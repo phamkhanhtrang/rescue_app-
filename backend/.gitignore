@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Môi trường ảo (Virtual Environment)
+venv/
+env/
+ENV/
+.venv/
+
+# Biến môi trường (Bảo mật - Quan trọng nhất)
+.env
+
+# Cơ sở dữ liệu cục bộ
+db.sqlite3
+
+# Thư mục chứa ảnh/file người dùng upload khi bạn test
+media/
+
+# Các file rác của hệ điều hành
+.DS_Store
+Thumbs.db

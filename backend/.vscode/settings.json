@@ -1,0 +1,7 @@
+{
+    "python-envs.pythonProjects": [],
+    "python.defaultInterpreterPath": "d:\\HTML\\DACN3\\backend\\venv\\Scripts\\python.exe",
+    "python.analysis.extraPaths": [
+        "d:\\HTML\\DACN3\\backend"
+    ]
+}

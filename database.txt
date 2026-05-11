@@ -1,0 +1,130 @@
+1. Quản lý Người dùng và Phân quyền (Users & Roles)
+Bảng này lưu trữ thông tin chung cho cả ba đối tượng: Người dân, Đội cứu trợ và Admin
+.
+CREATE TABLE Users (
+    user_id INT PRIMARY KEY AUTO_INCREMENT,
+    phone_number VARCHAR(15) UNIQUE NOT NULL,
+    full_name VARCHAR(100),
+    email VARCHAR(100) UNIQUE,
+    password_hash VARCHAR(255), -- Cho Admin/Đội cứu trợ
+    role ENUM('CITIZEN', 'RELIEF_TEAM', 'ADMIN') NOT NULL,
+    is_verified BOOLEAN DEFAULT FALSE, -- Phê duyệt đội cứu trợ [3, 5]
+    emergency_contact VARCHAR(15), -- Liên hệ khẩn cấp cho người dân [6, 7]
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+2. Quản lý Đội cứu trợ (Relief Teams)
+Lưu trữ thông tin chuyên biệt về năng lực và phương tiện của các đội
+.
+CREATE TABLE ReliefTeams (
+    team_id INT PRIMARY KEY,
+    user_id INT,
+    organization_name VARCHAR(150),
+    vehicle_type EN_VEHICLE (TRUCK, CANOE, BOAT, AMBULANCE), -- Loại phương tiện [9, 10]
+    transport_capacity TEXT, -- Khả năng vận chuyển
+    current_lat DECIMAL(10, 8), -- Vị trí GPS realtime [11, 12]
+    current_lng DECIMAL(11, 8),
+    status ENUM('AVAILABLE', 'MOVING', 'RESPONDING', 'OFFLINE') DEFAULT 'AVAILABLE',
+    FOREIGN KEY (user_id) REFERENCES Users(user_id)
+);
+3. Vùng cứu hộ (Rescue Zones)
+Đây là thực thể trung tâm của hệ thống, nơi gom cụm các yêu cầu SOS đơn lẻ
+.
+CREATE TABLE RescueZones (
+    zone_id INT PRIMARY KEY AUTO_INCREMENT,
+    zone_name VARCHAR(100),
+    center_lat DECIMAL(10, 8),
+    center_lng DECIMAL(11, 8),
+    radius_meters INT DEFAULT 300, -- Bán kính gom cụm AI [17, 18]
+    severity_level ENUM('RED', 'YELLOW', 'GREEN') DEFAULT 'YELLOW', -- Mức độ nghiêm trọng [15, 19, 20]
+    status ENUM('WAITING_FOR_TEAM', 'RESPONDING', 'PARTIALLY_STABILIZED', 'STABILIZED', 'NEEDS_MORE_SUPPORT') DEFAULT 'WAITING_FOR_TEAM', [5, 21, 22]
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+4. Yêu cầu cứu hộ SOS (SOS Requests)
+Lưu trữ các tín hiệu cầu cứu từ người dân
+.
+CREATE TABLE SOSRequests (
+    sos_id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT NULL, -- Có thể NULL nếu gửi ẩn danh [1, 7]
+    zone_id INT, -- Liên kết vào vùng cứu hộ sau khi AI/Admin xử lý [23, 24]
+    latitude DECIMAL(10, 8) NOT NULL,
+    longitude DECIMAL(11, 8) NOT NULL,
+    need_type SET('RESCUE', 'FOOD', 'MEDICAL') NOT NULL, -- Loại nhu cầu [6, 25]
+    description TEXT,
+    image_url VARCHAR(255), -- Hình ảnh hiện trường [23, 25]
+    is_offline_sent BOOLEAN DEFAULT FALSE, -- Đánh dấu nếu gửi từ chế độ Offline [26, 27]
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES Users(user_id),
+    FOREIGN KEY (zone_id) REFERENCES RescueZones(zone_id)
+);
+5. Điều phối và Tham gia (Participation & Coordination)
+Quản lý việc đội cứu trợ tham gia vào các vùng theo vai trò cụ thể
+.
+CREATE TABLE ZoneParticipation (
+    participation_id INT PRIMARY KEY AUTO_INCREMENT,
+    team_id INT,
+    zone_id INT,
+    assigned_role ENUM('RESCUE', 'SUPPLY', 'MEDICAL') NOT NULL, -- Vai trò cụ thể [19, 28]
+    joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    status ENUM('ON_WAY', 'ARRIVED', 'COMPLETED', 'CANCELLED') DEFAULT 'ON_WAY',
+    FOREIGN KEY (team_id) REFERENCES ReliefTeams(team_id),
+    FOREIGN KEY (zone_id) REFERENCES RescueZones(zone_id)
+);
+6. Cập nhật trạng thái và Theo dõi (Tracking & Updates)
+Lưu trữ các bản tin cập nhật định kỳ từ hiện trường
+.
+CREATE TABLE StatusUpdates (
+    update_id INT PRIMARY KEY AUTO_INCREMENT,
+    zone_id INT,
+    team_id INT,
+    reported_status ENUM('UNREACHABLE', 'RESPONDING', 'PARTIALLY_STABILIZED', 'STABILIZED', 'NEED_SUPPORT'), [31-33]
+    note TEXT, -- Ghi chú nhanh [32]
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (zone_id) REFERENCES RescueZones(zone_id),
+    FOREIGN KEY (team_id) REFERENCES ReliefTeams(team_id)
+);
+
+-- Theo dõi lịch sử di chuyển GPS để Admin giám sát [11, 12, 20]
+CREATE TABLE GPSHistory (
+    history_id INT PRIMARY KEY AUTO_INCREMENT,
+    team_id INT,
+    latitude DECIMAL(10, 8),
+    longitude DECIMAL(11, 8),
+    recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (team_id) REFERENCES ReliefTeams(team_id)
+);
+7. Tương tác cộng đồng và Thông báo (Community & Notifications)
+Hỗ trợ xác thực thông tin và gửi cảnh báo
+.
+CREATE TABLE CommunityVerifications (
+    verification_id INT PRIMARY KEY AUTO_INCREMENT,
+    zone_id INT,
+    user_id INT,
+    is_accurate BOOLEAN, -- Xác nhận tin SOS đúng hay sai [36, 37]
+    current_condition ENUM('DANGEROUS', 'ASSISTED', 'STABILIZED'), -- Tình trạng thực tế [36, 37]
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (zone_id) REFERENCES RescueZones(zone_id),
+    FOREIGN KEY (user_id) REFERENCES Users(user_id)
+);
+
+CREATE TABLE Notifications (
+    notification_id INT PRIMARY KEY AUTO_INCREMENT,
+    receiver_id INT, -- ID người nhận (NULL nếu gửi toàn hệ thống) [38, 39]
+    target_zone_id INT NULL, -- Thông báo theo vùng [3, 38, 39]
+    title VARCHAR(200),
+    message TEXT,
+    priority ENUM('URGENT', 'NORMAL') DEFAULT 'NORMAL', -- Mức độ ưu tiên [39, 40]
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (receiver_id) REFERENCES Users(user_id)
+);
+8. Minh bạch và Blockchain (Transparency Logs)
+Lưu trữ các bản ghi để đối soát trên Blockchain
+.
+CREATE TABLE BlockchainLogs (
+    log_id INT PRIMARY KEY AUTO_INCREMENT,
+    transaction_hash VARCHAR(255), -- Mã giao dịch trên Blockchain
+    entity_type ENUM('SOS_REQUEST', 'ZONE_STABILIZED', 'RESOURCE_ALLOCATED'),
+    entity_id INT, -- ID của bản ghi tương ứng trong DB
+    action_description TEXT,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
