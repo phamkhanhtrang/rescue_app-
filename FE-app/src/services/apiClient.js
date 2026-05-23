@@ -7,7 +7,7 @@
 // For Android emulator: use 'http://10.0.2.2:8000'
 // For iOS simulator: use 'http://127.0.0.1:8000'
 // For physical device: use your computer's local IP address e.g. 'http://192.168.x.x:8000'
-export const BASE_URL = 'http://192.168.1.13:8000';
+export const BASE_URL = 'http://192.168.1.71:8000';
 
 let authToken = null;
 
@@ -66,7 +66,10 @@ export const apiClient = async (endpoint, options = {}) => {
 
     // Xử lý khi API trả về lỗi
     if (!response.ok) {
-      const error = new Error(data.message || data.detail || 'API request failed');
+      console.log("--- API ERROR DETAIL ---");
+      console.log("Status:", response.status);
+      console.log("Response Data:", data);
+      const error = new Error(data.message || data.detail || `API Error ${response.status}`);
       error.status = response.status;
       error.data = data;
       throw error;

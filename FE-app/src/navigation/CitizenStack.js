@@ -27,9 +27,10 @@
  */
 
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 
 // ── Screens: Home ──────────────────────────────────────────────────────────
 import HomeScreen           from '../screens/citizen/home/HomeScreen';
@@ -89,12 +90,28 @@ const AlertsNavigator = () => (
 // ─── Tab Bar Icon (dùng emoji làm placeholder icon) ──────────────────────────
 // TODO: Thay bằng @expo/vector-icons: MaterialIcons hoặc Ionicons
 
-const TabIcon = ({ emoji, label, focused }) => (
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const TAB_ICON_MAX_WIDTH = Math.floor(SCREEN_WIDTH / 5); // mỗi tab tối đa 1/5 màn hình
+const tabBarHeight = 60; // Cân đối chiều cao tab bar
+
+const TabIcon = ({ name, label, focused }) => (
   <View style={tabIconStyles.wrapper}>
-    <Text style={[tabIconStyles.emoji, focused && tabIconStyles.emojiActive]}>
-      {emoji}
-    </Text>
-    <Text style={[tabIconStyles.label, { color: focused ? COLORS.primary : COLORS.textHint }]}>
+    <MaterialCommunityIcons
+      name={name}
+      size={28}
+      color={focused ? '#111' : '#888'}
+      style={{ marginBottom: 0 }}
+    />
+    <Text
+      style={[
+        tabIconStyles.label,
+        { color: focused ? '#111' : '#888' }
+      ]}
+      numberOfLines={1}
+      ellipsizeMode="tail"
+      adjustsFontSizeToFit
+      minimumFontScale={0.85}
+    >
       {label}
     </Text>
   </View>
@@ -103,20 +120,21 @@ const TabIcon = ({ emoji, label, focused }) => (
 const tabIconStyles = StyleSheet.create({
   wrapper: {
     alignItems: 'center',
-    gap: 2,
-    paddingTop: 4,
-  },
-  emoji: {
-    fontSize: 20,
-    opacity: 0.5,
-  },
-  emojiActive: {
-    opacity: 1,
+    justifyContent: 'center',
+    width: 72,
+    maxWidth: 80,
+    paddingTop: 2,
+    paddingBottom: 0,
+    paddingHorizontal: 2,
   },
   label: {
     fontSize: FONTS.xs,
     fontWeight: FONTS.semiBold,
     letterSpacing: 0.3,
+    maxWidth: 68,
+    textAlign: 'center',
+    includeFontPadding: false,
+    lineHeight: 18,
   },
 });
 
@@ -126,53 +144,46 @@ const CitizenTabs = () => (
   <Tab.Navigator
     screenOptions={{
       headerShown: false,
-      tabBarShowLabel: false,   // Label tùy chỉnh trong TabIcon
-      tabBarStyle: tabBarStyles.bar,
+      tabBarShowLabel: false,
+      tabBarStyle: { ...tabBarStyles.bar, height: tabBarHeight },
     }}
   >
-    {/* ── Tab HOME ────────────────────────────────────────────────────────── */}
     <Tab.Screen
       name="HomeTab"
       component={HomeScreen}
       options={{
         tabBarIcon: ({ focused }) => (
-          <TabIcon emoji="🏠" label="TRANG CHỦ" focused={focused} />
+          <TabIcon name="home-outline" label="TRANG CHỦ" focused={focused} />
         ),
         tabBarAccessibilityLabel: 'Trang chủ',
       }}
     />
-
-    {/* ── Tab MAP ─────────────────────────────────────────────────────────── */}
     <Tab.Screen
       name="MapTab"
       component={MapScreen}
       options={{
         tabBarIcon: ({ focused }) => (
-          <TabIcon emoji="🗺" label="BẢN ĐỒ" focused={focused} />
+          <TabIcon name="map-outline" label="BẢN ĐỒ" focused={focused} />
         ),
         tabBarAccessibilityLabel: 'Bản đồ',
       }}
     />
-
-    {/* ── Tab ALERTS ──────────────────────────────────────────────────────── */}
     <Tab.Screen
       name="AlertsTab"
       component={AlertsNavigator}
       options={{
         tabBarIcon: ({ focused }) => (
-          <TabIcon emoji="🔔" label="CẢNH BÁO" focused={focused} />
+          <TabIcon name="alert-circle-outline" label="CẢNH BÁO" focused={focused} />
         ),
         tabBarAccessibilityLabel: 'Cảnh báo',
       }}
     />
-
-    {/* ── Tab PROFILE ─────────────────────────────────────────────────────── */}
     <Tab.Screen
       name="ProfileTab"
       component={ProfileScreen}
       options={{
         tabBarIcon: ({ focused }) => (
-          <TabIcon emoji="👤" label="HỒ SƠ" focused={focused} />
+          <TabIcon name="account-outline" label="HỒ SƠ" focused={focused} />
         ),
         tabBarAccessibilityLabel: 'Hồ sơ',
       }}
@@ -184,17 +195,17 @@ const CitizenTabs = () => (
 
 const tabBarStyles = StyleSheet.create({
   bar: {
-    backgroundColor: COLORS.bgWhite,
+    backgroundColor: '#fff', // Nền trắng
     borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
-    height: 68,
-    paddingBottom: 8,
+    borderTopColor: '#E0E0E0',
+    height: 60,
+    paddingBottom: 4,
     paddingTop: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 10,
+    // shadowColor: '#000', // Loại bỏ shadow cho tối giản
+    // shadowOffset: { width: 0, height: -3 },
+    // shadowOpacity: 0.06,
+    // shadowRadius: 8,
+    // elevation: 10,
   },
 });
 

@@ -6,7 +6,7 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   SafeAreaView, Dimensions, Alert
@@ -16,6 +16,7 @@ import * as Location from 'expo-location';
 
 import RescuerHeader from '../../../components/rescuer/common/RescuerHeader';
 import { RCOLORS, RFONTS, RSPACING, RRADIUS, RSHADOWS, RLAYOUT } from '../../../constants/rescuer/theme';
+import API from '../../../services/api';
 
 const { width, height } = Dimensions.get('window');
 
@@ -27,17 +28,98 @@ const HAZARDS = [
 
 const MissionNavScreen = ({ navigation, route }) => {
   const { targetLat, targetLng, zoneName = 'Vùng mục tiêu' } = route?.params ?? {};
-  
+
   const [currentPos, setCurrentPos] = useState(null);
   const [heading, setHeading] = useState(0);
   const [distance, setDistance] = useState(0);
   const [eta, setEta] = useState('--:--');
   const [obstacleAlert, setObstacleAlert] = useState(null);
+  const [routePath, setRoutePath] = useState([]); // Lộ trình từ A* Server
 
+  const mapRef = useRef(null);
+
+  const lastRouteFetchRef = useRef(0);
+
+  const [isRouting, setIsRouting] = useState(false);
   const targetCoords = {
-    latitude: parseFloat(targetLat) || 10.762622,
-    longitude: parseFloat(targetLng) || 106.660172
+    latitude: parseFloat(targetLat) || 16.047079,
+    longitude: parseFloat(targetLng) || 108.206235
   };
+
+  const fetchRouteFromServer = async (startPos) => {
+
+    try {
+
+      setIsRouting(true);
+
+
+      const response = await API.rescueOperations.getRoute(
+        {
+          lat: startPos.latitude,
+          lng: startPos.longitude
+        },
+        {
+          lat: targetCoords.latitude,
+          lng: targetCoords.longitude
+        }
+      );
+
+      if (
+        response &&
+        response.status === 'success'
+      ) {
+
+        setRoutePath(response.path);
+
+        // Distance thật từ backend
+        setDistance(response.distance_meters || 0);
+
+        // ETA thật từ backend
+        const mins = Math.ceil(
+          (response.eta_seconds || 0) / 60
+        );
+
+        setEta(`${mins} phút`);
+
+        // Zoom map theo tuyến đường
+        if (
+          mapRef.current &&
+          response.path.length > 0
+        ) {
+
+          mapRef.current.fitToCoordinates(
+            response.path,
+            {
+              edgePadding: {
+                top: 100,
+                right: 50,
+                bottom: 300,
+                left: 50
+              },
+              animated: true
+            }
+          );
+        }
+      }
+
+    } catch (error) {
+
+      console.log(
+        'Không thể lấy lộ trình:',
+        error.message
+      );
+
+      setRoutePath([
+        startPos,
+        targetCoords
+      ]);
+
+    } finally {
+
+      setIsRouting(false);
+    }
+  };
+
 
   useEffect(() => {
     let subscription;
@@ -60,13 +142,20 @@ const MissionNavScreen = ({ navigation, route }) => {
           // 1. Tính khoảng cách
           const dist = getDistance(latitude, longitude, targetCoords.latitude, targetCoords.longitude);
           setDistance(Math.round(dist));
+          const now = Date.now();
 
-          // 2. Tính ETA (giả định vận tốc trung bình 30km/h = 8.3m/s)
-          const seconds = dist / 8.3;
-          const mins = Math.floor(seconds / 60);
-          const secs = Math.floor(seconds % 60);
-          setEta(`${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`);
+          if (
+            now - lastRouteFetchRef.current > 15000
+          ) {
 
+            lastRouteFetchRef.current = now;
+
+            fetchRouteFromServer({
+              latitude,
+              longitude
+            });
+          }
+          // 2. Tính ETA & Khoảng cách (đã được xử lý trong fetchRouteFromServer trên)
           // 3. Kiểm tra vật cản/nguy hiểm xung quanh
           const nearbyHazard = HAZARDS.find(h => getDistance(latitude, longitude, h.lat, h.lng) < 150);
           setObstacleAlert(nearbyHazard ? nearbyHazard.type : null);
@@ -80,12 +169,12 @@ const MissionNavScreen = ({ navigation, route }) => {
 
   const getDistance = (lat1, lon1, lat2, lon2) => {
     const R = 6371e3;
-    const φ1 = lat1 * Math.PI/180;
-    const φ2 = lat2 * Math.PI/180;
-    const Δφ = (lat2-lat1) * Math.PI/180;
-    const Δλ = (lon2-lon1) * Math.PI/180;
-    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2) * Math.sin(Δλ/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const φ1 = lat1 * Math.PI / 180;
+    const φ2 = lat2 * Math.PI / 180;
+    const Δφ = (lat2 - lat1) * Math.PI / 180;
+    const Δλ = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
   };
 
@@ -94,9 +183,10 @@ const MissionNavScreen = ({ navigation, route }) => {
       <RescuerHeader showBack onBack={() => navigation.goBack()} />
 
       <View style={styles.container}>
-        
+
         {/* ── Map ─────────────────────────────────────────────────────────── */}
         <MapView
+          ref={mapRef}
           provider={PROVIDER_GOOGLE}
           style={styles.map}
           customMapStyle={darkMapStyle}
@@ -120,12 +210,13 @@ const MissionNavScreen = ({ navigation, route }) => {
           </Marker>
 
           {/* Lộ trình (Đường thẳng tượng trưng cho lộ trình tối ưu) */}
-          {currentPos && (
+          {routePath.length > 0 && (
             <Polyline
-              coordinates={[currentPos, targetCoords]}
+              coordinates={routePath}
               strokeColor={RCOLORS.primary}
-              strokeWidth={4}
-              lineDashPattern={[5, 5]}
+              strokeWidth={5}
+              lineCap="round"
+              lineJoin="round"
             />
           )}
 
@@ -175,7 +266,7 @@ const MissionNavScreen = ({ navigation, route }) => {
             </View>
           </View>
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.arriveButton}
             onPress={() => navigation.navigate('MissionsTab', { screen: 'ActiveMissionScreen' })}
           >

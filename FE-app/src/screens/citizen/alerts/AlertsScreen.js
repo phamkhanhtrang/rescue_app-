@@ -1,64 +1,74 @@
-/**
- * src/screens/citizen/alerts/AlertsScreen.js
- * ─────────────────────────────────────────────────────────────────────────────
- * Màn hình Thông báo — "THE GUARDIAN PULSE" (Tab ALERTS).
- *
- * Bố cục từ Figma:
- *  1. Header SENTINEL
- *  2. "OPERATIONAL STATUS" label + "THE GUARDIAN PULSE" title + "AI VERIFIED"
- *  3. Banner đỏ: "KHU VỰC NGUY HIỂM — 3 MỐI ĐE DỌA"
- *  4. Danh sách AlertCard (Critical, Warning, Rescue Info)
- *  5. Footer stats: NEARBY USERS / GRID STATUS
- *  6. Floating SOS button
- * ─────────────────────────────────────────────────────────────────────────────
- */
-
 import React from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
   TouchableOpacity, SafeAreaView,
 } from 'react-native';
+import * as Location from 'expo-location';
 
 import SentinelHeader from '../../../components/citizen/common/SentinelHeader';
 import AlertCard from '../../../components/citizen/alerts/AlertCard';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS, LAYOUT } from '../../../constants/citizen/theme';
 
-// ─── Mock alerts data ─────────────────────────────────────────────────────────
-// ─── Mock alerts data ─────────────────────────────────────────────────────────
-const ALERTS = [
-  {
-    id: '1',
-    severity: 'critical',
-    category: 'LŨ QUÉT',
-    title: 'Quận Mabry: Sơ tán ngay lập tức',
-    description: 'Mực nước đang dâng cao 4m/h. AI gợi ý lộ trình phía Bắc qua Cao tốc 22 vẫn thông thoáng trong 15 phút tới.',
-    timeAgo: '2 phút trước',
-    hasRoute: true,
-    verified: true,
-  },
-  {
-    id: '2',
-    severity: 'warning',
-    category: 'GIÓ GIẬT MẠNH',
-    title: 'Dự báo lưới điện mất ổn định',
-    description: 'Gió giật vượt quá 65mph đã được phát hiện. Vui lòng sạc đầy tất cả thiết bị y tế và liên lạc ngay lập tức.',
-    timeAgo: '14 phút trước',
-    hasRoute: false,
-    verified: false,
-  },
-  {
-    id: '3',
-    severity: 'rescue',
-    category: 'TRẠM Y TẾ LƯU ĐỘNG',
-    title: 'Triển khai Đội Sentinel-7',
-    description: 'Hỗ trợ chấn thương và nguồn cung cấp nước sạch đã đến Trạm Trung tâm phía Tây. Mở cửa 24/7.',
-    timeAgo: '1 giờ trước',
-    hasRoute: false,
-    verified: false,
-  },
-];
+import API from '../../../services/api';
 
 const AlertsScreen = ({ navigation }) => {
+  const [activeTab, setActiveTab] = React.useState('nearby');
+  const [alerts, setAlerts]       = React.useState([]);
+  const [loading, setLoading]     = React.useState(true);
+
+  // Tọa độ GPS người dùng (null nếu chưa lấy được)
+  const [userLocation, setUserLocation] = React.useState(null);
+
+  // Lấy tọa độ GPS thật khi màn hình mount
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const loc = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          });
+          setUserLocation({
+            lat: loc.coords.latitude,
+            lng: loc.coords.longitude,
+          });
+        }
+      } catch (e) {
+        console.log('Không lấy được GPS:', e);
+      }
+    })();
+  }, []);
+
+  const fetchAlerts = async () => {
+    try {
+      setLoading(true);
+      const params = {
+        tab: activeTab,
+        is_active: 'true',
+      };
+
+      // Gửi tọa độ GPS lên backend nếu đã lấy được
+      if (userLocation) {
+        params.lat = userLocation.lat;
+        params.lng = userLocation.lng;
+      }
+
+      const data = await API.alerts.getAll(params);
+      if (data && data.results) {
+        setAlerts(data.results);
+      }
+    } catch (error) {
+      console.log('Fetch alerts error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch lại khi tab thay đổi HOẶC khi có GPS
+  React.useEffect(() => {
+    fetchAlerts();
+  }, [activeTab, userLocation]);
+
   return (
     <SafeAreaView style={styles.safe}>
       <SentinelHeader />
@@ -74,9 +84,8 @@ const AlertsScreen = ({ navigation }) => {
           <Text style={styles.opLabel}>TRẠNG THÁI HOẠT ĐỘNG</Text>
 
           <View style={styles.titleRow}>
-            <Text style={styles.pulseTitle}>NHỊP ĐẬP BẢO VỆ</Text>
+            <Text style={styles.pulseTitle}>Thông báo/Cảnh báo</Text>
             <View style={styles.aiVerified}>
-              <Text style={styles.aiIcon}>🤖</Text>
               <Text style={styles.aiVerifiedText}>XÁC THỰC AI</Text>
             </View>
           </View>
@@ -85,26 +94,49 @@ const AlertsScreen = ({ navigation }) => {
         {/* ─── 2. Threat banner ───────────────────────────────────────────── */}
         <View style={styles.threatBanner}>
           <Text style={styles.threatBannerIcon}>⚠</Text>
-          <View>
+          <View style={{ flex: 1 }}>
             <Text style={styles.threatBannerLabel}>KHU VỰC NGUY HIỂM TỨC THỜI</Text>
             <Text style={styles.threatBannerCount}>
-              3 MỐI ĐE DỌA NGHIÊM TRỌNG ĐANG HOẠT ĐỘNG
+              {alerts.filter(a => a.severity === 'Emergency' || a.severity === 'EMERGENCY').length} MỐI ĐE DỌA NGHIÊM TRỌNG ĐANG HOẠT ĐỘNG
             </Text>
           </View>
         </View>
 
+        {/* ─── Tabs: Lân cận / Toàn quốc ──────────────────────────────────── */}
+        {/* <View style={styles.tabContainer}>
+          <TouchableOpacity 
+            style={[styles.tabButton, activeTab === 'nearby' && styles.tabActive]}
+            onPress={() => setActiveTab('nearby')}
+          >
+            <Text style={[styles.tabText, activeTab === 'nearby' && styles.tabTextActive]}> Lân cận</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.tabButton, activeTab === 'national' && styles.tabActive]}
+            onPress={() => setActiveTab('national')}
+          >
+            <Text style={[styles.tabText, activeTab === 'national' && styles.tabTextActive]}>Toàn quốc</Text>
+          </TouchableOpacity>
+        </View> */}
+
         {/* ─── 3. Alert list ──────────────────────────────────────────────── */}
         <View style={styles.alertList}>
-          {ALERTS.map((alert) => (
-            <AlertCard
-              key={alert.id}
-              {...alert}
-              onPress={() =>
-                navigation.navigate('CommunityVerifyScreen', { alertId: alert.id })
-              }
-              onRoute={() => navigation.navigate('MapTab')}
-            />
-          ))}
+          {loading ? (
+            <Text style={{ textAlign: 'center', color: COLORS.textSecondary, marginVertical: 20 }}>Đang tải...</Text>
+          ) : alerts.length === 0 ? (
+            <Text style={{ textAlign: 'center', color: COLORS.textSecondary, marginVertical: 20 }}>Không có cảnh báo nào.</Text>
+          ) : (
+            alerts.map((alert) => (
+              <AlertCard
+                key={alert.id}
+                alert={alert}
+                onPress={() =>
+                  navigation.navigate('CommunityVerifyScreen', { alertId: alert.id })
+                }
+                onRoute={() => navigation.navigate('MapTab')}
+                onVoteSuccess={fetchAlerts}
+              />
+            ))
+          )}
         </View>
 
         {/* ─── 4. Quick nav to History ────────────────────────────────────── */}
@@ -117,7 +149,7 @@ const AlertsScreen = ({ navigation }) => {
         </TouchableOpacity>
 
         {/* ─── 5. Stats footer ────────────────────────────────────────────── */}
-        <View style={styles.statsRow}>
+        {/* <View style={styles.statsRow}>
           <View style={styles.statCard}>
             <Text style={styles.statValue}>142</Text>
             <Text style={styles.statLabel}>NGƯỜI DÙNG LÂN CẬN</Text>
@@ -128,16 +160,16 @@ const AlertsScreen = ({ navigation }) => {
             <Text style={styles.statLabel}>TRẠNG THÁI LƯỚI ĐIỆN</Text>
             <Text style={[styles.statSub, { color: COLORS.statusOrange }]}>ĐANG GIẢM SÚT</Text>
           </View>
-        </View>
+        </View> */}
 
         {/* ─── 6. Offline Mode link ───────────────────────────────────────── */}
-        <TouchableOpacity
+        {/* <TouchableOpacity
           style={styles.offlineLink}
           onPress={() => navigation.navigate('OfflineModeScreen')}
         >
           <Text style={styles.offlineLinkText}>📡  Chế độ Ngoại tuyến (Offline)</Text>
           <Text style={styles.offlineArrow}>›</Text>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
 
       </ScrollView>
 
@@ -231,6 +263,33 @@ const styles = StyleSheet.create({
     fontWeight: FONTS.bold,
     color: COLORS.textWhite,
     marginTop: 2,
+  },
+
+  // ── Tabs ───────────────────────────────────────
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#E0E0E0',
+    borderRadius: RADIUS.full,
+    padding: 4,
+    marginBottom: SPACING.lg,
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: RADIUS.full,
+  },
+  tabActive: {
+    backgroundColor: COLORS.bgWhite,
+    ...SHADOWS.card,
+  },
+  tabText: {
+    fontSize: FONTS.sm,
+    fontWeight: FONTS.bold,
+    color: COLORS.textSecondary,
+  },
+  tabTextActive: {
+    color: COLORS.textPrimary,
   },
 
   // ── Alert list ─────────────────────────────────

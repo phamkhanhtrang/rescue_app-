@@ -18,6 +18,8 @@ import {
 } from 'react-native';
 import { COLORS, FONTS, SPACING } from '../../../constants/citizen/theme';
 
+const STATUSBAR_HEIGHT = Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 0;
+
 // ─── Shield Icon SVG thay thế bằng Text emoji ────────────────────────────────
 // TODO: Thay bằng SVG hoặc @expo/vector-icons khi cài đặt
 
@@ -91,13 +93,13 @@ const SentinelHeader = ({
 
 const styles = StyleSheet.create({
   container: {
-    height: 56,
+    height: 56 + STATUSBAR_HEIGHT,
+    paddingTop: STATUSBAR_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.base,
     borderBottomWidth: 0,
-    // Thêm padding trên nếu không dùng SafeAreaView
   },
 
   // ── Slots ──────────────────────────────────────

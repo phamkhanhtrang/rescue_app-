@@ -17,4 +17,5 @@ urlpatterns = [
 
     # SOS Images
     path('sos/<uuid:sos_id>/images/', views.sos_image_upload, name='sos-image-upload'),
+    path('get-route/', views.get_rescue_route_api, name='get-route'),
 ]

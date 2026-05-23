@@ -109,5 +109,4 @@ Sau khi chạy lệnh trên, bạn có thể:
     - **Đội cứu trợ:** Giao diện tối chuyên nghiệp, tập trung vào dữ liệu bản đồ và nhiệm vụ.
 - **Tính minh bạch:** Giả lập các bước xác thực Blockchain và phân tích dữ liệu AI trên mọi hành động quan trọng.
 
----
-*Dự án được phát triển bởi Antigravity AI.*
+

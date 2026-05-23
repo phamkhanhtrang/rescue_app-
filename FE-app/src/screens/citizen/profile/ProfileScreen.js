@@ -17,11 +17,13 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput,
-  TouchableOpacity, SafeAreaView, Alert,
+  TouchableOpacity, SafeAreaView, Alert, ActivityIndicator,
+  KeyboardAvoidingView, Platform,
 } from 'react-native';
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import * as Location from 'expo-location';
 import API from '../../../services/api';
 import SentinelHeader from '../../../components/citizen/common/SentinelHeader';
-import MapPlaceholder from '../../../components/citizen/common/MapPlaceholder';
 import { useAuth } from '../../../context/AuthContext';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS, LAYOUT } from '../../../constants/citizen/theme';
 
@@ -41,6 +43,10 @@ const ProfileScreen = () => {
 
   const [saved, setSaved] = useState(false);
   const [medical, setMedical] = useState(userInfo?.medical_notes);
+
+  const [location, setLocation] = useState(null);
+  const [loadingLocation, setLoadingLocation] = useState(false);
+
   useEffect(() => {
     if (!userInfo?.id) return;
 
@@ -55,7 +61,7 @@ const ProfileScreen = () => {
           setEmergencyName(profileData.emergency_contact_name || '');
           setEmergencyPhone(profileData.emergency_contact_phone || '');
           setMedical(profileData.medical_notes || '');
-          // setAddress(profileData.address || '');
+          setAddress(profileData.address || '');
           setIdNumber(profileData.id_number || '');
         }
       } catch (error) {
@@ -65,6 +71,67 @@ const ProfileScreen = () => {
 
     fetchProfile();
   }, [userInfo?.id]);
+
+  useEffect(() => {
+    // Tự động lấy vị trí thực khi vào màn hình
+    const autoGetLocation = async () => {
+      try {
+        let { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          let loc = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.High,
+          });
+          setLocation({
+            latitude: loc.coords.latitude,
+            longitude: loc.coords.longitude,
+          });
+        }
+      } catch (error) {
+        console.error('Error auto-fetching location in ProfileScreen:', error);
+      }
+    };
+    autoGetLocation();
+  }, []);
+
+  const getCurrentLocationAndAddress = async () => {
+    setLoadingLocation(true);
+    try {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Quyền truy cập bị từ chối', 'Ứng dụng cần quyền vị trí để lấy tọa độ thực.');
+        return;
+      }
+
+      let loc = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+      const coords = {
+        latitude: loc.coords.latitude,
+        longitude: loc.coords.longitude,
+      };
+      setLocation(coords);
+
+      let reverse = await Location.reverseGeocodeAsync(coords);
+      if (reverse && reverse.length > 0) {
+        const item = reverse[0];
+        const addr = [
+          item.name,
+          item.street,
+          item.district,
+          item.city || item.region
+        ].filter(Boolean).join(', ');
+        setAddress(addr || 'Vị trí không xác định');
+        Alert.alert('Thành công', 'Đã cập nhật vị trí thực tế và giải mã địa chỉ của bạn.');
+      } else {
+        Alert.alert('Thông báo', 'Đã lấy được vị trí thực tế nhưng không thể giải mã địa chỉ.');
+      }
+    } catch (error) {
+      console.error('Error fetching current location:', error);
+      Alert.alert('Lỗi', 'Không thể lấy vị trí hiện tại của bạn.');
+    } finally {
+      setLoadingLocation(false);
+    }
+  };
   const handleSave = async () => {
     // TODO: Gọi API lưu profile
     setLoading(true);
@@ -105,11 +172,16 @@ const ProfileScreen = () => {
     <SafeAreaView style={styles.safe}>
       <SentinelHeader />
 
-      <ScrollView
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
 
         {/* ─── 1. Title section ───────────────────────────────────────────── */}
         <View style={styles.titleSection}>
@@ -159,15 +231,18 @@ const ProfileScreen = () => {
             onChangeText={setIdNumber}
             placeholder=""
           />
+          <FormField
+            label="Địa chỉ"
+            value={address}
+            onChangeText={setAddress}
+            placeholder=""
+          />
         </View>
 
         {/* ─── 3. Liên hệ khẩn cấp ───────────────────────────────────────── */}
         <View style={styles.sectionGroup}>
           <View style={styles.sectionGroupHeader}>
             <Text style={styles.sectionGroupLabel}>LIÊN HỆ KHẨN CẤP</Text>
-            <View style={styles.editable}>
-              <Text style={styles.editableText}>⚙ Có thể chỉnh sửa</Text>
-            </View>
           </View>
 
           <FormField
@@ -184,22 +259,58 @@ const ProfileScreen = () => {
         </View>
 
         {/* ─── 4. Vị trí xác định ─────────────────────────────────────────── */}
-        <View style={styles.sectionGroup}>
-          <Text style={styles.sectionGroupLabel}>⊙ VỊ TRÍ XÁC ĐỊNH</Text>
+        {/* <View style={styles.sectionGroup}>
+          <View style={styles.sectionGroupHeader}>
+            <Text style={styles.sectionGroupLabel}>⊙ VỊ TRÍ XÁC ĐỊNH</Text>
+            <TouchableOpacity 
+              style={styles.locationUpdateBtn} 
+              onPress={getCurrentLocationAndAddress}
+              disabled={loadingLocation}
+            >
+              {loadingLocation ? (
+                <ActivityIndicator size="small" color={COLORS.primary} />
+              ) : (
+                <Text style={styles.locationUpdateBtnText}>📍 Lấy vị trí thực</Text>
+              )}
+            </TouchableOpacity>
+          </View>
           <FormField
             placeholder="Nhập địa chỉ hoặc tọa độ..."
             value={address}
             onChangeText={setAddress}
           />
-          <MapPlaceholder
-            height={150}
-            label="Vị trí của bạn"
-            badgeText="GPS HOẠT ĐỘNG"
-          />
-        </View>
+          <View style={styles.mapContainer}>
+            {location ? (
+              <MapView
+                provider={PROVIDER_GOOGLE}
+                style={styles.map}
+                region={{
+                  ...location,
+                  latitudeDelta: 0.005,
+                  longitudeDelta: 0.005,
+                }}
+              >
+                <Marker 
+                  coordinate={location} 
+                  title="Vị trí thực tế của bạn" 
+                  pinColor={COLORS.primary} 
+                />
+              </MapView>
+            ) : (
+              <View style={styles.mapLoading}>
+                <ActivityIndicator color={COLORS.primary} />
+                <Text style={styles.mapLoadingText}>Đang xác định vị trí thực tế...</Text>
+              </View>
+            )}
+            <View style={styles.mapBadge}>
+              <View style={styles.badgeDot} />
+              <Text style={styles.badgeText}>LIVE GPS</Text>
+            </View>
+          </View>
+        </View> */}
 
         {/* ─── 5. Bảo mật blockchain ──────────────────────────────────────── */}
-        <View style={styles.blockchainSection}>
+        {/* <View style={styles.blockchainSection}>
           <View style={styles.blockchainHeader}>
             <Text style={styles.blockchainIcon}>⛓</Text>
             <Text style={styles.blockchainLabel}>BẢO MẬT BLOCKCHAIN</Text>
@@ -214,7 +325,7 @@ const ProfileScreen = () => {
           <View style={styles.blockchainStatus}>
             <Text style={styles.blockchainStatusText}>🔐 Bảo mật đa tầng</Text>
           </View>
-        </View>
+        </View> */}
 
         {/* ─── 6. Save button ─────────────────────────────────────────────── */}
         <TouchableOpacity
@@ -223,7 +334,7 @@ const ProfileScreen = () => {
           activeOpacity={0.5}
         >
           <Text style={styles.saveText}>
-            {saved ? '✓ Đã lưu!' : 'LƯU  💾'}
+            {saved ? 'Đã lưu!' : 'LƯU'}
           </Text>
         </TouchableOpacity>
 
@@ -232,7 +343,8 @@ const ProfileScreen = () => {
           <Text style={styles.signOutText}>Đăng xuất</Text>
         </TouchableOpacity>
 
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
@@ -270,6 +382,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.bgLight,
   },
   content: {
+    flexGrow: 1,
     padding: LAYOUT.screenPadding,
     paddingBottom: 40,
     gap: SPACING.base,
@@ -444,6 +557,69 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     fontSize: FONTS.base,
     fontWeight: FONTS.medium,
+  },
+  locationUpdateBtn: {
+    backgroundColor: '#E3F2FD',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: RADIUS.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  locationUpdateBtnText: {
+    color: COLORS.statusBlue,
+    fontSize: FONTS.xs,
+    fontWeight: FONTS.bold,
+  },
+  mapContainer: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    borderRadius: RADIUS.lg,
+    overflow: 'hidden',
+    marginTop: SPACING.xs,
+    backgroundColor: '#2C3E50',
+    ...SHADOWS.card,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  map: {
+    flex: 1,
+  },
+  mapLoading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#2C3E50',
+  },
+  mapLoadingText: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: FONTS.xs,
+  },
+  mapBadge: {
+    position: 'absolute',
+    top: SPACING.sm,
+    right: SPACING.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(13,20,33,0.75)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: RADIUS.full,
+    gap: 4,
+  },
+  badgeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: COLORS.statusGreen,
+  },
+  badgeText: {
+    color: COLORS.textWhite,
+    fontSize: FONTS.xs,
+    fontWeight: FONTS.bold,
+    letterSpacing: 0.5,
   },
 });
 

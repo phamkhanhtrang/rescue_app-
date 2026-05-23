@@ -1,8 +1,9 @@
+from .pathfinding import get_rescue_route
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from django.db.models import Count
-
+from django.db.models import Q
 from .models import Zone, SOSSignal, SOSImage
 from .serializers import (
     ZoneSerializer, ZoneListSerializer,
@@ -91,7 +92,7 @@ def sos_list(request):
     queryset = SOSSignal.objects.all().order_by('-sent_at')
     s = request.query_params.get('status')
     t = request.query_params.get('signal_type')
-    z = request.query_params.get('zone')
+    z = request.query_params.get('zone') or request.query_params.get('zone_id')
     c = request.query_params.get('citizen')
     if s:
         queryset = queryset.filter(status=s.upper())
@@ -148,3 +149,131 @@ def sos_image_upload(request, sos_id):
         serializer.save()
         return Response(serializer.data, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['POST'])
+def get_rescue_route_api(request):
+
+    try:
+
+        # =================================================
+        # GET REQUEST DATA
+        # =================================================
+
+        start = request.data.get('start')
+        target = request.data.get('target')
+
+        if not start or not target:
+
+            return Response({
+                'status': 'error',
+                'message': 'Missing start or target coordinates'
+            }, status=400)
+
+        start_lat = float(start['lat'])
+        start_lng = float(start['lng'])
+
+        target_lat = float(target['lat'])
+        target_lng = float(target['lng'])
+
+        # =================================================
+        # GET HAZARD SOS DATA
+        # =================================================
+
+        sos_hazards = SOSSignal.objects.filter(
+            Q(note__icontains='ngập') |
+            Q(note__icontains='lụt') |
+            Q(note__icontains='sạt lở') |
+            Q(note__icontains='cháy'),
+
+            status__in=[
+                'PENDING',
+                'ACKNOWLEDGED',
+                'IN_PROGRESS'
+            ],
+
+            location_lat__isnull=False,
+            location_lng__isnull=False
+        )
+
+        hazards_list = []
+
+        for sos in sos_hazards:
+
+            severity = 1
+
+            note = (sos.note or '').lower()
+
+            # =================================================
+            # SIMPLE SEVERITY SCORING
+            # =================================================
+
+            if 'cháy lớn' in note:
+                severity = 5
+
+            elif 'sạt lở' in note:
+                severity = 4
+
+            elif 'ngập nặng' in note:
+                severity = 3
+
+            elif 'ngập' in note:
+                severity = 2
+
+            hazards_list.append({
+                'lat': float(sos.location_lat),
+                'lng': float(sos.location_lng),
+                'radius': 150,
+                'severity': severity
+            })
+
+        print(f"Hazards loaded: {len(hazards_list)}")
+
+        # =================================================
+        # RUN A* RESCUE ROUTING
+        # =================================================
+
+        result = get_rescue_route(
+            (start_lat, start_lng),
+            (target_lat, target_lng),
+            hazards_list
+        )
+
+        # =================================================
+        # RETURN ERROR FROM ROUTING
+        # =================================================
+
+        if result['status'] == 'error':
+
+            return Response(result, status=500)
+
+        # =================================================
+        # SUCCESS RESPONSE
+        # =================================================
+
+        return Response({
+            'status': 'success',
+
+            'path': result['path'],
+
+            'distance_meters': result['distance_meters'],
+
+            'eta_seconds': result['eta_seconds'],
+
+            'hazards_detected': len(hazards_list)
+        })
+
+    except ValueError:
+
+        return Response({
+            'status': 'error',
+            'message': 'Invalid coordinate format'
+        }, status=400)
+
+    except Exception as e:
+
+        print(f"ROUTING API ERROR: {str(e)}")
+
+        return Response({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)

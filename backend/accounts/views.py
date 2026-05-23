@@ -266,10 +266,10 @@ def rescuer_update_location(request, user_id):
     except RescuerProfile.DoesNotExist:
         return Response({'error': 'Không tìm thấy hồ sơ cứu hộ.'}, status=status.HTTP_404_NOT_FOUND)
 
-    lat = request.data.get('current_lat')
-    lng = request.data.get('current_lng')
+    lat = request.data.get('current_lat') or request.data.get('latitude')
+    lng = request.data.get('current_lng') or request.data.get('longitude')
     if lat is None or lng is None:
-        return Response({'error': 'Vui lòng cung cấp current_lat và current_lng.'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'Vui lòng cung cấp tọa độ (current_lat/lng hoặc latitude/longitude).'}, status=status.HTTP_400_BAD_REQUEST)
 
     rp.current_lat = lat
     rp.current_lng = lng

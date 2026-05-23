@@ -62,7 +62,7 @@ const ActiveMissionScreen = ({ navigation, route }) => {
     if (!zoneId) return;
     try {
       const [sosRes, missionRes, zoneRes] = await Promise.all([
-        API.sos.getAll({ zone_id: zoneId }),
+        API.sos.getAll({ zone: zoneId }),
         API.missions.getAll({ zone_id: zoneId }),
         API.zones.getDetails(zoneId)
       ]);
@@ -94,7 +94,10 @@ const ActiveMissionScreen = ({ navigation, route }) => {
           const { latitude, longitude } = loc.coords;
 
           // Gửi vị trí lên server
-          await API.rescuers.updateLocation(userInfo?.id, { latitude, longitude });
+          await API.rescuers.updateLocation(userInfo?.id, { 
+            current_lat: latitude, 
+            current_lng: longitude 
+          });
 
           // Kiểm tra Geofencing (Nếu cách tâm vùng > 600m thì cảnh báo)
           if (currentZone) {

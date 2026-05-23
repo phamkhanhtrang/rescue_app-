@@ -12,39 +12,107 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, SafeAreaView, Alert,
+  TouchableOpacity, SafeAreaView, Alert, ActivityIndicator,
 } from 'react-native';
 
 import SentinelHeader from '../../../components/citizen/common/SentinelHeader';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS, LAYOUT } from '../../../constants/citizen/theme';
+import API from '../../../services/api';
+import { useAuth } from '../../../context/AuthContext';
 
-// ─── Lựa chọn xác thực ────────────────────────────────────────────────────────
+
+
 const VERIFY_OPTIONS = [
-  { id: 'confirm',  label: 'Đúng',            icon: '✅', color: COLORS.statusGreen, bgColor: '#E8F5E9' },
-  { id: 'false',    label: 'Sai',             icon: '❌', color: COLORS.primary,      bgColor: '#FFEBEE' },
-  { id: 'danger',   label: 'Vẫn nguy hiểm',  icon: '⚠️', color: COLORS.statusOrange,bgColor: '#FFF3E0' },
-  { id: 'rescued',  label: 'Đã có cứu trợ',  icon: '🚒', color: COLORS.statusBlue,  bgColor: '#E3F2FD' },
+  { id: 'TRUE',         label: 'Còn nguy hiểm',  color: COLORS.statusGreen,  bgColor: '#E8F5E9' },
+  { id: 'FALSE',        label: 'Tin giả',          color: COLORS.primary,      bgColor: '#FFEBEE' },
+  { id: 'STILL_DANGER', label: 'Vẫn nguy hiểm',         color: COLORS.statusOrange, bgColor: '#FFF3E0' },
+  { id: 'RESCUED',      label: 'Đã có cứu trợ',         color: COLORS.statusBlue,   bgColor: '#E3F2FD' },
 ];
-
+const LEVEL = [
+  { id: 'WARNING',         label: 'Cảnh báo',  color: COLORS.statusGreen,  bgColor: '#E8F5E9' },
+  { id: 'EMERGENCY',        label: 'Khẩn cấp',          color: COLORS.primary,      bgColor: '#FFEBEE' },
+  { id: 'NOTIFICATION',        label: 'Thông báo',          color: COLORS.primary,      bgColor: '#FFEBEE' },
+];
+const SOURCE = [
+  { id: 'SYSTEM',         label: 'Hệ thống',  color: COLORS.statusGreen,  bgColor: '#E8F5E9' },
+  { id: 'AI',        label: 'AI',          color: COLORS.primary,      bgColor: '#FFEBEE' },
+];
 const CommunityVerifyScreen = ({ navigation, route }) => {
+  const { alertId } = route.params || {};
+  const { userInfo } = useAuth();
+
+  const [alertData, setAlertData] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
   const [submitted, setSubmitted] = useState(false);
 
-  const handleSubmit = () => {
+  // ─── Load alert details ─────────────────────────────────────────────────────
+  useEffect(() => {
+    const fetchAlert = async () => {
+      try {
+        setLoading(true);
+        const data = await API.alerts.getDetails(alertId);
+        setAlertData(data);
+      } catch (e) {
+        console.log('Fetch alert error:', e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    if (alertId) {
+      fetchAlert();
+    }
+  }, [alertId]);
+
+  // ─── Submit vote ────────────────────────────────────────────────────────────
+  const handleSubmit = async () => {
     if (!selected) {
       Alert.alert('Chọn trạng thái', 'Vui lòng chọn một đánh giá trước khi gửi.');
       return;
     }
-    setSubmitted(true);
-    Alert.alert(
-      'Cảm ơn!',
-      'Đánh giá của bạn đã được ghi lại vào blockchain.',
-      [{ text: 'Quay lại', onPress: () => navigation.goBack() }]
-    );
+    try {
+      await API.alerts.vote(alertId, {
+        verdict: selected,
+        user: userInfo?.id,
+      });
+      setSubmitted(true);
+      Alert.alert(
+        'Cảm ơn!',
+        'Đánh giá của bạn đã được ghi lại.',
+        [{ text: 'Quay lại', onPress: () => navigation.goBack() }]
+      );
+    } catch (e) {
+      console.log('Submit vote error:', e);
+      const msg = e?.error || 'Bạn đã đánh giá cảnh báo này.';
+      Alert.alert('Lỗi', msg);
+    }
   };
+
+  // ─── Format thời gian ──────────────────────────────────────────────────────
+  const formatTime = (dateStr) => {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    return d.toLocaleString('vi-VN', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    });
+  };
+
+  // ─── Loading state ─────────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <SentinelHeader showBack onBack={() => navigation.goBack()} />
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={{ marginTop: 12, color: COLORS.textSecondary }}>Đang tải cảnh báo...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -69,40 +137,69 @@ const CommunityVerifyScreen = ({ navigation, route }) => {
             <Text style={styles.liveText}>CẢNH BÁO TRỰC TIẾP</Text>
           </View>
 
-          {/* Tiêu đề sự cố */}
+          {/* Tiêu đề sự cố — lấy từ API */}
           <View style={styles.incidentTitleBox}>
-            <Text style={styles.incidentTitle}>Ngập lụt: Quận 7, Khu vực Lam</Text>
+            <Text style={styles.incidentTitle}>
+              {alertData?.title || 'Đang tải...'}
+            </Text>
           </View>
         </View>
 
-        {/* ─── 2. Thông tin sự cố ─────────────────────────────────────────── */}
-        <View style={styles.infoCard}>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoIcon}>📍</Text>
-            <View>
-              <Text style={styles.infoMain}>35 Nguyễn Thị Thập, P. Tân Hưng, Q.7</Text>
-              <Text style={styles.infoSub}>Đã báo cáo 12 phút trước bởi @HauLe89</Text>
+        {/* ─── 2. Thông tin sự cố (từ API) ────────────────────────────────── */}
+        {alertData && (
+          <View style={styles.infoCard}>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoIcon}>📍</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.infoMain}>
+                  Khu vực: {alertData.zone_name || 'Chưa xác định'}
+                </Text>
+                {alertData.description ? (
+                  <Text style={styles.infoSub}>{alertData.description}</Text>
+                ) : null}
+              </View>
             </View>
-          </View>
-        </View>
 
-        {/* ─── 3. Blockchain verified ─────────────────────────────────────── */}
-        <View style={styles.blockchainSection}>
-          <View style={styles.blockchainHeader}>
-            <Text style={styles.blockchainIcon}>⛓</Text>
-            <Text style={styles.blockchainLabel}>LỊCH SỬ XÁC THỰC BLOCKCHAIN</Text>
-          </View>
-          <Text style={styles.blockchainHash}>
-            Mã hash: 0x7ac2...f · Xác thực bởi 14 nút lân cận.
-          </Text>
-          <Text style={styles.blockchainNote}>
-            Báo cáo này khớp với dữ liệu từ các cảm biến lượng mưa địa phương.
-          </Text>
-        </View>
+            <View style={[styles.infoRow, { marginTop: SPACING.sm }]}>
+              <Text style={styles.infoIcon}>🕐</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.infoMain}>
+                  Thời gian báo cáo
+                </Text>
+                <Text style={styles.infoSub}>
+                  {formatTime(alertData.created_at)}
+                </Text>
+              </View>
+            </View>
 
-        {/* ─── 4. Verify section ──────────────────────────────────────────── */}
+            {alertData.severity && (
+              <View style={[styles.infoRow, { marginTop: SPACING.sm }]}>
+                <Text style={styles.infoIcon}>⚠️</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.infoMain}>Mức độ</Text>
+                  <Text style={styles.infoSub}>{LEVEL.find(x=> x.id === alertData.severity)?.label}</Text>
+                </View>
+              </View>
+            )}
+
+            {alertData.source && (
+              <View style={[styles.infoRow, { marginTop: SPACING.sm }]}>
+                <Text style={styles.infoIcon}>📡</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.infoMain}>Nguồn phát tin</Text>
+                  <Text style={styles.infoSub}>{SOURCE.find(x=> x.id === alertData.source)?.label}</Text>
+                </View>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* ─── 3. Verify section ──────────────────────────────────────────── */}
         <View style={styles.verifySection}>
           <Text style={styles.verifyTitle}>Xác thực tình trạng này</Text>
+          {alertData && (
+            <Text style={styles.verifySubtitle}>Cảnh báo: {alertData.title}</Text>
+          )}
           <Text style={styles.verifySubtitle}>
             Sự đóng góp của bạn giúp lực lượng cứu hộ ưu tiên các lộ trình khẩn cấp.
           </Text>
@@ -120,8 +217,8 @@ const CommunityVerifyScreen = ({ navigation, route }) => {
                   ]}
                   onPress={() => setSelected(opt.id)}
                   activeOpacity={0.8}
+                  disabled={submitted}
                 >
-                  <Text style={styles.optionIcon}>{opt.icon}</Text>
                   <Text style={[
                     styles.optionLabel,
                     { color: isSelected ? '#FFF' : opt.color },
@@ -139,7 +236,7 @@ const CommunityVerifyScreen = ({ navigation, route }) => {
           <TouchableOpacity
             style={[styles.submitButton, !selected && styles.submitDisabled]}
             onPress={handleSubmit}
-            disabled={submitted}
+            disabled={submitted || !selected}
           >
             <Text style={styles.submitText}>
               {submitted ? '✓ Đã gửi xác nhận' : 'Gửi xác nhận'}
@@ -147,8 +244,23 @@ const CommunityVerifyScreen = ({ navigation, route }) => {
           </TouchableOpacity>
         </View>
 
+        {/* ─── 4. Thống kê vote hiện tại ──────────────────────────────────── */}
+        {alertData?.votes && alertData.votes.length > 0 && (
+          <View style={styles.voteSummaryCard}>
+            <Text style={styles.voteSummaryTitle}>
+              Xác nhận cộng đồng ({alertData.vote_count || alertData.votes.length} lượt)
+            </Text>
+            {alertData.votes.map((v) => (
+              <View key={v.id} style={styles.voteRow}>
+                <Text style={styles.voteUser}>{v.user_name || 'Ẩn danh'}</Text>
+                <Text style={styles.voteVerdict}>{VERIFY_OPTIONS.find(x=> x.id === v.verdict)?.label}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
         {/* ─── 5. AI Analysis card ────────────────────────────────────────── */}
-        <View style={styles.aiCard}>
+        {/* <View style={styles.aiCard}>
           <View style={styles.aiCardHeader}>
             <Text style={styles.aiCardIcon}>🤖</Text>
             <Text style={styles.aiCardLabel}>PHÂN TÍCH AI BẢO VỆ</Text>
@@ -156,7 +268,7 @@ const CommunityVerifyScreen = ({ navigation, route }) => {
           <Text style={styles.aiCardText}>
             Xác nhận hình ảnh từ các camera giao thông lân cận cho thấy mực nước đang dâng cao 2cm/giờ.
           </Text>
-        </View>
+        </View> */}
 
       </ScrollView>
     </SafeAreaView>
@@ -255,39 +367,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  // ── Blockchain ─────────────────────────────────
-  blockchainSection: {
-    backgroundColor: '#E8F5E9',
-    marginHorizontal: LAYOUT.screenPadding,
-    borderRadius: RADIUS.md,
-    padding: SPACING.base,
-    gap: SPACING.xs,
-    marginBottom: SPACING.base,
-    borderLeftWidth: 4,
-    borderLeftColor: COLORS.statusGreen,
-  },
-  blockchainHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  blockchainIcon: { fontSize: 13 },
-  blockchainLabel: {
-    fontSize: FONTS.xs,
-    fontWeight: FONTS.bold,
-    color: COLORS.statusGreen,
-    letterSpacing: 0.5,
-  },
-  blockchainHash: {
-    fontSize: FONTS.sm,
-    color: COLORS.textPrimary,
-  },
-  blockchainNote: {
-    fontSize: FONTS.sm,
-    color: COLORS.textSecondary,
-    fontStyle: 'italic',
-  },
-
   // ── Verify section ─────────────────────────────
   verifySection: {
     marginHorizontal: LAYOUT.screenPadding,
@@ -326,7 +405,6 @@ const styles = StyleSheet.create({
   optionSelected: {
     borderColor: 'rgba(255,255,255,0.3)',
   },
-  optionIcon: { fontSize: 24 },
   optionLabel: {
     fontSize: FONTS.sm,
     fontWeight: FONTS.semiBold,
@@ -355,6 +433,38 @@ const styles = StyleSheet.create({
     color: COLORS.textWhite,
     fontSize: FONTS.base,
     fontWeight: FONTS.bold,
+  },
+
+  // ── Vote summary ──────────────────────────────
+  voteSummaryCard: {
+    backgroundColor: COLORS.bgWhite,
+    marginHorizontal: LAYOUT.screenPadding,
+    borderRadius: RADIUS.md,
+    padding: SPACING.base,
+    ...SHADOWS.card,
+    marginBottom: SPACING.base,
+  },
+  voteSummaryTitle: {
+    fontSize: FONTS.base,
+    fontWeight: FONTS.bold,
+    color: COLORS.textPrimary,
+    marginBottom: SPACING.sm,
+  },
+  voteRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  voteUser: {
+    fontSize: FONTS.sm,
+    color: COLORS.textSecondary,
+  },
+  voteVerdict: {
+    fontSize: FONTS.sm,
+    fontWeight: FONTS.semiBold,
+    color: COLORS.textPrimary,
   },
 
   // ── AI card ────────────────────────────────────

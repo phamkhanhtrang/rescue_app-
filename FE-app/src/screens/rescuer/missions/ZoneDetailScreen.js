@@ -42,7 +42,7 @@ const ZoneDetailScreen = ({ navigation, route }) => {
       try {
         const [zoneData, sosData, missionData] = await Promise.all([
           API.zones.getDetails(zoneId),
-          API.sos.getAll({ zone_id: zoneId }),
+          API.sos.getAll({ zone: zoneId }),
           API.missions.getAll({ zone_id: zoneId })
         ]);
         setZone(zoneData);

@@ -93,7 +93,10 @@ const API = {
   // 3. COMMUNICATIONS (Alerts)
   // --------------------------------------------------
   alerts: {
-    getAll: () => apiClient('/communications/alerts/'),
+    getAll: (params = {}) => {
+      const query = new URLSearchParams(params).toString();
+      return apiClient(`/communications/alerts/${query ? `?${query}` : ''}`);
+    },
     getDetails: (id) => apiClient(`/communications/alerts/${id}/`),
     vote: (id, voteData) => apiClient(`/communications/alerts/${id}/vote/`, {
       method: 'POST',
@@ -128,6 +131,13 @@ const API = {
     create: (data) => apiClient('/reporting/resources/create/', {
       method: 'POST',
       body: JSON.stringify(data),
+    }),
+  },
+   rescueOperations: {
+    // API lấy lộ trình dẫn đường thông minh
+    getRoute: (start, target) => apiClient('/rescue_operations/get-route/', {
+      method: 'POST',
+      body: JSON.stringify({ start, target }),
     }),
   },
 };

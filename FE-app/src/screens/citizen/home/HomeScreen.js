@@ -13,85 +13,18 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
   TouchableOpacity, SafeAreaView,
 } from 'react-native';
 
-import SentinelHeader from '../../../components/citizen/common/SentinelHeader';
-import MapPlaceholder from '../../../components/citizen/common/MapPlaceholder';
-import SOSButton from '../../../components/citizen/home/SOSButton';
+import SentinelHeader   from '../../../components/citizen/common/SentinelHeader';
+import MapPlaceholder   from '../../../components/citizen/common/MapPlaceholder';
+import SOSButton        from '../../../components/citizen/home/SOSButton';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS, LAYOUT } from '../../../constants/citizen/theme';
 
-import * as Location from 'expo-location';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
-
 const HomeScreen = ({ navigation }) => {
-  const [stats, setStats] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [totalZones, setTotalZones] = useState(0);
-  const [totalSOS, setTotalSOS] = useState(0);
-
-  const [location, setLocation] = useState(null);
-  const [addressName, setAddressName] = useState('Đang xác định vị trí...');
-
-  // Fetch dashboard stats khi component mount
-  useEffect(() => {
-    fetchDashboardStats();
-    getCurrentLocation();
-  }, []);
-
-  const getCurrentLocation = async () => {
-    try {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setAddressName('Quyền truy cập vị trí bị từ chối');
-        return;
-      }
-
-      let loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-      setLocation(loc.coords);
-
-      // Ngược mã địa lý để lấy tên địa chỉ
-      let reverse = await Location.reverseGeocodeAsync({
-        latitude: loc.coords.latitude,
-        longitude: loc.coords.longitude,
-      });
-
-      if (reverse && reverse.length > 0) {
-        const addr = reverse[0];
-        const formattedAddr = [
-          addr.name,
-          addr.street,
-          addr.district,
-          addr.city || addr.region
-        ].filter(Boolean).join(', ');
-        setAddressName(formattedAddr || 'Vị trí hiện tại');
-      }
-    } catch (error) {
-      console.error('Lỗi khi lấy vị trí:', error);
-      setAddressName('Không thể xác định vị trí');
-    }
-  };
-
-  const fetchDashboardStats = async () => {
-    setLoading(true);
-    // try {
-    //   const result = await rescueOperationsApi.getDashboardStats();
-    //   if (result.ok && result.data) {
-    //     setStats(result.data);
-    //     setTotalZones(result.data.summary?.total_zones || 0);
-    //     setTotalSOS(result.data.summary?.total_sos || 0);
-    //   }
-    // } catch (error) {
-    //   console.error('Fetch dashboard stats error:', error);
-    // } finally {
-    //   setLoading(false);
-    // }
-  };
 
   // Chuyển sang SOSScreen (full-screen modal từ CitizenStack)
   const handleSOS = () => {
@@ -108,49 +41,13 @@ const HomeScreen = ({ navigation }) => {
         showsVerticalScrollIndicator={false}
       >
 
-        {/* ─── 1. Bản đồ thực tế ─────────────────────────────────────────── */}
-        <View style={[styles.mapContainer, styles.mapCard]}>
-          {location ? (
-            <MapView
-              provider={PROVIDER_GOOGLE}
-              style={styles.map}
-              region={{
-                latitude: location.latitude,
-                longitude: location.longitude,
-                latitudeDelta: 0.002,
-                longitudeDelta: 0.002,
-              }}
-              showsUserLocation={true}
-              followsUserLocation={true}
-              showsMyLocationButton={true}
-              loadingEnabled={true}
-            >
-              <Marker
-                coordinate={{
-                  latitude: location.latitude,
-                  longitude: location.longitude,
-                }}
-                title="Vị trí của bạn"
-              />
-            </MapView>
-          ) : (
-            <View style={[styles.mapPlaceholder, { height: 160 }]}>
-              <Text style={{ color: COLORS.textSecondary }}>Đang tải bản đồ...</Text>
-            </View>
-          )}
-
-          {/* Overlay UI giống placeholder */}
-          <View style={styles.mapOverlay}>
-            <View style={styles.mapBadge}>
-              <View style={[styles.badgeDot, { backgroundColor: location ? COLORS.statusGreen : COLORS.statusOrange }]} />
-              <Text style={styles.badgeText}>{location ? "GPS HOẠT ĐỘNG" : "ĐANG DÒ GPS..."}</Text>
-            </View>
-            <View style={styles.mapLabel}>
-              <Text style={styles.labelIcon}>📍</Text>
-              <Text style={styles.labelText} numberOfLines={1}>{addressName}</Text>
-            </View>
-          </View>
-        </View>
+        {/* ─── 1. Bản đồ preview ──────────────────────────────────────────── */}
+        <MapPlaceholder
+          height={160}
+          label="VỊ TRÍ HIỆN TẠI"
+          badgeText="GPS HOẠT ĐỘNG"
+          style={styles.mapCard}
+        />
 
         {/* ─── 2. Status banner ───────────────────────────────────────────── */}
         <View style={styles.statusBanner}>
@@ -162,21 +59,6 @@ const HomeScreen = ({ navigation }) => {
         <Text style={styles.safeSubtitle}>
           Sentinel đang giám sát môi trường xung quanh bạn.
         </Text>
-
-        {/* ─── 2.5 Dashboard Stats ────────────────────────────────────────── */}
-        {stats && (
-          <View style={styles.statsContainer}>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{totalZones}</Text>
-              <Text style={styles.statLabel}>🚨 Vùng sự cố</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{totalSOS}</Text>
-              <Text style={styles.statLabel}>📞 Tín hiệu SOS</Text>
-            </View>
-          </View>
-        )}
 
         {/* ─── 3. Nút SOS ─────────────────────────────────────────────────── */}
         <View style={styles.sosWrapper}>
@@ -242,69 +124,6 @@ const styles = StyleSheet.create({
   // ── Map ────────────────────────────────────────
   mapCard: {
     marginBottom: SPACING.xs,
-  },
-  mapContainer: {
-    height: 160,
-    borderRadius: RADIUS.lg,
-    overflow: 'hidden',
-    backgroundColor: '#E0E0E0',
-    position: 'relative',
-    ...SHADOWS.card,
-  },
-  map: {
-    width: '100%',
-    height: '100%',
-  },
-  mapPlaceholder: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  mapOverlay: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    padding: SPACING.sm,
-    justifyContent: 'space-between',
-    pointerEvents: 'none', // Cho phép chạm vào map bên dưới nếu cần
-  },
-  mapBadge: {
-    alignSelf: 'flex-end',
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(13,20,33,0.75)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: RADIUS.full,
-    gap: 4,
-  },
-  badgeDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  badgeText: {
-    color: COLORS.textWhite,
-    fontSize: FONTS.xs,
-    fontWeight: FONTS.bold,
-  },
-  mapLabel: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(13,20,33,0.75)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: RADIUS.full,
-    gap: 4,
-    maxWidth: '90%',
-  },
-  labelIcon: {
-    fontSize: 10,
-  },
-  labelText: {
-    color: COLORS.textWhite,
-    fontSize: FONTS.xs,
-    fontWeight: FONTS.semiBold,
   },
 
   // ── Status banner ──────────────────────────────

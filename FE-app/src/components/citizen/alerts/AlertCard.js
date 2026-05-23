@@ -16,53 +16,67 @@
  */
 
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../../constants/citizen/theme';
+
+import API from '../../../services/api';
 
 // Cấu hình màu theo severity
 const SEVERITY_CONFIG = {
-  critical: {
+  emergency: {
     accent:    COLORS.primary,
     badgeBg:   '#FFEBEE',
     badgeText: COLORS.primary,
-    icon:      '🔴',
-    label:     'CRITICAL',
+    label:     'Khẩn cấp',
   },
   warning: {
     accent:    COLORS.statusOrange,
     badgeBg:   '#FFF3E0',
     badgeText: COLORS.statusOrange,
-    icon:      '⚠️',
-    label:     'WARNING',
+    label:     'Cảnh báo',
   },
-  info: {
+  notification: {
     accent:    COLORS.statusBlue,
     badgeBg:   '#E3F2FD',
     badgeText: COLORS.statusBlue,
-    icon:      '🔵',
-    label:     'INFO',
-  },
-  rescue: {
-    accent:    COLORS.statusGreen,
-    badgeBg:   '#E8F5E9',
-    badgeText: COLORS.statusGreen,
-    icon:      '🟢',
-    label:     'RESCUE INFO',
+    label:     'Thông báo',
   },
 };
 
+const SOURCE_BADGES = {
+  AUTHORITY: 'CƠ QUAN CHỨC NĂNG',
+  AI: 'AI VERIFIED',
+  SYSTEM: 'HỆ THỐNG',
+  COMMUNITY: 'CỘNG ĐỒNG'
+};
+
 const AlertCard = ({
-  severity = 'info',
-  category = '',
-  title = '',
-  description = '',
-  timeAgo = '',
-  hasRoute = false,
-  verified = false,
+  alert,
   onPress,
   onRoute,
+  onVoteSuccess
 }) => {
-  const cfg = SEVERITY_CONFIG[severity] || SEVERITY_CONFIG.info;
+  if (!alert) return null;
+  const { id, severity = 'info', category, title, description, source, created_at, hasRoute, verified } = alert;
+
+  const cfg = SEVERITY_CONFIG[(severity || '').toLowerCase()] || SEVERITY_CONFIG.notification || { accent: COLORS.statusBlue };
+
+  // Format time (simple mockup)
+  const timeStr = created_at ? new Date(created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Vừa xong';
+
+  const handleVote = async (verdict) => {
+    try {
+      const payload = {
+        user: 'd9b2d63d-a233-4123-8472-1234567890ab', // Mock UUID for now
+        verdict: verdict
+      };
+      await API.alerts.vote(id, payload);
+      Alert.alert('Thành công', 'Đã ghi nhận phản hồi!');
+      if (onVoteSuccess) onVoteSuccess();
+    } catch (err) {
+      Alert.alert('Lỗi', err.message || 'Lỗi khi vote');
+    }
+  };
 
   return (
     <TouchableOpacity
@@ -79,11 +93,18 @@ const AlertCard = ({
               {cfg.label}
             </Text>
           </View>
+          {source && (
+            <View style={[styles.badge, { backgroundColor: '#E0E0E0' }]}>
+              <Text style={[styles.badgeLabel, { color: '#424242' }]}>
+                {SOURCE_BADGES[source] || source}
+              </Text>
+            </View>
+          )}
           {category ? (
             <Text style={styles.category}>• {category}</Text>
           ) : null}
         </View>
-        <Text style={styles.timeAgo}>{timeAgo}</Text>
+        <Text style={styles.timeAgo}>{timeStr}</Text>
       </View>
 
       {/* Content */}
@@ -93,23 +114,41 @@ const AlertCard = ({
       ) : null}
 
       {/* Footer actions */}
-      {(hasRoute || verified) && (
-        <View style={styles.footerRow}>
-          {hasRoute && (
-            <TouchableOpacity
-              style={[styles.routeButton, { backgroundColor: cfg.accent }]}
-              onPress={onRoute}
-            >
-              <Text style={styles.routeText}>GET ROUTE</Text>
-            </TouchableOpacity>
-          )}
-          {verified && (
-            <View style={styles.verifiedBadge}>
-              <Text style={styles.verifiedText}>⛓ BLOCKCHAIN VERIFIED</Text>
-            </View>
-          )}
-        </View>
-      )}
+      <View style={styles.footerRow}>
+        {(hasRoute || verified) && (
+          <>
+            {hasRoute && (
+              <TouchableOpacity
+                style={[styles.routeButton, { backgroundColor: cfg.accent }]}
+                onPress={onRoute}
+              >
+                <Text style={styles.routeText}>GET ROUTE</Text>
+              </TouchableOpacity>
+            )}
+            {verified && (
+              <View style={styles.verifiedBadge}>
+                <Text style={styles.verifiedText}>⛓ BLOCKCHAIN VERIFIED</Text>
+              </View>
+            )}
+          </>
+        )}
+
+        {/* Voting Buttons */}
+        {/* <View style={{ flexDirection: 'row', gap: SPACING.sm, marginLeft: 'auto' }}>
+          <TouchableOpacity
+            style={[styles.voteButton, { backgroundColor: COLORS.statusGreen }]}
+            onPress={() => handleVote('RESCUED')}
+          >
+            <Text style={styles.voteText}>ĐÃ TỚI</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.voteButton, { backgroundColor: COLORS.primary }]}
+            onPress={() => handleVote('STILL_DANGER')}
+          >
+            <Text style={styles.voteText}>CÒN NGUY HIỂM</Text>
+          </TouchableOpacity>
+        </View> */}
+      </View>
     </TouchableOpacity>
   );
 };
@@ -198,6 +237,16 @@ const styles = StyleSheet.create({
     color: COLORS.statusBlue,
     fontWeight: FONTS.semiBold,
   },
+  voteButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: RADIUS.sm,
+  },
+  voteText: {
+    color: COLORS.textWhite,
+    fontSize: 10,
+    fontWeight: FONTS.bold,
+  }
 });
 
 export default AlertCard;
