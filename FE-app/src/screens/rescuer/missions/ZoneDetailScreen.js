@@ -10,7 +10,7 @@ import {
   TouchableOpacity, SafeAreaView, ActivityIndicator,
   Alert
 } from 'react-native';
-
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import RescuerHeader from '../../../components/rescuer/common/RescuerHeader';
 import { RCOLORS, RFONTS, RSPACING, RRADIUS, RSHADOWS, RLAYOUT } from '../../../constants/rescuer/theme';
 import API from '../../../services/api';
@@ -30,9 +30,10 @@ const ZoneDetailScreen = ({ navigation, route }) => {
   const [zone, setZone] = useState(null);
   const [sosSignals, setSosSignals] = useState([]);
   const [missionsCount, setMissionsCount] = useState(0);
+  const [missions, setMissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
+  const total = zone?.rescuers_needed - missionsCount;
   useEffect(() => {
     const fetchData = async () => {
       if (!zoneId) {
@@ -47,6 +48,7 @@ const ZoneDetailScreen = ({ navigation, route }) => {
         ]);
         setZone(zoneData);
         setSosSignals(sosData.results || []);
+        setMissions(missionData.results || []);
         setMissionsCount(missionData.count || 0);
       } catch (err) {
         console.error('Fetch detail error:', err);
@@ -57,6 +59,11 @@ const ZoneDetailScreen = ({ navigation, route }) => {
     };
     fetchData();
   }, [zoneId]);
+  const NEEDD = [
+    { id: 'RESCUE', roleName: 'Đội Cứu hộ', label: 'Cứu hộ' },
+    { id: 'MEDICAL', roleName: 'Đội Y tế', label: 'Y tế' },
+    { id: 'FOOD', roleName: 'Đội Hậu cần', label: 'Lương thực' },
+  ];
 
   if (loading) {
     return (
@@ -86,9 +93,6 @@ const ZoneDetailScreen = ({ navigation, route }) => {
 
         {/* ── Image header ──────────────────────────────────────────────────── */}
         <View style={styles.imageHeader}>
-          <View style={styles.imageBg}>
-            <Text style={styles.imageBgText}>{displayZone.incident_type === 'Flood' ? '🌊' : '🔥'}</Text>
-          </View>
           <View style={[styles.levelBadge, { backgroundColor: severityColor }]}>
             <Text style={styles.levelBadgeText}>⚠ {getSeverityLabel(displayZone.severity)}</Text>
           </View>
@@ -99,7 +103,11 @@ const ZoneDetailScreen = ({ navigation, route }) => {
 
         {/* ── Địa chỉ ────────────────────────────────────────────────────────── */}
         <View style={styles.locationRow}>
-          <Text style={styles.locationIcon}>📍</Text>
+          <MaterialCommunityIcons
+            name="map-marker-outline"
+            size={20}
+            color="#666"
+          />
           <Text style={styles.locationText}>
             {displayZone.sector_code ? `Mã khu vực: ${displayZone.sector_code} · ` : ''}
             Tọa độ: {displayZone.location_lat}, {displayZone.location_lng}
@@ -108,20 +116,18 @@ const ZoneDetailScreen = ({ navigation, route }) => {
 
         {/* ── Nhu cầu cấp thiết ──────────────────────────────────────────────── */}
         <View style={styles.demandCard}>
-          <Text style={styles.demandLabel}>NHU CẦU CẤP THIẾT ({sosSignals.length} SOS)</Text>
+          <Text style={styles.demandLabel}>Tống số SOS mà người dân gửi {sosSignals.length} SOS</Text>
           <View style={styles.demandRow}>
-            <Text style={styles.demandNumber}>{displayZone.people_affected || 0}</Text>
-            <TouchableOpacity 
-              style={styles.sosMini} 
+            <Text style={styles.demandNumber}>{displayZone.people_affected || 0} Người</Text>
+            <TouchableOpacity
+              style={styles.sosMini}
               onPress={() => Alert.alert('Chi tiết SOS', notes.join('\n\n') || 'Không có ghi chú cụ thể.')}
             >
               <Text style={styles.sosMiniText}>SOS</Text>
             </TouchableOpacity>
           </View>
-           
-          <View style={styles.demandBar}>
-            <View style={[styles.demandBarFill, { width: '68%' }]} />
-          </View>
+
+
           <Text style={styles.demandDesc}>
             <Text style={styles.demandUrgent}>Tổng hợp ghi chú: </Text>
             {notes.length > 0 ? notes[0] : (displayZone.description || 'Chưa có mô tả.')}
@@ -133,7 +139,7 @@ const ZoneDetailScreen = ({ navigation, route }) => {
         <View style={styles.teamsSection}>
           <Text style={styles.teamsLabel}>ĐỘI NGŨ HIỆN TẠI</Text>
           <Text style={styles.teamsSub}>
-            Cần điều động thêm khoảng {displayZone.rescuers_needed || 0} đội cứu hộ 
+            Cần điều động thêm {total} đội cứu hộ
           </Text>
           {/* <View style={styles.teamAvatars}>
             {['T1', 'T2', 'T3', 'T4'].map((t, i) => (
@@ -150,16 +156,29 @@ const ZoneDetailScreen = ({ navigation, route }) => {
         {/* ── Nhân lực cần ──────────────────────────────────────────────────── */}
         <View style={styles.personnelList}>
           <View style={styles.personnelRow}>
-           
+
             <View style={styles.personnelInfo}>
               <Text style={styles.personnelLabel}>Tổng đội cứu hộ cần thiết</Text>
               <Text style={styles.personnelSub}>
-                Yêu cầu khẩn cấp: {emergencyTypes.join(', ') || 'Chưa có yêu cầu cụ thể'}
+                Yêu cầu khẩn cấp: {NEEDD.map(n => {
+                  const isRequested = sosSignals.some(s => s.emergency_type?.toUpperCase() === n.id.toUpperCase());
+                  if (!isRequested) return null;
+
+                  const activeMissionCount = missions.filter(m => {
+                    const r = m.role?.toLowerCase() || '';
+                    return (r.includes(n.label.toLowerCase()) || r.includes(n.roleName.toLowerCase())) &&
+                      ['ACTIVE', 'ON_MY_WAY', 'NEEDS_HELP'].includes(m.status);
+                  }).length;
+
+                  return activeMissionCount > 0
+                    ? `${n.label} (đã có ${activeMissionCount})`
+                    : `${n.label} (chưa có)`;
+                }).filter(Boolean).join(', ') || 'Chưa có yêu cầu cụ thể'}
               </Text>
             </View>
             <View style={[styles.personnelStatus, { backgroundColor: (missionsCount >= teamsNeeded && teamsNeeded > 0) ? '#E8F5E9' : RCOLORS.primaryLight }]}>
               <Text style={[styles.personnelStatusText, { color: (missionsCount >= teamsNeeded && teamsNeeded > 0) ? RCOLORS.statusGreen : RCOLORS.primary }]}>
-                {teamsNeeded > 0 ? `${missionsCount}/${teamsNeeded} ĐỘI` : 'ĐỦ QUÂN SỐ'}
+                {displayZone.rescuers_needed > 0 ? `${missionsCount}/${displayZone.rescuers_needed} ĐỘI` : 'Chưa có'}
               </Text>
               {displayZone.severity === 'CRITICAL' && missionsCount < teamsNeeded && <Text style={styles.urgentLabel}>CẦN GẤP</Text>}
             </View>
@@ -169,9 +188,18 @@ const ZoneDetailScreen = ({ navigation, route }) => {
         {/* ── Join button ───────────────────────────────────────────────────── */}
         <TouchableOpacity
           style={styles.joinButton}
-          onPress={() => navigation.navigate('JoinConfirmScreen', { zoneId: displayZone.id, zoneName: displayZone.name })}
+          onPress={() => navigation.navigate('JoinConfirmScreen', { 
+            zoneId: displayZone.id, 
+            zoneName: displayZone.name,
+            missionsCount: missionsCount,
+            rescuersNeeded: displayZone.rescuers_needed
+          })}
         >
-          <Text style={styles.joinIcon}>⚡</Text>
+          <MaterialCommunityIcons
+            name="lightning-bolt-outline"
+            size={22}
+            color="#dcb30eff"
+          />
           <Text style={styles.joinText}>THAM GIA VÙNG CỨU HỘ</Text>
         </TouchableOpacity>
 
@@ -201,7 +229,7 @@ const styles = StyleSheet.create({
   demandCard: { marginHorizontal: RLAYOUT.screenPadding, backgroundColor: RCOLORS.bgWhite, borderRadius: RRADIUS.lg, padding: RSPACING.base, gap: RSPACING.sm, ...RSHADOWS.card },
   demandLabel: { fontSize: RFONTS.xs, fontWeight: RFONTS.bold, color: RCOLORS.textSecondary, letterSpacing: 1.5 },
   demandRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  demandNumber: { fontSize: RFONTS.hero + 8, fontWeight: RFONTS.black, color: RCOLORS.textPrimary },
+  demandNumber: { fontSize: RFONTS.lg, fontWeight: RFONTS.black, color: RCOLORS.textPrimary },
   sosMini: { backgroundColor: RCOLORS.primary, paddingHorizontal: 16, paddingVertical: 8, borderRadius: RRADIUS.sm, ...RSHADOWS.redGlow },
   sosMiniText: { color: RCOLORS.textWhite, fontSize: RFONTS.base, fontWeight: RFONTS.black, letterSpacing: 1 },
   demandSub: { fontSize: RFONTS.xs, fontWeight: RFONTS.bold, color: RCOLORS.textSecondary, letterSpacing: 1 },

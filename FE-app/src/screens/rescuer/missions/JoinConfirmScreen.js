@@ -17,7 +17,7 @@ import {
   View, Text, StyleSheet, ScrollView,
   TouchableOpacity, SafeAreaView, Alert,
 } from 'react-native';
-
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import RescuerHeader from '../../../components/rescuer/common/RescuerHeader';
 import { RCOLORS, RFONTS, RSPACING, RRADIUS, RSHADOWS, RLAYOUT } from '../../../constants/rescuer/theme';
 import API from '../../../services/api';
@@ -25,30 +25,60 @@ import { useAuth } from '../../../context/AuthContext';
 
 const ROLES = [
   {
-    id: 'medical', icon: '🏥',
+    id: 'medical',
+    icon: 'hospital-box-outline',
     title: 'Đội Y tế',
     desc: 'Sơ cứu, điều phối thuốc và chăm sóc thương binh.',
   },
   {
-    id: 'rescue',  icon: '⛑',
+    id: 'rescue',
+    icon: 'shield-cross',
     title: 'Đội Cứu hộ',
     desc: 'Tìm kiếm cứu nạn, di chuyển người dân và thiết bị.',
     selected: true,
   },
   {
-    id: 'supply',  icon: '📦',
+    id: 'supply',
+    icon: 'package-variant-closed',
     title: 'Đội Hậu cần',
     desc: 'Phân phối thực phẩm, nước uống và điều phối kho bãi.',
   },
 ];
 
 const JoinConfirmScreen = ({ navigation, route }) => {
-  const { zoneId, zoneName = 'Vùng 7G' } = route?.params ?? {};
+  const { zoneId, zoneName = 'Vùng 7G', missionsCount = 0, rescuersNeeded = 0 } = route?.params ?? {};
   const [selectedRole, setSelectedRole] = useState('rescue');
   const { userInfo } = useAuth();
 
+  const isFull = rescuersNeeded > 0 && missionsCount >= rescuersNeeded;
+
   const handleConfirm = async () => {
+    if (isFull) {
+      Alert.alert(
+        'Đã đủ đội',
+        'Vùng này đã đủ đội cứu hộ, vui lòng tìm nhiệm vụ khác.',
+        [{ text: 'Đã hiểu' }]
+      );
+      return;
+    }
+
     try {
+      if (userInfo?.id) {
+        // Kiểm tra xem cứu hộ viên có nhiệm vụ nào chưa hoàn tất không
+        const rescuerMissions = await API.missions.getAll({ rescuer_id: userInfo.id });
+        const activeMission = (rescuerMissions.results || []).find(
+          m => m.status !== 'COMPLETED' && m.status !== 'CANCELLED'
+        );
+        if (activeMission) {
+          Alert.alert(
+            '⚠️ Nhiệm vụ chưa hoàn tất',
+            'Bạn đang ở trong một nhiệm vụ khác. Vui lòng hoàn thành nhiệm vụ hiện tại trước khi tham gia nhiệm vụ mới.',
+            [{ text: 'Đã hiểu' }]
+          );
+          return;
+        }
+      }
+
       // Gọi API tạo nhiệm vụ mới (Tham gia)
       const missionData = {
         zone: zoneId,
@@ -78,7 +108,11 @@ const JoinConfirmScreen = ({ navigation, route }) => {
 
         {/* AI badge */}
         <View style={styles.aiBadge}>
-          <Text style={styles.aiBadgeIcon}>🤖</Text>
+          <MaterialCommunityIcons
+            name="robot-outline"
+            size={20}
+            color="#666"
+          />
           <Text style={styles.aiBadgeText}>VÙNG ĐÃ XÁC THỰC AI</Text>
         </View>
 
@@ -98,9 +132,11 @@ const JoinConfirmScreen = ({ navigation, route }) => {
                 onPress={() => setSelectedRole(role.id)}
                 activeOpacity={0.8}
               >
-                <View style={[styles.roleIconBox, active && styles.roleIconBoxActive]}>
-                  <Text style={styles.roleIcon}>{role.icon}</Text>
-                </View>
+                <MaterialCommunityIcons
+                  name={role.icon}
+                  size={24}
+                  color="#666"
+                />
                 <View style={styles.roleInfo}>
                   <Text style={[styles.roleTitle, active && styles.roleTitleActive]}>{role.title}</Text>
                   <Text style={styles.roleDesc}>{role.desc}</Text>
@@ -127,8 +163,11 @@ const JoinConfirmScreen = ({ navigation, route }) => {
         </View> */}
 
         {/* Confirm button */}
-        <TouchableOpacity style={styles.confirmButton} onPress={handleConfirm}>
-          <Text style={styles.confirmText}>XÁC NHẬN THAM GIA  →</Text>
+        <TouchableOpacity 
+          style={[styles.confirmButton, isFull && { backgroundColor: '#9E9E9E', shadowColor: 'transparent', elevation: 0 }]} 
+          onPress={handleConfirm}
+        >
+          <Text style={styles.confirmText}>{isFull ? "ĐÃ ĐỦ ĐỘI" : "XÁC NHẬN THAM GIA  →"}</Text>
         </TouchableOpacity>
 
       </ScrollView>

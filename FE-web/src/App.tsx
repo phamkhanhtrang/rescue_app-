@@ -26,7 +26,7 @@ function App() {
         <Route path="/report" element={<Report />} />
         <Route path="/detail-report" element={<DetailReport />} />
         <Route path="/map" element={<Map />} />
-        <Route path="/details-rescue-zone" element={<DetailsRescueZone />} />
+        <Route path="/details-rescue-zone/:id" element={<DetailsRescueZone />} />
       </Routes>
     </BrowserRouter>
   );

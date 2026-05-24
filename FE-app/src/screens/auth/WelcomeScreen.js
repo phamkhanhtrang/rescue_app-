@@ -18,42 +18,42 @@ import {
   View, Text, StyleSheet, TouchableOpacity,
   SafeAreaView, Animated, StatusBar, Dimensions,
 } from 'react-native';
-
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 const { height: SCREEN_H } = Dimensions.get('window');
 
 // ─── Màu sắc nội tuyến (không phụ thuộc theme) ────────────────────────────────
 const C = {
-  bg:           '#0B1220',
-  bgCard:       '#111E30',
-  bgCardLight:  '#FFFFFF',
-  primary:      '#E53935',
-  blue:         '#1565C0',
-  teal:         '#00838F',
-  white:        '#FFFFFF',
-  textDim:      'rgba(255,255,255,0.55)',
-  textDimDark:  'rgba(0,0,0,0.5)',
-  border:       'rgba(255,255,255,0.10)',
-  borderLight:  '#E0E7F0',
+  bg: '#0B1220',
+  bgCard: '#111E30',
+  bgCardLight: '#FFFFFF',
+  primary: '#E53935',
+  blue: '#1565C0',
+  teal: '#00838F',
+  white: '#FFFFFF',
+  textDim: 'rgba(255,255,255,0.55)',
+  textDimDark: 'rgba(0,0,0,0.5)',
+  border: 'rgba(255,255,255,0.10)',
+  borderLight: '#E0E7F0',
 };
 
 const WelcomeScreen = ({ navigation }) => {
   // Animations
-  const logoScale   = useRef(new Animated.Value(0.6)).current;
+  const logoScale = useRef(new Animated.Value(0.6)).current;
   const logoOpacity = useRef(new Animated.Value(0)).current;
-  const cardsY      = useRef(new Animated.Value(60)).current;
-  const cardsOpacity= useRef(new Animated.Value(0)).current;
+  const cardsY = useRef(new Animated.Value(60)).current;
+  const cardsOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.sequence([
       // 1. Logo xuất hiện
       Animated.parallel([
-        Animated.spring(logoScale,   { toValue: 1, useNativeDriver: true, tension: 60, friction: 8 }),
+        Animated.spring(logoScale, { toValue: 1, useNativeDriver: true, tension: 60, friction: 8 }),
         Animated.timing(logoOpacity, { toValue: 1, duration: 600, useNativeDriver: true }),
       ]),
       // 2. Cards slide up
       Animated.parallel([
-        Animated.spring(cardsY,      { toValue: 0, useNativeDriver: true, tension: 80, friction: 10 }),
-        Animated.timing(cardsOpacity,{ toValue: 1, duration: 400, useNativeDriver: true }),
+        Animated.spring(cardsY, { toValue: 0, useNativeDriver: true, tension: 80, friction: 10 }),
+        Animated.timing(cardsOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
       ]),
     ]).start();
   }, []);
@@ -74,7 +74,7 @@ const WelcomeScreen = ({ navigation }) => {
           </View>
         </View>
         <Text style={styles.brandName}>SENTINEL</Text>
-        <Text style={styles.tagline}>Hệ thống Cứu hộ Khẩn cấp{'\n'}Blockchain · AI · Realtime</Text>
+        <Text style={styles.tagline}>Hệ thống Cứu hộ Khẩn cấp</Text>
 
         {/* Live indicator */}
         <View style={styles.liveRow}>
@@ -95,7 +95,11 @@ const WelcomeScreen = ({ navigation }) => {
           accessibilityLabel="Đăng nhập với vai trò Người dân"
         >
           <View style={styles.cardIconBox}>
-            <Text style={styles.cardIcon}>👤</Text>
+            <MaterialCommunityIcons
+              name="account-outline"
+              size={26}
+              color="#000"
+            />
           </View>
           <View style={styles.cardBody}>
             <Text style={styles.citizenCardTitle}>Người dân</Text>
@@ -116,8 +120,12 @@ const WelcomeScreen = ({ navigation }) => {
           accessibilityLabel="Đăng nhập với vai trò Đội cứu hộ"
         >
           <View style={[styles.cardIconBox, { backgroundColor: 'rgba(229,57,53,0.15)' }]}>
-            <Text style={styles.cardIcon}>🚒</Text>
-          </View>
+  <MaterialCommunityIcons
+    name="fire-truck"
+    size={26}
+    color="#fff"
+  />
+</View>
           <View style={styles.cardBody}>
             <Text style={styles.rescuerCardTitle}>Đội cứu hộ</Text>
             <Text style={styles.rescuerCardDesc}>
@@ -133,7 +141,7 @@ const WelcomeScreen = ({ navigation }) => {
       {/* ── Footer ───────────────────────────────────────────────────────── */}
       <View style={styles.footer}>
         <View style={styles.footerBadge}>
-          <Text style={styles.footerBadgeText}>⛓  Blockchain Secured</Text>
+
         </View>
         <Text style={styles.footerVersion}>SENTINEL v2.1 · © 2025</Text>
       </View>

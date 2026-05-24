@@ -14,9 +14,11 @@
  */
 
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, StatusBar } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, StatusBar, Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { RCOLORS, RFONTS, RSPACING } from '../../../constants/rescuer/theme';
+
+const STATUSBAR_HEIGHT = Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 0;
 
 const RescuerHeader = ({
   dark = false,
@@ -93,9 +95,11 @@ const RescuerHeader = ({
 
 const styles = StyleSheet.create({
   container: {
-    height: 56,
+    height: 56 + STATUSBAR_HEIGHT,
+    paddingTop: STATUSBAR_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: RSPACING.base,
     borderBottomWidth: 0,
   },

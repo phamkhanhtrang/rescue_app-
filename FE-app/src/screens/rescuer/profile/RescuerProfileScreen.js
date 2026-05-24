@@ -16,7 +16,7 @@ import API from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
 import RescuerHeader from '../../../components/rescuer/common/RescuerHeader';
 import { RCOLORS, RFONTS, RSPACING, RRADIUS, RSHADOWS } from '../../../constants/rescuer/theme';
-
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 const RescuerProfileScreen = ({ navigation }) => {
   const { signOut, userInfo } = useAuth();
   // const [fullName, setFullName] = useState(userInfo?.full_name || userInfo?.name || '');
@@ -53,8 +53,8 @@ const RescuerProfileScreen = ({ navigation }) => {
       'Bạn có chắc chắn muốn đăng xuất khỏi hệ thống chỉ huy SENTINEL?',
       [
         { text: 'Hủy', style: 'cancel' },
-        { 
-          text: 'Đăng xuất', 
+        {
+          text: 'Đăng xuất',
           style: 'destructive',
           onPress: async () => {
             await signOut();
@@ -65,9 +65,21 @@ const RescuerProfileScreen = ({ navigation }) => {
   };
 
   const PROFILE_STATS = [
-    { label: 'NHIỆM VỤ', value: '42', icon: '📋' },
-    { label: 'GIỜ TRỰC', value: '128h', icon: '⏱' },
-    { label: 'UY TÍN', value: '98%', icon: '⭐' },
+    {
+      label: 'NHIỆM VỤ',
+      value: '42',
+      icon: 'clipboard-text-outline',
+    },
+    {
+      label: 'GIỜ TRỰC',
+      value: '128h',
+      icon: 'clock-outline',
+    },
+    {
+      label: 'UY TÍN',
+      value: '98%',
+      icon: 'star-outline',
+    },
   ];
 
   return (
@@ -75,7 +87,7 @@ const RescuerProfileScreen = ({ navigation }) => {
       <RescuerHeader dark showBack onBack={() => navigation.goBack()} showAvatar={false} />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        
+
         {/* ── Profile Header ─────────────────────────────────────────────── */}
         <View style={styles.profileHeader}>
           <View style={styles.avatarWrap}>
@@ -87,19 +99,19 @@ const RescuerProfileScreen = ({ navigation }) => {
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.userName}>{userInfo?.name || 'Đội trưởng Trần B'}</Text>
+          <Text style={styles.userName}>{userInfo?.full_name}</Text>
           <Text style={styles.userRole}>CHỈ HUY HIỆN TRƯỜNG • UNIT-07</Text>
-          
-          <View style={styles.verifiedBadge}>
-            <Text style={styles.verifiedText}>⛓ ĐẠI LÝ ĐÃ XÁC THỰC BLOCKCHAIN</Text>
-          </View>
         </View>
 
         {/* ── Stats Grid ─────────────────────────────────────────────────── */}
         <View style={styles.statsGrid}>
           {PROFILE_STATS.map((stat, i) => (
             <View key={i} style={styles.statCard}>
-              <Text style={styles.statIcon}>{stat.icon}</Text>
+              <MaterialCommunityIcons
+                name={stat.icon}
+                size={22}
+                color="#666"
+              />
               <Text style={styles.statValue}>{stat.value}</Text>
               <Text style={styles.statLabel}>{stat.label}</Text>
             </View>
@@ -109,32 +121,48 @@ const RescuerProfileScreen = ({ navigation }) => {
         {/* ── Rescuer Detailed Info ───────────────────────────────────────── */}
         <View style={styles.infoSection}>
           <Text style={styles.sectionTitle}>THÔNG TIN ĐỘI VIÊN</Text>
-          
+
           <View style={styles.infoCard}>
-            <InfoRow label="HỌ VÀ TÊN" value={userInfo?.full_name || userInfo?.name || '---'}   />
+            <InfoRow label="HỌ VÀ TÊN" value={userInfo?.full_name || userInfo?.name || '---'} />
             <InfoRow
-  label="SỐ CCCD"
-  value={idNumber  }
-/>
-            <InfoRow label="TỔ CHỨC" value={unitName || 'Đội cứu hộ SENTINEL'}  />
-            <InfoRow label="CẤP BẬC" value={rank || 'Thành viên'}   />
-            <InfoRow label="CHUYÊN MÔN" value={specialty || 'Cứu hộ tổng hợp'}  />
+              label="SỐ CCCD"
+              value={idNumber}
+            />
+            <InfoRow label="TỔ CHỨC" value={unitName || 'Đội cứu hộ SENTINEL'} />
+            <InfoRow label="CẤP BẬC" value={rank || 'Thành viên'} />
+            <InfoRow label="CHUYÊN MÔN" value={specialty || 'Cứu hộ tổng hợp'} />
           </View>
         </View>
 
         {/* ── Settings Menu ──────────────────────────────────────────────── */}
         <View style={styles.menuSection}>
           <Text style={styles.sectionTitle}>HỆ THỐNG & CÁ NHÂN</Text>
-          
-          <MenuButton 
-            icon="👤" 
-            label="Thông tin cá nhân" 
-            onPress={() => navigation.navigate('RescuerProfileEdit')} 
+
+          <MenuButton
+            icon="👤"
+            label="Thông tin cá nhân"
+            onPress={() => navigation.navigate('RescuerProfileEdit')}
           />
-          <MenuButton icon="🛡" label="Bảo mật & Xác thực 2 lớp" />
-          <MenuButton icon="🔔" label="Cài đặt thông báo" />
-          <MenuButton icon="🌐" label="Ngôn ngữ" value="Tiếng Việt" />
-          <MenuButton icon="📄" label="Điều khoản & Pháp lý" />
+          {/* <MenuButton
+            icon="shield-lock-outline"
+            label="Bảo mật & Xác thực 2 lớp"
+          />
+
+          <MenuButton
+            icon="bell-outline"
+            label="Cài đặt thông báo"
+          />
+
+          <MenuButton
+            icon="translate"
+            label="Ngôn ngữ"
+            value="Tiếng Việt"
+          />
+
+          <MenuButton
+            icon="file-document-outline"
+            label="Điều khoản & Pháp lý"
+          /> */}
         </View>
 
         {/* ── Logout Button ─────────────────────────────────────────────── */}
@@ -155,14 +183,20 @@ const RescuerProfileScreen = ({ navigation }) => {
 const MenuButton = ({ icon, label, value, onPress }) => (
   <TouchableOpacity style={styles.menuItem} onPress={onPress}>
     <View style={styles.menuLeft}>
-      <Text style={styles.menuIcon}>{icon}</Text>
+      <MaterialCommunityIcons
+        name={icon}
+        size={22}
+        color="#666"
+      />
       <Text style={styles.menuLabel}>{label}</Text>
     </View>
     <View style={styles.menuRight}>
       {value && <Text style={styles.menuValue}>{value}</Text>}
       <Text style={styles.menuArrow}>›</Text>
     </View>
+
   </TouchableOpacity>
+
 );
 
 const InfoRow = ({ label, value, icon }) => (
@@ -222,7 +256,7 @@ const styles = StyleSheet.create({
 
   menuSection: { gap: RSPACING.xs },
   sectionTitle: { fontSize: 11, fontWeight: RFONTS.black, color: RCOLORS.textHint, letterSpacing: 1.5, marginBottom: 8 },
-  
+
   // Info Section
   infoSection: { gap: RSPACING.xs },
   infoCard: { backgroundColor: RCOLORS.bgNavyLight, borderRadius: RRADIUS.md, padding: RSPACING.base, gap: 12 },

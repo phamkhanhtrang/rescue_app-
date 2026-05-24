@@ -12,11 +12,12 @@ import {
 } from 'react-native';
 
 import RescuerHeader from '../../../components/rescuer/common/RescuerHeader';
+import { useAuth } from '../../../context/AuthContext';
 import {
   RCOLORS, RFONTS, RSPACING, RRADIUS, RSHADOWS, RLAYOUT,
 } from '../../../constants/rescuer/theme';
-import API from '../../../services/api'; 
-
+import API from '../../../services/api';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 const AI_INSIGHTS = [
   {
     icon: '🤖',
@@ -30,7 +31,7 @@ const AI_INSIGHTS = [
 
 const UNIT_DISTRIBUTION = [
   { label: 'Tìm kiếm & Cứu nạn', count: 43, color: RCOLORS.primary, pct: 0.70 },
-  { label: 'Hỗ trợ Y tế',  count: 18, color: RCOLORS.bgBlue,  pct: 0.30 },
+  { label: 'Hỗ trợ Y tế', count: 18, color: RCOLORS.bgBlue, pct: 0.30 },
 ];
 
 const DashboardScreen = ({ navigation }) => {
@@ -38,15 +39,40 @@ const DashboardScreen = ({ navigation }) => {
   const [zones, setZones] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [extraStats, setExtraStats] = useState({ completed: 0, staff: 1 });
+
+  const { userInfo } = useAuth();
 
   const fetchData = async () => {
     try {
-      const [statsData, zonesData] = await Promise.all([
+      const [statsData, zonesData, missionsData, resourcesData] = await Promise.all([
         API.zones.getDashboardStats(),
-        API.zones.getAll({ limit: 2 })
+        API.zones.getAll(),
+        API.missions.getAll(),
+        API.resources.getAll()
       ]);
       setStats(statsData);
-      setZones(zonesData.results || []);
+
+      const rawMissions = Array.isArray(missionsData) ? missionsData : (missionsData?.results || []);
+      const activeStatuses = ['ACTIVE', 'ON_MY_WAY', 'NEEDS_HELP'];
+      const myActiveMissionZoneIds = rawMissions
+        .filter(m => m.rescuer === userInfo?.id && activeStatuses.includes(m.status))
+        .map(m => m.zone);
+
+      const rawZones = Array.isArray(zonesData) ? zonesData : (zonesData?.results || []);
+      const myZones = rawZones.filter(z => myActiveMissionZoneIds.includes(z.id));
+
+      setZones(myZones);
+
+      // Tính toán Ca đã hoàn thành và Nhân sự trong nhóm
+      const completedCount = rawMissions.filter(m => m.rescuer === userInfo?.id && m.status === 'COMPLETED').length;
+      
+      const rawResources = Array.isArray(resourcesData) ? resourcesData : (resourcesData?.results || []);
+      const myResources = rawResources.filter(r => r.rescuer === userInfo?.id);
+      // Lấy tổng số staff từ các resources khai báo, mặc định là 1 (chính họ) nếu chưa có
+      const totalStaff = myResources.reduce((sum, r) => sum + (r.number_staff || 0), 0) || 1;
+      
+      setExtraStats({ completed: completedCount, staff: totalStaff });
     } catch (err) {
       console.error('Fetch dashboard data error:', err);
     } finally {
@@ -91,19 +117,19 @@ const DashboardScreen = ({ navigation }) => {
             {/* ─── 2. Stats row ───────────────────────────────────────────────── */}
             <View style={styles.statsRow}>
               <View style={[styles.statCard, styles.statCardLeft]}>
-                <Text style={styles.statLabel}>VÙNG GIÁM SÁT</Text>
-                <Text style={styles.statValue}>{stats?.total_zones || 0}</Text>
-                <Text style={styles.statSub}>{stats?.critical_zones || 0} vùng nguy cấp</Text>
+                <Text style={styles.statLabel}>CA ĐÃ HOÀN THÀNH</Text>
+                <Text style={styles.statValue}>{extraStats.completed}</Text>
+                <Text style={styles.statSub}>Nhiệm vụ cứu hộ</Text>
               </View>
               <View style={[styles.statCard, styles.statCardRight]}>
-                <Text style={styles.statLabel}>NHÂN VIÊN ĐANG TRỰC</Text>
-                <Text style={styles.statValue}>{stats?.total_rescuers || 0}</Text>
-                <Text style={styles.statSub}>92% Sẵn sàng vận hành</Text>
+                <Text style={styles.statLabel}>NHÂN SỰ TRONG NHÓM</Text>
+                <Text style={styles.statValue}>{extraStats.staff}</Text>
+                <Text style={styles.statSub}>Đang sẵn sàng</Text>
               </View>
             </View>
 
             {/* ─── 3. Security Status ─────────────────────────────────────────── */}
-            <View style={styles.securityCard}>
+            {/* <View style={styles.securityCard}>
               <Text style={styles.securityLabel}>TRẠNG THÁI AN NINH</Text>
               <View style={styles.securityRow}>
                 <View style={styles.alertDot} />
@@ -116,7 +142,7 @@ const DashboardScreen = ({ navigation }) => {
                   {stats?.critical_zones > 0 ? '⚠ CẢNH BÁO ĐỎ' : '✓ AN TOÀN'}
                 </Text>
               </View>
-            </View>
+            </View> */}
 
             {/* ─── 4. Priority Watch Zones ────────────────────────────────────── */}
             <View style={styles.sectionHeader}>
@@ -126,50 +152,61 @@ const DashboardScreen = ({ navigation }) => {
               </View>
             </View>
 
-            {zones.map((zone) => (
-              <View key={zone.id} style={styles.zoneCard}>
-                <View style={styles.zoneHeader}>
-                  <View style={styles.zoneIconBox}>
-                    <Text style={styles.zoneIcon}>{zone.incident_type === 'Flood' ? '🌊' : '🎯'}</Text>
-                  </View>
-                  <View style={styles.zoneInfo}>
-                    <Text style={styles.zoneName}>{zone.name}</Text>
-                    <Text style={styles.zoneDesc} numberOfLines={1}>{zone.description}</Text>
-                  </View>
-                </View>
-                {/* Progress (Mocked) */}
-                <View style={styles.progressRow}>
-                  <Text style={styles.progressLabel}>TIẾN ĐỘ</Text>
-                  <Text style={styles.progressValue}>{zone.severity === 'CRITICAL' ? '20%' : '60%'}</Text>
-                </View>
-                <View style={styles.progressBg}>
-                  <View 
-                    style={[
-                      styles.progressFill, 
-                      { 
-                        width: zone.severity === 'CRITICAL' ? '20%' : '60%', 
-                        backgroundColor: zone.severity === 'CRITICAL' ? RCOLORS.primary : RCOLORS.statusOrange 
-                      }
-                    ]} 
-                  />
-                </View>
-                {/* Action button */}
-                <TouchableOpacity
-                  style={[
-                    styles.zoneAction, 
-                    { backgroundColor: zone.severity === 'CRITICAL' ? RCOLORS.primary : RCOLORS.bgBlue }
-                  ]}
-                  onPress={() => navigation.navigate('MissionsTab', { 
-                    screen: 'ZoneDetailScreen',
-                    params: { zoneId: zone.id, zoneName: zone.name }
-                  })}
-                >
-                  <Text style={styles.zoneActionText}>
-                    {zone.severity === 'CRITICAL' ? 'Triển khai' : 'Giám sát'}
-                  </Text>
-                </TouchableOpacity>
+            {zones.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <MaterialCommunityIcons
+                  name="email-open-outline"
+                  size={48}
+                  color="#999"
+                />
+                <Text style={styles.emptyText}>Chưa thực hiện nhiệm vụ nào</Text>
               </View>
-            ))}
+            ) : (
+              zones.map((zone) => (
+                <View key={zone.id} style={styles.zoneCard}>
+                  <View style={styles.zoneHeader}>
+                    <View style={styles.zoneIconBox}>
+                      <Text style={styles.zoneIcon}>{zone.incident_type === 'Flood' ? '🌊' : '🎯'}</Text>
+                    </View>
+                    <View style={styles.zoneInfo}>
+                      <Text style={styles.zoneName}>{zone.name}</Text>
+                      <Text style={styles.zoneDesc} numberOfLines={1}>{zone.description}</Text>
+                    </View>
+                  </View>
+                  {/* Progress (Mocked) */}
+                  <View style={styles.progressRow}>
+                    <Text style={styles.progressLabel}>TIẾN ĐỘ</Text>
+                    <Text style={styles.progressValue}>{zone.severity === 'CRITICAL' ? '20%' : '60%'}</Text>
+                  </View>
+                  <View style={styles.progressBg}>
+                    <View
+                      style={[
+                        styles.progressFill,
+                        {
+                          width: zone.severity === 'CRITICAL' ? '20%' : '60%',
+                          backgroundColor: zone.severity === 'CRITICAL' ? RCOLORS.primary : RCOLORS.statusOrange
+                        }
+                      ]}
+                    />
+                  </View>
+                  {/* Action button */}
+                  <TouchableOpacity
+                    style={[
+                      styles.zoneAction,
+                      { backgroundColor: zone.severity === 'CRITICAL' ? RCOLORS.primary : RCOLORS.bgBlue }
+                    ]}
+                    onPress={() => navigation.navigate('MissionsTab', {
+                      screen: 'ActiveMissionScreen',
+                      params: { zoneId: zone.id, zoneName: zone.name }
+                    })}
+                  >
+                    <Text style={styles.zoneActionText}>
+                      Chi tiết
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ))
+            )}
 
             {/* ─── 5. Quick actions ───────────────────────────────────────────── */}
             <View style={styles.quickRow}>
@@ -196,7 +233,7 @@ const DashboardScreen = ({ navigation }) => {
             </View>
 
             {/* ─── 7. Unit Distribution ───────────────────────────────────────── */}
-            <View style={styles.unitCard}>
+            {/* <View style={styles.unitCard}>
               <Text style={styles.unitTitle}>Phân bổ Đội ngũ</Text>
               {UNIT_DISTRIBUTION.map((unit, idx) => (
                 <View key={idx} style={styles.unitRow}>
@@ -207,7 +244,7 @@ const DashboardScreen = ({ navigation }) => {
                   <Text style={styles.unitCount}>{unit.count}</Text>
                 </View>
               ))}
-            </View>
+            </View> */}
 
             {/* ─── Resource Declare button ─────────────────────────────────────── */}
             <TouchableOpacity
@@ -262,6 +299,10 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: RFONTS.base, fontWeight: RFONTS.bold, color: RCOLORS.textPrimary },
   liveBadge: { backgroundColor: '#E8F5E9', paddingHorizontal: 8, paddingVertical: 3, borderRadius: RRADIUS.full },
   liveBadgeText: { fontSize: RFONTS.xs, fontWeight: RFONTS.bold, color: RCOLORS.statusGreen },
+
+  emptyCard: { backgroundColor: RCOLORS.bgWhite, borderRadius: RRADIUS.md, padding: RSPACING.xl, alignItems: 'center', justifyContent: 'center', gap: RSPACING.sm, ...RSHADOWS.card, minHeight: 120 },
+  emptyIcon: { fontSize: 32, opacity: 0.6 },
+  emptyText: { fontSize: RFONTS.sm, color: RCOLORS.textSecondary, fontWeight: RFONTS.medium },
 
   zoneCard: { backgroundColor: RCOLORS.bgWhite, borderRadius: RRADIUS.md, padding: RSPACING.base, gap: RSPACING.md, ...RSHADOWS.card },
   zoneHeader: { flexDirection: 'row', gap: RSPACING.sm, alignItems: 'flex-start' },

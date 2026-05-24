@@ -115,3 +115,29 @@ def resource_detail(request, pk):
     if request.method == 'DELETE':
         resource.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+@api_view(['GET'])
+def mission_history(request, rescuer_id):
+    """Lấy lịch sử nhiệm vụ của một Đội cứu trợ."""
+
+    try:
+        # Filter missions by rescuer
+        missions = Mission.objects.filter(
+            rescuer_id=rescuer_id
+        ).order_by('-joined_at')
+
+        # Serialize mission history
+        serializer = MissionSerializer(missions, many=True)
+
+        return Response({
+            'status': 'success',
+            'count': missions.count(),
+            'results': serializer.data
+        })
+
+    except Exception as e:
+        print(f"MISSION HISTORY ERROR: {str(e)}")
+        return Response({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)

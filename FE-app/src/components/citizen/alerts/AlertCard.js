@@ -43,12 +43,6 @@ const SEVERITY_CONFIG = {
   },
 };
 
-const SOURCE_BADGES = {
-  AUTHORITY: 'CƠ QUAN CHỨC NĂNG',
-  AI: 'AI VERIFIED',
-  SYSTEM: 'HỆ THỐNG',
-  COMMUNITY: 'CỘNG ĐỒNG'
-};
 
 const AlertCard = ({
   alert,
@@ -93,16 +87,6 @@ const AlertCard = ({
               {cfg.label}
             </Text>
           </View>
-          {source && (
-            <View style={[styles.badge, { backgroundColor: '#E0E0E0' }]}>
-              <Text style={[styles.badgeLabel, { color: '#424242' }]}>
-                {SOURCE_BADGES[source] || source}
-              </Text>
-            </View>
-          )}
-          {category ? (
-            <Text style={styles.category}>• {category}</Text>
-          ) : null}
         </View>
         <Text style={styles.timeAgo}>{timeStr}</Text>
       </View>

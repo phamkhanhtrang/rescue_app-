@@ -72,8 +72,7 @@ export default function Page() {
 
         <div className="p-8 max-w-6xl mx-auto w-full space-y-10">
           <div className="flex flex-col gap-2">
-            <h1 className="text-4xl font-black text-slate-900">Message Composer</h1>
-            <p className="text-slate-500">Dispatch critical intelligence across the network architecture.</p>
+            <h1 className="text-4xl font-black text-slate-900">Tin nhắn thông báo</h1>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -82,9 +81,9 @@ export default function Page() {
               <div className="space-y-4">
                 <label className="text-xs font-black uppercase text-slate-400 tracking-widest">Chọn phạm vi</label>
                 <div className="grid grid-cols-3 gap-4">
-                  <ScopeBtn active={formData.scope === 'wide'} label="Toàn hệ thống" onClick={() => setFormData({...formData, scope: 'wide'})} />
-                  <ScopeBtn active={formData.scope === 'zone'} label="Theo vùng" onClick={() => setFormData({...formData, scope: 'zone'})} />
-                  <ScopeBtn active={formData.scope === 'teams'} label="Đội cụ thể" onClick={() => setFormData({...formData, scope: 'teams'})} />
+                  <ScopeBtn active={formData.scope === 'system'} label="Toàn dân" onClick={() => setFormData({...formData, scope: 'system'})} />
+                  <ScopeBtn active={formData.scope === 'zone'} label="Theo khu vực" onClick={() => setFormData({...formData, scope: 'zone'})} />
+                  <ScopeBtn active={formData.scope === 'teams'} label="Đội cứu hộ" onClick={() => setFormData({...formData, scope: 'teams'})} />
                 </div>
                 {formData.scope === 'zone' && (
                   <select 
@@ -96,7 +95,7 @@ export default function Page() {
                     {zones.map(z => <option key={z.id} value={z.id}>{z.name}</option>)}
                   </select>
                 )}
-                {formData.scope === 'teams' && (
+                {/* {formData.scope === 'teams' && (
                   <select 
                     className="w-full p-4 bg-slate-50 border border-slate-100 rounded-xl text-sm"
                     value={formData.selectedId}
@@ -109,7 +108,7 @@ export default function Page() {
                       </option>
                     ))}
                   </select>
-                )}
+                )} */}
               </div>
 
               {/* Mức độ */}

@@ -277,3 +277,4 @@ def get_rescue_route_api(request):
             'status': 'error',
             'message': str(e)
         }, status=500)
+

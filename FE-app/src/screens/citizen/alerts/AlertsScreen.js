@@ -55,7 +55,8 @@ const AlertsScreen = ({ navigation }) => {
 
       const data = await API.alerts.getAll(params);
       if (data && data.results) {
-        setAlerts(data.results);
+        const citizenAlerts = data.results.filter(a => a.category !== 'teams');
+        setAlerts(citizenAlerts);
       }
     } catch (error) {
       console.log('Fetch alerts error:', error);
@@ -144,7 +145,7 @@ const AlertsScreen = ({ navigation }) => {
           style={styles.historyLink}
           onPress={() => navigation.navigate('HistoryScreen')}
         >
-          <Text style={styles.historyLinkText}>📋  Xem lịch sử tín hiệu (Signal History)</Text>
+          <Text style={styles.historyLinkText}>Xem lịch sử tín hiệu (Signal History)</Text>
           <Text style={styles.historyArrow}>›</Text>
         </TouchableOpacity>
 

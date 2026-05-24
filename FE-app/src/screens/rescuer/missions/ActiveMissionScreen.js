@@ -17,7 +17,7 @@ import RescuerHeader from '../../../components/rescuer/common/RescuerHeader';
 import { RCOLORS, RFONTS, RSPACING, RRADIUS, RSHADOWS, RLAYOUT } from '../../../constants/rescuer/theme';
 import API from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
-
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 // Hàm tính khoảng cách giữa 2 tọa độ (meters)
 const getDistance = (lat1, lon1, lat2, lon2) => {
   const R = 6371e3; // metres
@@ -168,22 +168,20 @@ const ActiveMissionScreen = ({ navigation, route }) => {
               : `BÁO CÁO\nTRẠNG THÁI\n${zoneName.toUpperCase()}`}
           </Text>
           
-          <Animated.Text style={[styles.missionTimer, { transform: [{ scale: pulse }], color: isLeavingZone ? '#FFD600' : RCOLORS.blockchain }]}>
+          {/* <Animated.Text style={[styles.missionTimer, { transform: [{ scale: pulse }], color: isLeavingZone ? '#FFD600' : RCOLORS.blockchain }]}>
             {timer}
           </Animated.Text>
           
           {isLeavingZone && (
             <Text style={styles.geofenceDesc}>Bạn đang di chuyển ra ngoài khu vực được phân công. Vui lòng quay lại ngay!</Text>
-          )}
+          )} */}
         </View>
 
         {/* ─── 2. Mission Progress ────────────────────────────────────────── */}
         <View style={styles.progressCard}>
           <View style={styles.progressHeader}>
             <Text style={styles.progressLabel}>Tiến độ Nhiệm vụ</Text>
-            <View style={styles.aiStatusBadge}>
-              <Text style={styles.aiStatusText}>🤖 ĐANG CHIA SẺ GPS</Text>
-            </View>
+            
           </View>
           <View style={styles.progressTypeRow}>
             <Text style={styles.progressType}>TIẾN ĐỘ XỬ LÝ SOS</Text>
@@ -195,7 +193,7 @@ const ActiveMissionScreen = ({ navigation, route }) => {
 
           <View style={styles.statsGrid}>
             <StatBox label="NẠN NHÂN ĐÃ TÌM THẤY" value={`${victimsFound}/${totalPeople}`} />
-            <StatBox label="KHOẢNG CÁCH"    value={isLeavingZone ? "> 600m" : "< 500m"}    color={isLeavingZone ? RCOLORS.primary : RCOLORS.statusGreen} />
+            {/* <StatBox label="KHOẢNG CÁCH"    value={isLeavingZone ? "> 600m" : "< 500m"}    color={isLeavingZone ? RCOLORS.primary : RCOLORS.statusGreen} /> */}
             <StatBox label="MỐI NGUY HIỂM"       value={sosSignals.filter(s => s.status === 'PENDING').length}    color={RCOLORS.primary} />
           </View>
         </View>
@@ -238,7 +236,17 @@ const ActiveMissionScreen = ({ navigation, route }) => {
 
         <TouchableOpacity
           style={styles.updateMainButton}
-          onPress={() => navigation.navigate('StatusUpdateScreen', { zoneId })}
+          onPress={() => {
+            const myMission = otherMissions.find(m => m.rescuer === userInfo?.id);
+            if (myMission?.id) {
+              navigation.navigate('StatusUpdateScreen', { 
+                missionId: myMission.id, 
+                currentStatus: myMission.status 
+              });
+            } else {
+              Alert.alert('⚠️ Không tìm thấy nhiệm vụ', 'Hệ thống không tìm thấy nhiệm vụ nào của bạn trong vùng này.');
+            }
+          }}
         >
           <Text style={styles.updateMainText}>⚙  Cập nhật trạng thái đội</Text>
         </TouchableOpacity>

@@ -7,7 +7,7 @@
 // For Android emulator: use 'http://10.0.2.2:8000'
 // For iOS simulator: use 'http://127.0.0.1:8000'
 // For physical device: use your computer's local IP address e.g. 'http://192.168.x.x:8000'
-export const BASE_URL = 'http://192.168.1.71:8000';
+export const BASE_URL = 'http://192.168.1.76:8000';
 
 let authToken = null;
 

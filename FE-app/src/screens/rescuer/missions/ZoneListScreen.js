@@ -1,4 +1,4 @@
-/**
+/**vùng cứu hộ hoạt động
  * src/screens/rescuer/missions/ZoneListScreen.js
  * ─────────────────────────────────────────────────────────────────────────────
  * Danh sách Vùng Cứu Hộ Hoạt Động (Screen 4 — Tab NHIỆM VỤ default).
@@ -132,12 +132,12 @@ const ZoneListScreen = ({ navigation }) => {
             >
               <View style={styles.zoneTop}>
                 <View style={styles.zoneLeft}>
-                  <Text style={styles.zoneIcon}>{icon}</Text>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.zoneName} numberOfLines={1}>{zone.name}</Text>
+                    <Text style={styles.sosCount}>Mức độ khẩn cấp: {severityLabel} </Text>
                     <View style={styles.sosCountRow}>
-                      <Text style={styles.sosCount}>{zone.people_affected || 0} Yêu cầu</Text>
-                      <Text style={styles.teamCount}>  ·  {zone.rescuers_needed || 0} Cần thiết</Text>
+                      <Text style={styles.sosCount}>{zone.rescuers_needed || 0} Yêu cầu</Text>
+                      <Text style={styles.teamCount}>  ·  {zone.people_affected || 0} Người bị ảnh hưởng</Text>
                     </View>
                   </View>
                 </View>

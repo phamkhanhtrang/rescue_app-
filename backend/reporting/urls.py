@@ -12,4 +12,5 @@ urlpatterns = [
     path('resources/', views.resource_list, name='resource-list'),
     path('resources/create/', views.resource_create, name='resource-create'),
     path('resources/<uuid:pk>/', views.resource_detail, name='resource-detail'),
+    path('missions/<uuid:rescuer_id>/history/', views.mission_history, name='mission-history'),
 ]

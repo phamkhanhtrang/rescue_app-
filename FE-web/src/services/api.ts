@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://192.168.1.44:8000';
+const API_BASE_URL = 'http://192.168.1.76:8000';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -43,6 +43,8 @@ export const api = {
   },
   missions: {
     getAll: (params?: any) => apiClient.get('/reporting/missions/', { params }),
+    updateStatus: (id: string, data: any) => apiClient.patch(`/reporting/missions/${id}/`, data),
+    getHistory: (id: string) => apiClient.get(`/reporting/missions/${id}/history/`),
   },
   communications: {
     createAlert: (data: any) => apiClient.post('/communications/alerts/create/', data),

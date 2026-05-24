@@ -25,39 +25,40 @@ import {
   SafeAreaView, ScrollView, ActivityIndicator,
   StatusBar, Animated, KeyboardAvoidingView, Platform,
 } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuth } from '../../../context/AuthContext';
 import API from '../../../services/api';
 
 // ─── Design tokens (tối) ─────────────────────────────────────────────────────
 const C = {
-  bg:           '#0B1220',
-  bgCard:       '#111E30',
-  bgCardLight:  '#162030',
-  bgInput:      '#0F1B2D',
-  primary:      '#E53935',       // red
-  primaryDark:  '#B71C1C',
-  primaryGlow:  'rgba(229,57,53,0.25)',
-  blue:         '#1E88E5',
-  teal:         '#00BCD4',
-  white:        '#FFFFFF',
-  textWhite:    'rgba(255,255,255,0.95)',
-  textDim:      'rgba(255,255,255,0.55)',
-  textHint:     'rgba(255,255,255,0.3)',
-  border:       'rgba(255,255,255,0.10)',
-  borderFocus:  '#E53935',
-  error:        '#FF5252',
-  green:        '#43A047',
+  bg: '#0B1220',
+  bgCard: '#111E30',
+  bgCardLight: '#162030',
+  bgInput: '#0F1B2D',
+  primary: '#E53935',       // red
+  primaryDark: '#B71C1C',
+  primaryGlow: 'rgba(229,57,53,0.25)',
+  blue: '#1E88E5',
+  teal: '#00BCD4',
+  white: '#FFFFFF',
+  textWhite: 'rgba(255,255,255,0.95)',
+  textDim: 'rgba(255,255,255,0.55)',
+  textHint: 'rgba(255,255,255,0.3)',
+  border: 'rgba(255,255,255,0.10)',
+  borderFocus: '#E53935',
+  error: '#FF5252',
+  green: '#43A047',
 };
 
 const RescuerLoginScreen = ({ navigation }) => {
   const { signIn } = useAuth();
-  const [teamId,    setTeamId]    = useState('');
-  const [password,  setPassword]  = useState('');
-  const [teamCode,  setTeamCode]  = useState('');
-  const [showPass,  setShowPass]  = useState(false);
-  const [loading,   setLoading]   = useState(false);
-  const [error,     setError]     = useState('');
-  const [focused,   setFocused]   = useState(null);
+  const [teamId, setTeamId] = useState('');
+  const [password, setPassword] = useState('');
+  const [teamCode, setTeamCode] = useState('');
+  const [showPass, setShowPass] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [focused, setFocused] = useState(null);
 
   // Senior Tip: Sử dụng useMemo để object trả về từ f('id') không bị tạo mới liên tục, 
   // tránh việc TextInput bị re-mount hoặc mất focus khi đang gõ.
@@ -83,17 +84,17 @@ const RescuerLoginScreen = ({ navigation }) => {
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const shake = () => {
     Animated.sequence([
-      Animated.timing(shakeAnim, { toValue: 10,  duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 10, duration: 60, useNativeDriver: true }),
       Animated.timing(shakeAnim, { toValue: -10, duration: 60, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: 8,   duration: 60, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: 0,   duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 8, duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 0, duration: 60, useNativeDriver: true }),
     ]).start();
   };
 
   const handleLogin = async () => {
     console.log("🔘 Nút Đăng nhập đã được bấm!");
     setError('');
-    if (!teamId.trim())   { setError('Vui lòng nhập ID đội hoặc email.'); shake(); return; }
+    if (!teamId.trim()) { setError('Vui lòng nhập ID đội hoặc email.'); shake(); return; }
     if (!password.trim()) { setError('Vui lòng nhập mật khẩu.'); shake(); return; }
     // if (!teamCode.trim()) { setError('Vui lòng nhập mã xác thực đội.'); shake(); return; }
 
@@ -101,7 +102,7 @@ const RescuerLoginScreen = ({ navigation }) => {
     try {
       console.log("📡 Đang gửi yêu cầu đăng nhập với:", { login_input: teamId });
       const result = await API.auth.login({
-        login_input: teamId, 
+        login_input: teamId,
         password: password,
       });
       console.log("📥 Kết quả nhận về từ Server:", result);
@@ -118,7 +119,7 @@ const RescuerLoginScreen = ({ navigation }) => {
         }
 
         console.log("✅ Đăng nhập cứu hộ thành công!");
-        
+
         // signIn(role, info, token)
         await signIn('RESCUER', user, token);
       } else {
@@ -134,9 +135,9 @@ const RescuerLoginScreen = ({ navigation }) => {
       setLoading(false);
     }
   };
-  
 
- 
+
+
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
@@ -167,15 +168,16 @@ const RescuerLoginScreen = ({ navigation }) => {
           <View style={styles.heroSection}>
             <View style={styles.shieldOuter}>
               <View style={styles.shieldInner}>
-                <Text style={styles.shieldText}>🛡</Text>
+                <MaterialCommunityIcons
+                  name="shield-outline"
+                  size={38}
+                  color="#fff"
+                />
               </View>
             </View>
-            <Text style={styles.systemLabel}>THE SENTINEL</Text>
+
             <Text style={styles.pageTitle}>XÁC THỰC{'\n'}DANH TÍNH</Text>
-            <View style={styles.cursorWrap}>
-              <Text style={styles.pageTitleSub}>SENTINEL RESCUER PORTAL</Text>
-              <Animated.Text style={[styles.cursor, { opacity: blinkAnim }]}>|</Animated.Text>
-            </View>
+
           </View>
 
           {/* ── Form ───────────────────────────────────────────────────────── */}
@@ -185,7 +187,11 @@ const RescuerLoginScreen = ({ navigation }) => {
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>◈  ID ĐỘI / EMAIL ĐĂNG KÝ</Text>
               <View style={[styles.inputWrap, focused === 'id' && styles.inputWrapFocus]}>
-                <Text style={styles.inputPfx}>⛑</Text>
+                <MaterialCommunityIcons
+                  name="shield-cross"
+                  size={20}
+                  color="#666"
+                />
                 <TextInput
                   style={styles.input}
                   placeholder="TEAM-01 hoặc email@rescue..."
@@ -193,7 +199,7 @@ const RescuerLoginScreen = ({ navigation }) => {
                   value={teamId}
                   onChangeText={setTeamId}
                   autoCapitalize="none"
-                  
+
                 />
               </View>
             </View>
@@ -202,7 +208,11 @@ const RescuerLoginScreen = ({ navigation }) => {
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>◈  MẬT KHẨU</Text>
               <View style={[styles.inputWrap, focused === 'pass' && styles.inputWrapFocus]}>
-                <Text style={styles.inputPfx}>🔒</Text>
+                <MaterialCommunityIcons
+                  name="lock-outline"
+                  size={20}
+                  color="#666"
+                />
                 <TextInput
                   style={styles.input}
                   placeholder="••••••••"
@@ -210,10 +220,17 @@ const RescuerLoginScreen = ({ navigation }) => {
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry={!showPass}
-                  
+
                 />
-                <TouchableOpacity onPress={() => setShowPass(s => !s)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Text>{showPass ? '🙈' : '👁'}</Text>
+                <TouchableOpacity
+                  onPress={() => setShowPass(s => !s)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <MaterialCommunityIcons
+                    name={showPass ? 'eye-off-outline' : 'eye-outline'}
+                    size={22}
+                    color="#666"
+                  />
                 </TouchableOpacity>
               </View>
             </View>
@@ -246,12 +263,12 @@ const RescuerLoginScreen = ({ navigation }) => {
             ) : null}
 
             {/* Blockchain note */}
-            <View style={styles.blockchainNote}>
+            {/* <View style={styles.blockchainNote}>
               <Text style={styles.bnIcon}>⛓</Text>
               <Text style={styles.bnText}>
                 Phiên đăng nhập được mã hóa và ghi nhận trên blockchain SENTINEL
               </Text>
-            </View>
+            </View> */}
 
             {/* CTA */}
             <TouchableOpacity
@@ -273,13 +290,7 @@ const RescuerLoginScreen = ({ navigation }) => {
 
           </Animated.View>
 
-          {/* ── Demo ─────────────────────────────────────────────────────────── */}
-          <TouchableOpacity
-            style={styles.demoButton}
-            onPress={() => signIn('RESCUER', { name: 'Demo Rescuer', teamId: 'TEAM-01', teamCode: 'SENTINEL-DEMO' })}
-          >
-            <Text style={styles.demoText}>⚡  Truy cập Demo — Bỏ qua xác thực</Text>
-          </TouchableOpacity>
+
 
           {/* ── Register link ─────────────────────────────────────────────── */}
           <TouchableOpacity

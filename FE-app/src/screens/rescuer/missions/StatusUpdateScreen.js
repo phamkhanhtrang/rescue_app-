@@ -98,7 +98,7 @@ const StatusUpdateScreen = ({ navigation, route }) => {
     setLoading(false);
     try {
       setLoading(true);
-      await API.missions.updateStatus(missionId, { status: selected });
+      await API.missions.complete(missionId, { status: selected });
       Alert.alert(
         '✅ Đã cập nhật',
         'Trạng thái nhiệm vụ của bạn đã được ghi nhận trên hệ thống.',
@@ -117,12 +117,6 @@ const StatusUpdateScreen = ({ navigation, route }) => {
       <RescuerHeader showBack onBack={() => navigation.goBack()} />
 
       <ScrollView contentContainerStyle={styles.content}>
-
-        {/* AI badge */}
-        <View style={styles.aiBadge}>
-          <Text style={styles.aiIcon}>🤖</Text>
-          <Text style={styles.aiText}>XÁC THỰC TRÍ TUỆ NHÂN TẠO</Text>
-        </View>
 
         <Text style={styles.pageTitle}>Cập nhật hiện trường</Text>
         <Text style={styles.pageDesc}>
@@ -157,11 +151,7 @@ const StatusUpdateScreen = ({ navigation, route }) => {
           })}
         </View>
 
-        {/* Blockchain hash */}
-        <View style={styles.blockchainCard}>
-          <Text style={styles.blockchainLabel}>⛓ BẢO MẬT BLOCKCHAIN</Text>
-          <Text style={styles.blockchainHash}>MÃ BẢO MẬT: 81ZF • 2023-11-03</Text>
-        </View>
+
 
         {/* Confirm */}
         <TouchableOpacity 

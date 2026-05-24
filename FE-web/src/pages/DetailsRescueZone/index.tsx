@@ -1,495 +1,376 @@
 import React, { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import SliderBar from "../../components/SliderBar";
-import axios from "axios";
+import Header from "../../components/Header";
+import { api } from "../../services/api";
+import { MdOutlineHealthAndSafety } from 'react-icons/md';
+import { MdOutlineCrisisAlert } from 'react-icons/md';
+import { MdOutlineWarningAmber } from 'react-icons/md';
+import { RiClipboardLine } from 'react-icons/ri';
+import { MdOutlineLocationOn } from 'react-icons/md';
+import { RiBarChartGroupedLine } from 'react-icons/ri';
+import { RiCheckboxCircleLine } from 'react-icons/ri';
+
+// ── Status & Severity helpers ────────────────────────────────────────────────
+
+const SEVERITY_MAP: Record<string, { label: string; bgCard: string; textColor: string; barColor: string }> = {
+  CRITICAL: { label: "🔴 Nguy Hiểm", bgCard: "bg-red-50",    textColor: "text-red-700",  barColor: "bg-red-600" },
+  HIGH:     { label: "🟠 Khẩn Cấp",  bgCard: "bg-orange-50", textColor: "text-orange-700",barColor: "bg-orange-500" },
+  MEDIUM:   { label: "🔵 Trung Bình", bgCard: "bg-blue-50",   textColor: "text-blue-700", barColor: "bg-blue-500" },
+  LOW:      { label: "🟢 Thấp",       bgCard: "bg-green-50",  textColor: "text-green-700",barColor: "bg-green-500" },
+};
+
+const MISSION_STATUS_MAP: Record<string, { label: string; bg: string; text: string }> = {
+  ACTIVE:      { label: "Đang hoạt động", bg: "bg-green-100",  text: "text-green-700" },
+  ON_MY_WAY:   { label: "Đang đến",       bg: "bg-blue-100",   text: "text-blue-700" },
+  NEEDS_HELP:  { label: "Cần hỗ trợ",     bg: "bg-red-100",    text: "text-red-700" },
+  COMPLETED:   { label: "Hoàn thành",     bg: "bg-slate-100",  text: "text-slate-500" },
+  CANCELLED:   { label: "Đã hủy",         bg: "bg-slate-100",  text: "text-slate-400" },
+};
+
+const SOS_STATUS_MAP: Record<string, { label: string; dot: string }> = {
+  PENDING:     { label: "Chờ xử lý",   dot: "bg-yellow-400" },
+  ACKNOWLEDGED:{ label: "Đã tiếp nhận",dot: "bg-blue-400"   },
+  IN_PROGRESS: { label: "Đang xử lý",  dot: "bg-orange-400" },
+  RESOLVED:    { label: "Đã giải quyết",dot:"bg-green-400"  },
+  CANCELLED:   { label: "Đã hủy",      dot: "bg-slate-300"  },
+};
+const LEVEL_MAP : Record<string, string>  = {
+  LOW: "Thấp",
+  MEDIUM: "Trung Bình",
+  HIGH: "Cao",
+  CRITICAL: "Nguy Hiểm"
+}
+const STATUS : Record<string, string> = {
+  ACTIVE : "Đang hoạt động",
+  STABILIZING : "Đang ổn định",
+  RESOLVED : "Đã giải quyết",
+  STANDBY : "Chờ xử lý"
+}
+// ────────────────────────────────────────────────────────────────────────────
 
 export default function Page() {
-  const { id } = useParams();
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [zone, setZone] = useState<any>(null);
-  const [sosCount, setSosCount] = useState(0);
+  const [sosList, setSosList] = useState<any[]>([]);
+  const [missions, setMissions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchZoneDetail = async () => {
+    if (!id) return;
+    const fetchAll = async () => {
       try {
-        const res = await axios.get(`http://127.0.0.1:8000/rescue_operations/zones/${id}/`);
-        setZone(res.data);
+        setLoading(true);
+        const [zoneRes, sosRes, missionRes] = await Promise.all([
+          api.zones.getDetail(id),
+          api.sos.getAll({ zone: id }),
+          api.missions.getAll({ zone_id: id }),
+        ]);
+        setZone(zoneRes.data);
+        setSosList(sosRes.data.results || []);
+        setMissions(missionRes.data.results || []);
       } catch (e) {
-        console.error(e);
+        console.error("Lỗi tải dữ liệu chi tiết vùng:", e);
+      } finally {
+        setLoading(false);
       }
     };
-    const fetchSos = async () => {
-      try {
-        const res = await axios.get(`http://127.0.0.1:8000/rescue_operations/sos/?zone=${id}`);
-        setSosCount(res.data.count);
-      } catch (e) {
-        console.error(e);
-      }
-    };
-    if (id) {
-      fetchZoneDetail();
-      fetchSos();
-    }
+    fetchAll();
   }, [id]);
 
-  if (!zone) return <div className="p-8 text-center">Đang tải dữ liệu...</div>;
+  if (loading) return (
+    <div className="flex h-screen items-center justify-center bg-[#F8F9FA]">
+      <div className="text-center space-y-3">
+        <div className="w-10 h-10 border-4 border-[#B7131A] border-t-transparent rounded-full animate-spin mx-auto" />
+        <p className="text-slate-500 text-sm font-bold">Đang tải dữ liệu...</p>
+      </div>
+    </div>
+  );
+
+  if (!zone) return (
+    <div className="flex h-screen items-center justify-center bg-[#F8F9FA]">
+      <div className="text-center space-y-2">
+        <p className="text-2xl font-black text-slate-800 flex items-center justify-center gap-2">
+          <MdOutlineWarningAmber className="text-yellow-500" />
+          Không tìm thấy vùng
+        </p>
+        <button onClick={() => navigate(-1)} className="text-[#005FAF] text-sm font-bold underline">← Quay lại</button>
+      </div>
+    </div>
+  );
+
+  // Derived stats
+  const sev = SEVERITY_MAP[zone.severity] ?? SEVERITY_MAP.MEDIUM;
+  const activeMissions = missions.filter(m => ['ACTIVE','ON_MY_WAY','NEEDS_HELP'].includes(m.status));
+  const sosActive = sosList.filter(s => !['RESOLVED','CANCELLED'].includes(s.status)).length;
+  const needsHelpCount = missions.filter(m => m.status === 'NEEDS_HELP').length;
 
   return (
     <div className="flex h-screen w-full bg-[#F8F9FA] overflow-hidden">
-      {/* Mobile Overlay */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/40 z-20 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
       {/* Sidebar */}
-      <div
-        className={`
-          fixed lg:relative z-30 lg:z-auto
-          h-full overflow-y-auto shrink-0 border-r border-slate-200
-          transition-transform duration-300 ease-in-out
-          ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
-        `}
-      >
+      <div className={`fixed lg:relative z-30 lg:z-auto h-full overflow-y-auto shrink-0 border-r border-slate-200 transition-transform duration-300 ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}>
         <SliderBar />
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 bg-[#F8F9FA] flex flex-col h-full overflow-y-auto min-w-0">
-        {/* Header */}
-        <div
-          className="flex flex-col self-stretch bg-slate-50 pt-3 mb-4 gap-3"
-          style={{ boxShadow: "0px 1px 2px #0000000D" }}
-        >
-          <div className="flex justify-between items-center self-stretch mx-4 md:mx-6">
-            <div className="flex shrink-0 items-center gap-3 md:gap-[31px]">
-              {/* Mobile menu button */}
-              <button
-                className="lg:hidden flex flex-col justify-center items-center w-8 h-8 gap-1.5 rounded border-0 bg-transparent cursor-pointer"
-                onClick={() => setSidebarOpen(true)}
-                aria-label="Open sidebar"
-              >
-                <span className="w-5 h-0.5 bg-slate-700 rounded" />
-                <span className="w-5 h-0.5 bg-slate-700 rounded" />
-                <span className="w-5 h-0.5 bg-slate-700 rounded" />
-              </button>
+      {/* Main */}
+      <div className="flex-1 flex flex-col h-full overflow-y-auto min-w-0">
+        <Header onOpenSidebar={() => setSidebarOpen(true)} />
 
-              <div className="flex flex-col shrink-0 items-start py-1.5">
-                <span className="text-slate-900 text-base md:text-xl font-bold">
-                  {"Sentinel Ethos"}
+        <div className="px-6 md:px-10 pb-16 space-y-8">
+
+          {/* ── BREADCRUMB & BACK ── */}
+          
+          {/* ── HERO: ZONE TITLE & SEVERITY ── */}
+          <div className="flex flex-col lg:flex-row justify-between items-start gap-6">
+            <div className="flex-1 min-w-0">
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                <span className="bg-slate-100 text-slate-500 text-[10px] font-black px-3 py-1 rounded-full font-mono">
+                  ID: {zone.id?.slice(0, 8)}…
                 </span>
-              </div>
-
-              <div className="hidden sm:flex shrink-0 items-center bg-slate-200 py-[7px] px-3.5 gap-[15px] rounded">
-                <img
-                  src="https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/a22b0998-b5ff-48aa-be37-b378f672ab86"
-                  className="w-2.5 h-2.5 object-fill"
-                  alt="search"
-                />
-                <div className="flex flex-col shrink-0 items-start pb-[1px]">
-                  <span className="text-gray-500 text-sm">{"Tìm kiếm..."}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex shrink-0 items-center gap-3 md:gap-8">
-              <img
-                src="https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/609c9e4e-c0c0-45b8-aa59-b9bab93992f9"
-                className="hidden md:block w-[108px] h-9 object-fill"
-                alt="logo"
-              />
-              <div className="flex shrink-0 items-center gap-2 md:gap-3">
-                <div className="flex flex-col shrink-0 items-start">
-                  <div className="flex flex-col items-start py-0.5 px-[1px]">
-                    <span className="text-slate-900 text-xs font-bold">
-                      {"Admin_Primary"}
-                    </span>
-                  </div>
-                  <div className="flex flex-col items-start py-[3px]">
-                    <span className="text-slate-500 text-[10px]">
-                      {"Sector 7-G"}
-                    </span>
-                  </div>
-                </div>
-                <img
-                  src="https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/c827b9a9-d27c-48a0-8301-ba6f7b6d0802"
-                  className="w-8 h-9 md:w-[39px] md:h-10 object-fill"
-                  alt="avatar"
-                />
-              </div>
-            </div>
-          </div>
-          <div className="self-stretch bg-slate-200 h-[1px]"></div>
-        </div>
-
-        {/* === SECTION 1: Zone Title & Risk === */}
-        <div className="flex flex-col lg:flex-row justify-between items-start self-stretch px-4 md:px-6 gap-4 pb-4">
-          {/* Left: Zone info */}
-          <div className="flex flex-col shrink-0 items-start gap-2 min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                className="flex flex-col shrink-0 items-start bg-[#E7E8E9] text-left py-[7px] px-3 rounded border-0"
-              >
-                <span className="text-[#191C1D] text-xs font-bold">
-                  {`ID: ${zone.id}`}
+                <span className="bg-blue-50 text-[#005FAF] text-[10px] font-black px-3 py-1 rounded-full">
+                  🗺 {zone.sector_code || 'N/A'}
                 </span>
-              </button>
-              <div className="flex shrink-0 items-center gap-[7px]">
-                <img
-                  src="https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/efaabfc8-8f6f-4108-b55e-353e042cdc1a"
-                  className="w-3 h-3 object-fill"
-                />
-                <span className="text-[#005FAF] text-xs font-bold">
-                  {`Sector: ${zone.sector_code || 'N/A'}`}
+                <span className={`${sev.bgCard} ${sev.textColor} text-[10px] font-black px-3 py-1 rounded-full`}>
+                  {sev.label}
                 </span>
+                {needsHelpCount > 0 && (
+                  <span className="bg-red-50 text-[#B7131A] text-[10px] font-black px-2 py-1 rounded-lg border border-red-200 flex items-center gap-1">
+                    <MdOutlineCrisisAlert className="text-sm" />
+                    {needsHelpCount} đội cần hỗ trợ
+                  </span>
+                )}
               </div>
-            </div>
-            <div className="flex flex-col items-start py-1.5 px-[1px]">
-              <span className="text-[#191C1D] text-2xl sm:text-3xl lg:text-5xl font-bold leading-tight">
+              <h1 className="text-4xl md:text-5xl font-black text-slate-900 leading-tight mb-3">
                 {zone.name}
-              </span>
+              </h1>
+              <p className="text-slate-500 text-sm max-w-2xl leading-relaxed">
+                {zone.description || "Chưa có mô tả chi tiết cho vùng cứu hộ này."}
+              </p>
             </div>
-            <div className="flex flex-col items-start py-1">
-              <span className="text-[#5B403D] text-sm sm:text-base max-w-xl">
-                {zone.description || "Chưa có mô tả chi tiết."}
-              </span>
+
+            {/* Risk severity card */}
+            <div className={`${sev.bgCard} border border-current/10 rounded-3xl p-6 w-full lg:w-72 shrink-0`}>
+              <p className={`${sev.textColor} text-[10px] font-black uppercase tracking-widest mb-2`}>Mức độ khẩn cấp</p>
+              <p className={`${sev.textColor} text-3xl font-black mb-4`}>{LEVEL_MAP[zone.severity || "N/A"]}</p>
+              
+              <p className="text-slate-400 text-[10px] font-bold mt-3 flex items-center gap-1">
+                <MdOutlineLocationOn className="text-xs" />
+                {zone.location_lat
+                  ? `${parseFloat(zone.location_lat).toFixed(5)}, ${parseFloat(zone.location_lng).toFixed(5)}`
+                  : 'Chưa có tọa độ'}
+              </p>
             </div>
           </div>
 
-          {/* Right: Risk card */}
-          <div className={`flex flex-col shrink-0 items-start p-6 rounded-lg w-full lg:w-auto ${zone.severity === 'CRITICAL' ? 'bg-[#FFDAD6]' : 'bg-[#D3E3FD]'}`}>
-            <div className="flex flex-col items-start pb-1">
-              <span className={`${zone.severity === 'CRITICAL' ? 'text-[#93000A]' : 'text-[#005FAF]'} text-[11px] font-bold`}>
-                {"Risk Assessment"}
-              </span>
-            </div>
-            <div className="flex items-center mb-2 gap-4">
-              <span className={`${zone.severity === 'CRITICAL' ? 'text-[#93000A]' : 'text-[#005FAF]'} text-2xl sm:text-3xl font-bold`}>
-                {zone.severity || "NORMAL"}
-              </span>
-              <img
-                src="https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/0a1262f0-bad0-433c-a186-83e4d59f35a4"
-                className="w-[33px] h-7 object-fill"
-              />
-            </div>
-            <div className="items-start bg-[#93000A33] pr-6 mt-2 rounded-xl w-full">
-              <div className="bg-[#B7131A] w-[168px] h-1.5"></div>
-            </div>
+          {/* ── STAT CARDS ── */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard label="Tổng SOS" total={sosList.length} unit="tín hiệu" color="text-[#B7131A]" />
+            <StatCard label="Đội Cứu Hộ Có Mặt"  total={zone.rescuers_needed || 0} unit="đội" color="text-[#005FAF]" />
+            <StatCard label="Người Bị Ảnh Hưởng" value={zone.people_affected || 0} total={null} unit="người" color="text-orange-600" />
+            <StatCard label="Ưu Tiên AI" value={zone.ai_priority_score ? zone.ai_priority_score.toFixed(1) : 'N/A'} total={null} unit="điểm" color="text-purple-600" />
           </div>
-        </div>
 
-        {/* === SECTION 2: Main content (map + sidebar) === */}
-        <div className="flex flex-col xl:flex-row items-start self-stretch gap-6 px-4 md:px-6 pb-6">
-          {/* Left column: stats + map + actions */}
-          <div className="flex flex-col flex-1 gap-6 min-w-0">
-            {/* Stat Cards */}
-            <div className="flex flex-col sm:flex-row items-stretch justify-center gap-4">
-              {/* Active SOS */}
-              <div className="flex flex-col shrink-0 items-start bg-[#F3F4F5] p-6 gap-[22px] rounded-lg flex-1">
-                <div className="flex flex-col items-start pb-[1px]">
-                  <span className="text-[#5B403D] text-[11px]">
-                    {"Active SOS Signals"}
-                  </span>
+          {/* ── MAIN GRID: Active Units + SOS List ── */}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+
+            {/* Active Units (from real missions) */}
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+                <div>
+                  <h2 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                    <MdOutlineHealthAndSafety className="text-red-600 text-lg" />
+                    Đội Cứu Hộ
+                  </h2>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">{activeMissions.length} / {zone.rescuers_needed || 0} đội theo yêu cầu</p>
                 </div>
-                <div className="flex flex-col items-start pt-1.5 gap-[15px]">
-                  <span className="text-[#B7131A] text-4xl sm:text-5xl font-bold ml-[1px]">
-                    {sosCount}
-                  </span>
-                  <span className="text-[#5B403D] text-xs">
-                    {`Tín hiệu khẩn cấp`}
-                  </span>
-                </div>
+                {needsHelpCount > 0 && (
+                  <span className="bg-red-50 text-[#B7131A] text-[10px] font-black px-2 py-1 rounded-lg border border-red-200 flex items-center gap-1">
+  <MdOutlineCrisisAlert className="text-sm" />
+  {needsHelpCount} cần hỗ trợ
+</span>
+                )}
               </div>
-              {/* Assigned Teams */}
-              <div className="flex flex-col shrink-0 items-start bg-[#F3F4F5] p-6 gap-[22px] rounded-lg flex-1">
-                <div className="flex flex-col items-start pb-[1px]">
-                  <span className="text-[#5B403D] text-[11px]">
-                    {"Rescuers Needed"}
-                  </span>
-                </div>
-                <div className="flex flex-col items-start pt-1.5 gap-[15px]">
-                  <span className="text-[#005FAF] text-4xl sm:text-5xl font-bold ml-0.5">
-                    {zone.rescuers_needed || 0}
-                  </span>
-                  <span className="text-[#5B403D] text-xs">
-                    {"Nhân sự"}
-                  </span>
-                </div>
+              <div className="divide-y divide-slate-50 max-h-96 overflow-y-auto">
+                {activeMissions.length === 0 ? (
+                  <div className="px-6 py-10 text-center text-slate-400 text-sm font-bold">
+                    Chưa có đội cứu hộ nào tại vùng này.
+                  </div>
+                ) : (
+                  activeMissions.map((m: any) => {
+                    const ms = MISSION_STATUS_MAP[m.status] ?? { label: m.status, bg: "bg-slate-100", text: "text-slate-500" };
+                    return (
+                      <div key={m.id} className="flex items-center justify-between px-6 py-4 hover:bg-slate-50 transition-colors">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`w-9 h-9 rounded-xl ${m.status === 'NEEDS_HELP' ? 'bg-red-100' : 'bg-blue-50'} flex items-center justify-center text-base shrink-0`}>
+                            {m.status === 'NEEDS_HELP' ? '🆘' : '🧑‍🚒'}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-black text-slate-900 truncate">{m.rescuer_name || 'Cứu hộ viên'}</p>
+                            <p className="text-[10px] text-slate-400 font-bold">{m.role || 'Đội cứu hộ'} · Tham gia {new Date(m.joined_at).toLocaleTimeString('vi-VN', {hour:'2-digit', minute:'2-digit'})}</p>
+                          </div>
+                        </div>
+                        <span className={`${ms.bg} ${ms.text} text-[10px] font-black px-2 py-1 rounded-lg shrink-0`}>
+                          {ms.label}
+                        </span>
+                      </div>
+                    );
+                  })
+                )}
               </div>
-              {/* Missing Roles */}
-              <div className="flex flex-col shrink-0 items-start bg-[#008097] p-6 gap-[15px] rounded-lg flex-1">
-                <span className="text-[#F9FDFF] text-[11px] pb-[1px]">
-                  {"Missing Roles"}
+
+              {/* Completed missions — full list */}
+              {missions.filter(m => m.status === 'COMPLETED').length > 0 && (
+                <div className="border-t border-slate-100">
+                  <div className="px-6 py-3 bg-slate-50 flex items-center gap-2">
+                    <RiCheckboxCircleLine className="text-green-600 text-base" />
+                    <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">
+                      {missions.filter(m => m.status === 'COMPLETED').length} đội đã hoàn thành nhiệm vụ
+                    </p>
+                  </div>
+                  <div className="divide-y divide-slate-50">
+                    {missions
+                      .filter(m => m.status === 'COMPLETED')
+                      .map((m: any) => (
+                        <div key={m.id} className="flex items-center justify-between px-6 py-3 bg-slate-50/60 hover:bg-slate-100/60 transition-colors">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-8 h-8 rounded-xl bg-green-100 flex items-center justify-center text-sm shrink-0">
+                              <RiCheckboxCircleLine className="text-green-600 text-base" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-black text-slate-700 truncate">Tên đội trưởng: {m.rescuer_name || 'Cứu hộ viên'}</p>
+                              <p className="text-[10px] text-slate-400 font-bold">
+                                {m.role || 'Đội cứu hộ'}
+                                {m.completed_at
+                                  ? ` · Hoàn thành lúc ${new Date(m.completed_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} ngày ${new Date(m.completed_at).toLocaleDateString('vi-VN')}`
+                                  : ''}
+                              </p>
+                            </div>
+                          </div>
+                          <span className="bg-green-100 text-green-700 text-[10px] font-black px-2 py-1 rounded-lg shrink-0">
+                            Hoàn thành
+                          </span>
+                        </div>
+                      ))
+                    }
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* SOS Signals */}
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+                <div>
+                  <h2 className="text-sm font-black text-slate-900"> Tín Hiệu SOS</h2>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">{sosList.length} tín hiệu tổng</p>
+                </div>
+                <span className="bg-red-50 text-[#B7131A] text-[10px] font-black px-2 py-1 rounded-lg border border-red-200">
+                  {sosActive} chưa xử lý
                 </span>
-                <div className="flex flex-col items-start gap-2 w-full">
-                  {[
-                    { role: "Rescue", val: "-02" },
-                    { role: "Supply", val: "-04" },
-                    { role: "Medical", val: "-01" },
-                  ].map((item, i) => (
-                    <div key={i} className="flex items-center justify-between w-full">
-                      <span className="text-[#F9FDFF] text-xs">{item.role}</span>
-                      <span className="text-[#F9FDFF] text-base font-bold">{item.val}</span>
+              </div>
+              <div className="divide-y divide-slate-50 max-h-96 overflow-y-auto">
+                {sosList.length === 0 ? (
+                  <div className="px-6 py-10 text-center text-slate-400 text-sm font-bold">
+                    Chưa có tín hiệu SOS nào tại vùng này.
+                  </div>
+                ) : (
+                  sosList.map((s: any) => {
+                    const ss = SOS_STATUS_MAP[s.status] ?? { label: s.status, dot: "bg-slate-300" };
+                    return (
+                      <div key={s.id} className="flex items-start gap-3 px-6 py-4 hover:bg-slate-50 transition-colors">
+                        <div className={`w-2 h-2 rounded-full ${ss.dot} shrink-0 mt-1.5`} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-sm font-black text-slate-900 truncate">
+                              {s.citizen_name || 'Người dân'} · {s.signal_type || 'SOS'}
+                            </p>
+                            <span className="text-[10px] text-slate-400 font-bold shrink-0">
+                              {new Date(s.sent_at).toLocaleString('vi-VN', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-500 mt-0.5">
+                            {ss.label}
+                            {s.emergency_type ? ` · ${s.emergency_type}` : ''}
+                            {s.people_count ? ` · ${s.people_count} người` : ''}
+                          </p>
+                          {s.note && <p className="text-[11px] text-slate-600 mt-1 line-clamp-2">{s.note}</p>}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* ── ZONE META INFO ── */}
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
+            <h2 className="text-sm font-black text-slate-900 mb-5 flex items-center gap-2">
+  <RiClipboardLine className="text-red-600 text-base" />
+  Thông Tin Vùng Cứu Hộ
+</h2>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              <MetaItem label="Mã Sector" value={zone.sector_code || 'N/A'} />
+              <MetaItem label="Trạng thái" value={STATUS[zone.status] || 'N/A'} />
+              <MetaItem label="Loại sự cố" value={zone.incident_type || 'N/A'} />
+              <MetaItem label="Người ảnh hưởng" value={`${zone.people_affected || 0} người`} />
+              <MetaItem label="Cứu hộ cần thiết" value={`${zone.rescuers_needed || 0} đội`} />
+              <MetaItem label="Điểm ưu tiên AI" value={zone.ai_priority_score != null ? zone.ai_priority_score.toFixed(2) : 'N/A'} />
+              <MetaItem label="Tạo lúc" value={zone.created_at ? new Date(zone.created_at).toLocaleString('vi-VN') : 'N/A'} />
+              <MetaItem label="Cập nhật" value={zone.updated_at ? new Date(zone.updated_at).toLocaleString('vi-VN') : 'N/A'} />
+            </div>
+          </div>
+
+          {/* ── SOS BY TYPE SUMMARY ── */}
+          {sosList.length > 0 && (() => {
+            const byStatus = Object.entries(SOS_STATUS_MAP).map(([key, val]) => ({
+              key, ...val,
+              count: sosList.filter(s => s.status === key).length
+            })).filter(x => x.count > 0);
+            return (
+              <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
+                <h2 className="text-sm font-black text-slate-900 mb-5 flex items-center gap-2">
+  <RiBarChartGroupedLine className="text-red-600 text-base" />
+  Phân Loại Tín Hiệu SOS
+</h2>
+                <div className="flex flex-wrap gap-3">
+                  {byStatus.map(b => (
+                    <div key={b.key} className="flex items-center gap-2 bg-slate-50 px-4 py-2 rounded-xl border border-slate-100">
+                      <div className={`w-2 h-2 rounded-full ${b.dot}`} />
+                      <span className="text-xs font-black text-slate-700">{b.label}</span>
+                      <span className="text-xs font-black text-slate-400">{b.count}</span>
                     </div>
                   ))}
                 </div>
               </div>
-            </div>
+            );
+          })()}
 
-            {/* Live Feed / Map Area */}
-            <div
-              className="flex items-start self-stretch px-4 sm:px-6 min-h-[220px] sm:min-h-[280px] rounded-lg"
-              style={{ background: "linear-gradient(180deg, #00000099, #00000000)" }}
-            >
-              <div className="flex flex-col shrink-0 items-start bg-[#E1E3E499] py-4 px-4 mt-[60px] sm:mt-[100px] mb-4 gap-[7px] rounded-lg border border-solid border-[#FFFFFF33]">
-                <span className="text-white text-[10px] font-bold">
-                  {"Live Feed"}
-                </span>
-                <div className="flex items-center gap-2">
-                  <div className="bg-[#B7131A] w-2 h-2 rounded-xl"></div>
-                  <span className="text-white text-sm sm:text-base font-bold">
-                    {"DRONE-7 VERIFYING"}
-                  </span>
-                </div>
-              </div>
-              <div className="flex-1 self-stretch"></div>
-              <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2 mt-[60px] sm:mt-[100px] mb-4">
-                <button
-                  className="flex flex-col shrink-0 items-start bg-[#FFFFFF1A] text-left py-[11px] px-4 rounded border-0"
-                  onClick={() => alert("Pressed!")}
-                >
-                  <span className="text-white text-xs font-bold">{"EXPAND VIEW"}</span>
-                </button>
-                <button
-                  className="flex flex-col shrink-0 items-start bg-[#FFFFFF1A] text-left py-[11px] px-4 rounded border-0"
-                  onClick={() => alert("Pressed!")}
-                >
-                  <span className="text-white text-xs font-bold">{"LAYER: TOPOLOGY"}</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex shrink-0 items-center bg-[#E7E8E9] py-4 sm:py-5 px-4 sm:px-[35px] gap-[11px] rounded-lg cursor-pointer hover:bg-slate-200 transition-colors">
-                <img
-                  src="https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/0f603779-5284-44ab-bf8f-92a16b0df17d"
-                  className="w-[18px] h-4 rounded-lg object-fill"
-                />
-                <span className="text-[#191C1D] text-xs font-bold whitespace-nowrap">
-                  {"Update Risk"}
-                </span>
-              </div>
-              <div
-                className="flex shrink-0 items-center bg-[#FFFFFF00] py-3 gap-[11px] rounded-lg cursor-pointer"
-                style={{ boxShadow: "0px 4px 6px #0000001A" }}
-              >
-                <img
-                  src="https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/d3e307e6-b368-444a-82c1-b2e2dff83516"
-                  className="w-[19px] h-4 rounded-lg object-fill"
-                />
-                <span className="text-white text-xs text-center w-[108px]">
-                  {"Dispatch More Teams"}
-                </span>
-              </div>
-              <div className="flex-1" />
-              <div className="flex shrink-0 items-center bg-[#E7E8E9] py-4 sm:py-5 px-4 sm:px-[13px] gap-[11px] rounded-lg cursor-pointer hover:bg-slate-200 transition-colors">
-                <img
-                  src="https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/f50fcfd1-fbf0-4855-8b68-2c2361bfdbf5"
-                  className="w-4 h-4 rounded-lg object-fill"
-                />
-                <span className="text-[#191C1D] text-xs font-bold whitespace-nowrap">
-                  {"Merge/Split Zone"}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Right column: AI Insights + Active Units */}
-          <div className="flex flex-col shrink-0 items-start gap-6 w-full xl:w-[320px]">
-            {/* AI Insights */}
-            <div className="flex flex-col items-start bg-[#EDEEEF] p-[25px] gap-6 rounded-lg border border-solid border-[#E4BEB926] w-full">
-              <div className="flex items-center gap-[7px]">
-                <img
-                  src="https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/b511ce48-f4a6-4f21-9cc5-60ed62d87fc8"
-                  className="w-[19px] h-5 object-fill"
-                />
-                <span className="text-[#191C1D] text-xs font-bold">
-                  {"AI Situational Insight"}
-                </span>
-              </div>
-              <div className="flex flex-col items-start gap-4 w-full">
-                {/* Insight 1 */}
-                <div className="flex items-center bg-white py-4 rounded w-full">
-                  <div className="bg-[#006578] w-1 mx-4 self-stretch rounded"></div>
-                  <div className="flex flex-col shrink-0 items-start gap-1 min-w-0">
-                    <span className="text-[#191C1D] text-sm font-bold">
-                      {"Projected flood peak in 42 minutes."}
-                    </span>
-                    <span className="text-[#5B403D] text-xs">
-                      {"Recommended evacuation of sector 7-B via high-ground route 4."}
-                    </span>
-                  </div>
-                </div>
-                {/* Insight 2 */}
-                <div className="flex items-center bg-white py-4 rounded w-full">
-                  <div className="bg-[#BA1A1A] w-1 mx-4 self-stretch rounded"></div>
-                  <div className="flex flex-col shrink-0 items-start gap-1 min-w-0">
-                    <span className="text-[#191C1D] text-sm font-bold">
-                      {"Power Grid Instability"}
-                    </span>
-                    <span className="text-[#5B403D] text-xs">
-                      {"Ground sensors indicate substation 4 failure is imminent."}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Active Unit Status */}
-            <div className="flex flex-col items-start w-full">
-              <div className="flex flex-col items-start pb-4 pl-2">
-                <span className="text-[#191C1D] text-xs">{"Active Unit Status"}</span>
-              </div>
-              <div className="flex flex-col items-start gap-3 w-full">
-                {/* Aqua-Rescue 1 */}
-                <div className="flex items-center justify-between bg-white p-4 rounded-lg w-full">
-                  <div className="flex shrink-0 items-center gap-4">
-                    <button
-                      className="flex flex-col shrink-0 items-start bg-[#005FAF1A] text-left py-2.5 px-3 rounded-xl border-0"
-                      onClick={() => alert("Pressed!")}
-                    >
-                      <img
-                        src="https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/f1588b68-e643-4218-a376-456ef468399f"
-                        className="w-4 h-5 rounded-xl object-fill"
-                      />
-                    </button>
-                    <div className="flex flex-col shrink-0 items-start py-1 gap-[5px]">
-                      <span className="text-[#191C1D] text-sm font-bold">{"Aqua-Rescue 1"}</span>
-                      <span className="text-[#5B403D] text-[10px]">{"En Route - ETA 4m"}</span>
-                    </div>
-                  </div>
-                  <button
-                    className="flex flex-col shrink-0 items-start bg-[#E7E8E9] text-left py-[7px] px-2 rounded-sm border-0"
-                    onClick={() => alert("Pressed!")}
-                  >
-                    <span className="text-[#191C1D] text-[10px] font-bold">{"Active"}</span>
-                  </button>
-                </div>
-                {/* Med-Response Delta */}
-                <div className="flex items-center justify-between bg-[#F3F4F5] p-4 rounded-lg w-full">
-                  <div className="flex shrink-0 items-center gap-4">
-                    <button
-                      className="flex flex-col shrink-0 items-start bg-[#B7131A1A] text-left p-2.5 rounded-xl border-0"
-                      onClick={() => alert("Pressed!")}
-                    >
-                      <img
-                        src="https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/e98036ce-e4dd-44f5-8ad7-ef630f09d89d"
-                        className="w-5 h-5 rounded-xl object-fill"
-                      />
-                    </button>
-                    <div className="flex flex-col shrink-0 items-start py-1 gap-[5px]">
-                      <span className="text-[#191C1D] text-sm font-bold ml-[1px]">{"Med-Response Delta"}</span>
-                      <span className="text-[#5B403D] text-[10px]">{"On Site - Deploying"}</span>
-                    </div>
-                  </div>
-                  <button
-                    className="flex flex-col shrink-0 items-start bg-[#BA1A1A1A] text-left py-[7px] px-2 rounded-sm border-0"
-                    onClick={() => alert("Pressed!")}
-                  >
-                    <span className="text-[#BA1A1A] text-[10px] font-bold">{"Busy"}</span>
-                  </button>
-                </div>
-                {/* Air-Lift 7 */}
-                <div className="flex items-center justify-between bg-white p-4 rounded-lg w-full">
-                  <div className="flex shrink-0 items-center gap-4">
-                    <button
-                      className="flex flex-col shrink-0 items-start bg-slate-200 text-left py-2.5 px-[9px] rounded-xl border-0"
-                      onClick={() => alert("Pressed!")}
-                    >
-                      <img
-                        src="https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/b1c27805-c376-4491-9c46-7da7f9996af1"
-                        className="w-[22px] h-5 rounded-xl object-fill"
-                      />
-                    </button>
-                    <div className="flex flex-col shrink-0 items-start pb-[3px] gap-[3px]">
-                      <span className="text-[#191C1D] text-sm font-bold">{"Air-Lift 7"}</span>
-                      <span className="text-[#5B403D] text-[10px]">{"Standby - Refueling"}</span>
-                    </div>
-                  </div>
-                  <button
-                    className="flex flex-col shrink-0 items-start bg-[#E7E8E9] text-left py-[7px] px-[9px] rounded-sm border-0"
-                    onClick={() => alert("Pressed!")}
-                  >
-                    <span className="text-[#191C1D] text-[10px] font-bold">{"Ready"}</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* === SECTION 3: Command Log (Blockchain Ledger) === */}
-        <div className="bg-slate-50 border-t border-slate-200 p-6 md:p-12 relative">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-3">
-                <div className="bg-[#005FAF] p-2 rounded-lg">
-                  <img
-                    src="https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/blockchain-icon-placeholder"
-                    className="w-5 h-5 object-fill invert"
-                    alt="chain"
-                  />
-                </div>
-                <h3 className="text-[#191C1D] text-lg font-black tracking-tight">
-                  {"Immutable Command Log"}
-                </h3>
-              </div>
-              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest ml-12">
-                {"Chain ID: Sentinel-Mainnet-01"}
-              </p>
-            </div>
-            <button className="text-[#005FAF] text-xs font-black uppercase tracking-widest hover:underline decoration-2 underline-offset-4">
-              {"Verify Entire Zone History"}
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[
-              { hash: "0x8f2...ae19", title: "Zone Risk Upgraded to CRITICAL", meta: "14:22:09 UTC | Admin: Jonas_K", icon: "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/518a58df-7b63-4547-b7de-3f2c8e7f780d" },
-              { hash: "0x41c...90bb", title: "Team Dispatch: Aqua-Rescue 1", meta: "14:18:45 UTC | Admin: Auto_Dispatch", icon: "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/0b95a22e-46b9-4858-86fc-eb503fc5346c" },
-              { hash: "0x221...fe04", title: "Satellite Telemetry Verified", meta: "14:15:22 UTC | System: Sentinel_Orbital", icon: "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/50cbfd52-b580-42f1-9f35-563acc94bbfb" }
-            ].map((log, idx) => (
-              <div key={idx} className="flex flex-col gap-4 bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all group">
-                <div className="flex items-center justify-between">
-                  <span className="text-[#5B403D] text-[10px] font-black font-mono opacity-40 bg-slate-50 py-1 px-2 rounded-md group-hover:opacity-100 transition-opacity">
-                    {log.hash}
-                  </span>
-                  <img src={log.icon} className="w-3 h-3 object-fill opacity-20" alt="verified" />
-                </div>
-                <div className="space-y-1">
-                  <h4 className="text-[#191C1D] text-[15px] font-black tracking-tight">{log.title}</h4>
-                  <p className="text-slate-400 text-xs font-medium leading-relaxed">{log.meta}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Floating Action Button */}
-          <button
-            className="flex flex-col items-center justify-center bg-white w-14 h-14 absolute -bottom-7 right-8 rounded-2xl shadow-2xl border border-slate-100 hover:scale-110 active:scale-95 transition-all text-slate-400 hover:text-[#005FAF]"
-            onClick={() => alert("Loading full ledger...")}
-          >
-            <img
-              src="https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/d48473a0-a6d5-419a-8cc5-2d365167a859"
-              className="w-6 h-6 object-fill"
-              alt="ledger"
-            />
-          </button>
         </div>
       </div>
     </div>
   );
 }
+
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+const StatCard = ({ label, value, total, unit, color }: any) => (
+  <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5">
+    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{label}</p>
+    <div className="flex items-baseline gap-1">
+      <span className={`text-3xl font-black ${color}`}>{total}</span>
+      <span className={`text-3xl font-black ${color}`}>{value}</span>
+    </div>
+    <p className="text-[10px] text-slate-400 font-bold mt-1">{unit}</p>
+  </div>
+);
+
+const MetaItem = ({ label, value }: any) => (
+  <div className="bg-slate-50 rounded-2xl p-4">
+    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
+    <p className="text-sm font-black text-slate-800">{value}</p>
+  </div>
+);

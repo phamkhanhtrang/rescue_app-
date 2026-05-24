@@ -27,3 +27,4 @@ class ResourceSerializer(serializers.ModelSerializer):
             'vehicle_type', 'number_staff', 'is_available', 'created_at',
         ]
         read_only_fields = ['id', 'created_at']
+

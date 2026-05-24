@@ -21,7 +21,7 @@ import RescuerHeader from '../../../components/rescuer/common/RescuerHeader';
 import { RCOLORS, RFONTS, RSPACING, RRADIUS, RSHADOWS, RLAYOUT } from '../../../constants/rescuer/theme';
 import API from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
-
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /** Trả về nhãn và màu sắc cho từng mức độ khẩn cấp */
@@ -47,12 +47,12 @@ const timeAgo = (dateStr) => {
 const RescuerAlertsScreen = ({ navigation }) => {
   const { userInfo } = useAuth();
 
-  const [urgentAlerts, setUrgentAlerts]   = useState([]);
-  const [systemAlerts, setSystemAlerts]   = useState([]);
-  const [teamRequests, setTeamRequests]   = useState([]);
-  const [loading, setLoading]             = useState(true);
-  const [refreshing, setRefreshing]       = useState(false);
-  const [accepted, setAccepted]           = useState({});
+  const [urgentAlerts, setUrgentAlerts] = useState([]);
+  const [systemAlerts, setSystemAlerts] = useState([]);
+  const [teamRequests, setTeamRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [accepted, setAccepted] = useState({});
 
   // ── Fetch data ──────────────────────────────────────────────────────────────
 
@@ -66,13 +66,15 @@ const RescuerAlertsScreen = ({ navigation }) => {
 
       // Phân loại Alerts
       const allAlerts = alertsRes?.results ?? [];
+      const filteredAlerts = allAlerts.filter(a => a.category === 'system' || a.category === 'teams');
+
       setUrgentAlerts(
-        allAlerts.filter(a =>
+        filteredAlerts.filter(a =>
           a.source === 'AI' || a.severity === 'CRITICAL' || a.severity === 'HIGH'
         )
       );
       setSystemAlerts(
-        allAlerts.filter(a =>
+        filteredAlerts.filter(a =>
           a.source === 'SYSTEM' && a.severity !== 'CRITICAL' && a.severity !== 'HIGH'
         )
       );
@@ -140,7 +142,11 @@ const RescuerAlertsScreen = ({ navigation }) => {
 
         {/* ── Cảnh báo khẩn cấp ──────────────────────────────────────────────── */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionIcon}>🚨</Text>
+          <MaterialCommunityIcons
+            name="alert-outline"
+            size={22}
+            color="#E53935"
+          />
           <Text style={styles.sectionTitle}>CẢNH BÁO KHẨN CẤP</Text>
           {urgentAlerts.length > 0 && (
             <View style={styles.badge}><Text style={styles.badgeText}>{urgentAlerts.length}</Text></View>
@@ -149,7 +155,8 @@ const RescuerAlertsScreen = ({ navigation }) => {
 
         {urgentAlerts.length === 0 ? (
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>✅ Không có cảnh báo khẩn cấp</Text>
+
+            <Text style={styles.emptyText}>Không có cảnh báo khẩn cấp</Text>
           </View>
         ) : urgentAlerts.map(alertItem => {
           const style = getUrgentStyle(alertItem.source, alertItem.severity);
@@ -165,18 +172,16 @@ const RescuerAlertsScreen = ({ navigation }) => {
               <Text style={styles.urgentDesc}>{alertItem.description}</Text>
               <TouchableOpacity
                 style={[styles.urgentAction, { backgroundColor: style.color }]}
-                onPress={() => alertItem.zone && navigation.navigate('MissionsTab', {
-                  screen: 'ZoneDetailScreen', params: { zoneId: alertItem.zone }
-                })}
+                onPress={() => navigation.navigate('MissionsTab')}
               >
-                <Text style={styles.urgentActionText}>PHẢN HỒI NGAY</Text>
+                <Text style={styles.urgentActionText}>XEM CHI TIẾT</Text>
               </TouchableOpacity>
             </View>
           );
         })}
 
         {/* ── Yêu cầu từ các đội ─────────────────────────────────────────────── */}
-        <View style={styles.sectionHeader}>
+        {/* <View style={styles.sectionHeader}>
           <Text style={styles.sectionIcon}>📋</Text>
           <Text style={styles.sectionTitle}>YÊU CẦU TỪ CÁC ĐỘI</Text>
           {teamRequests.length > 0 && (
@@ -184,11 +189,11 @@ const RescuerAlertsScreen = ({ navigation }) => {
               <Text style={styles.badgeText}>{teamRequests.length}</Text>
             </View>
           )}
-        </View>
+        </View> */}
 
-        {teamRequests.length === 0 ? (
+        {/* {teamRequests.length === 0 ? (
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>📭 Không có yêu cầu hỗ trợ</Text>
+            <Text style={styles.emptyText}>Không có yêu cầu hỗ trợ</Text>
           </View>
         ) : teamRequests.map(req => (
           <View key={req.id} style={styles.requestCard}>
@@ -202,8 +207,8 @@ const RescuerAlertsScreen = ({ navigation }) => {
             </View>
             <Text style={styles.requestDesc}>
               {req.role ? `Vai trò: ${req.role} — ` : ''}Đội này đang cần chi viện khẩn cấp tại vùng sự cố.
-            </Text>
-            <View style={styles.requestActions}>
+            </Text> */}
+            {/* <View style={styles.requestActions}>
               <TouchableOpacity
                 style={[styles.acceptButton, accepted[req.id] && styles.acceptedButton]}
                 onPress={() => handleAccept(req.id, req.zone)}
@@ -219,9 +224,9 @@ const RescuerAlertsScreen = ({ navigation }) => {
               >
                 <Text style={styles.detailText}>CHI TIẾT</Text>
               </TouchableOpacity>
-            </View>
-          </View>
-        ))}
+            </View> */}
+          {/* </View>
+        ))} */}
 
         {/* ── Thông báo hệ thống ─────────────────────────────────────────────── */}
         <View style={styles.sectionHeader}>
@@ -231,11 +236,10 @@ const RescuerAlertsScreen = ({ navigation }) => {
 
         {systemAlerts.length === 0 ? (
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>📭 Không có thông báo hệ thống</Text>
+            <Text style={styles.emptyText}> Không có thông báo hệ thống</Text>
           </View>
         ) : systemAlerts.map(sa => (
           <View key={sa.id} style={styles.systemCard}>
-            <Text style={styles.systemIcon}>⚙️</Text>
             <View style={styles.systemInfo}>
               <Text style={styles.systemText}>{sa.title}</Text>
               <Text style={styles.systemSub}>{sa.description}</Text>

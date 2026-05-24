@@ -57,7 +57,7 @@ class AlertListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Alert
         fields = [
-            'id', 'zone_name', 'title', 'category',
+            'id', 'zone_name', 'title', 'category','description',
             'severity', 'source', 'is_active', 'created_at', 'vote_count',
             'location_lat', 'location_lng',
         ]

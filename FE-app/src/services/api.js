@@ -81,7 +81,7 @@ const API = {
     getDetails: (id) => apiClient(`/rescue_operations/sos/${id}/`),
     updateStatus: (id, status) => apiClient(`/rescue_operations/sos/${id}/`, {
       method: 'PATCH',
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status, timestamp }),
     }),
     cancel: (id) => apiClient(`/rescue_operations/sos/${id}/`, {
       method: 'PUT',
@@ -117,12 +117,12 @@ const API = {
       body: JSON.stringify(data),
     }),
     getDetails: (id) => apiClient(`/reporting/missions/${id}/`),
-    updateStatus: (id, data) => apiClient(`/reporting/missions/${id}/`, {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    }),
+    // updateStatus: (id, data,timestamp) => apiClient(`/reporting/missions/${id}/`, {
+    //   method: 'PATCH',
+    //   body: JSON.stringify(data,timestamp),
+    // }),
     complete: (id, data = {}) => apiClient(`/reporting/missions/${id}/complete/`, {
-      method: 'POST',
+      method: 'PATCH',
       body: JSON.stringify(data),
     }),
   },

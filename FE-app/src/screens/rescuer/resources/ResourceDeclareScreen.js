@@ -27,25 +27,26 @@ import RescuerHeader from '../../../components/rescuer/common/RescuerHeader';
 import { RCOLORS, RFONTS, RSPACING, RRADIUS, RSHADOWS, RLAYOUT } from '../../../constants/rescuer/theme';
 import API from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
-const VEHICLES  = ['Xe tải', ' Thuyền', 'Cano'];
-const TYPES     = ['Cứu hộ', 'Thực phẩm', 'Y tế'];
-const SUPPLIES  = [
-  { id: 'water',    label: 'Nước uống',    unit: 'thùng',  initial: 15 },
-  { id: 'medicine', label: 'Thuốc men',     unit: 'hộp',   initial: 0  },
-  { id: 'rice',     label: 'Lúa gạo/muối', unit: 'bao',   initial: 5  },
+const VEHICLES = ['Xe tải', ' Thuyền', 'Cano'];
+const TYPES = ['Cứu hộ', 'Thực phẩm', 'Y tế'];
+const SUPPLIES = [
+  { id: 'water', label: 'Nước uống', unit: 'thùng', initial: 15 },
+  { id: 'medicine', label: 'Thuốc men', unit: 'hộp', initial: 0 },
+  { id: 'rice', label: 'Lúa gạo/muối', unit: 'bao', initial: 5 },
 ];
 
 const ResourceDeclareScreen = ({ navigation }) => {
-  const [selectedVehicle, setSelectedVehicle] = useState('🚛 Xe tải');
-  const [selectedTypes,   setSelectedTypes]   = useState(['🚨 Cứu hộ']);
-  const [supplies,        setSupplies]        = useState(
+  const [selectedVehicle, setSelectedVehicle] = useState('Xe tải');
+  const [selectedTypes, setSelectedTypes] = useState(['Cứu hộ']);
+  const [supplies, setSupplies] = useState(
     SUPPLIES.reduce((acc, s) => ({ ...acc, [s.id]: s.initial }), {})
   );
-  const [location,        setLocation]        = useState(null);
-  const [errorMsg,        setErrorMsg]        = useState(null);
-  const [numberStaff,     setNumberStaff]     = useState(1);
-  const [loading,         setLoading]         = useState(false);
+  const [location, setLocation] = useState(null);
+  const [errorMsg, setErrorMsg] = useState(null);
+  const [numberStaff, setNumberStaff] = useState(1);
+  const [loading, setLoading] = useState(false);
 
   const { userInfo } = useAuth();
 
@@ -86,7 +87,7 @@ const ResourceDeclareScreen = ({ navigation }) => {
       };
 
       await API.resources.create(payload);
-      
+
       Alert.alert('Thành công', 'Thông tin nguồn lực đã được ghi nhận.');
       navigation.goBack();
     } catch (error) {
@@ -104,10 +105,10 @@ const ResourceDeclareScreen = ({ navigation }) => {
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
 
         {/* AI Matched badge */}
-        <View style={styles.aiBadge}>
+        {/* <View style={styles.aiBadge}>
           <Text style={styles.aiDot}>●</Text>
           <Text style={styles.aiBadgeText}>GHÉP CẶP HỖ TRỢ AI</Text>
-        </View>
+        </View> */}
 
         <Text style={styles.pageTitle}>Khai báo nguồn lực</Text>
         <Text style={styles.pageDesc}>
@@ -146,22 +147,26 @@ const ResourceDeclareScreen = ({ navigation }) => {
         <SectionLabel index="02" label="SỐ LƯỢNG THÀNH VIÊN TRONG NHÓM" />
         <View style={styles.staffCard}>
           <View style={styles.staffInfo}>
-            <Text style={styles.staffEmoji}>👥</Text>
+            <MaterialCommunityIcons
+              name="account-group-outline"
+              size={24}
+              color="#666"
+            />
             <View>
               <Text style={styles.staffLabel}>Nhân sự đi cùng</Text>
               <Text style={styles.staffSubLabel}>Bao gồm cả đội trưởng</Text>
             </View>
           </View>
           <View style={styles.counter}>
-            <TouchableOpacity 
-              style={styles.counterBtn} 
+            <TouchableOpacity
+              style={styles.counterBtn}
               onPress={() => setNumberStaff(prev => Math.max(1, prev - 1))}
             >
               <Text style={styles.counterBtnText}>−</Text>
             </TouchableOpacity>
             <Text style={styles.counterValue}>{numberStaff}</Text>
-            <TouchableOpacity 
-              style={[styles.counterBtn, styles.counterBtnPlus]} 
+            <TouchableOpacity
+              style={[styles.counterBtn, styles.counterBtnPlus]}
               onPress={() => setNumberStaff(prev => prev + 1)}
             >
               <Text style={[styles.counterBtnText, { color: RCOLORS.textWhite }]}>+</Text>
@@ -223,8 +228,8 @@ const ResourceDeclareScreen = ({ navigation }) => {
         </View> */}
 
         {/* ── Submit ───────────────────────────────────────────────────────── */}
-        <TouchableOpacity 
-          style={[styles.submitButton, loading && styles.submitButtonDisabled]} 
+        <TouchableOpacity
+          style={[styles.submitButton, loading && styles.submitButtonDisabled]}
           onPress={handleConfirm}
           disabled={loading}
         >

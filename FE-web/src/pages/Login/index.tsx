@@ -29,7 +29,7 @@ export default function HomeLogin() {
     setError(""); // Reset lỗi cũ
 
     try {
-      const response = await axios.post("http://192.168.1.44:8000/accounts/login/", {
+      const response = await axios.post("http://192.168.1.76:8000/accounts/login/", {
         login_input: loginInput,
         password: password,
       });
@@ -48,7 +48,7 @@ export default function HomeLogin() {
       if (response.data.user.role === "ADMIN") {
         navigate("/dashboard");
       } else {
-        navigate("/home"); // Cho Citizen hoặc Relief Team
+        navigate("/home"); 
       }
     } catch (err: any) {
       // Nếu lỗi (Sai pass, thiếu trường...)
