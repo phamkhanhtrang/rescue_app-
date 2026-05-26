@@ -1,240 +1,449 @@
-import React, { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import SliderBar from "../../components/SliderBar";
 import Header from "../../components/Header";
 import { api } from "../../services/api";
-import { MapContainer, TileLayer, Circle, Marker, Popup } from 'react-leaflet';
-import L from 'leaflet';
+import { useNavigate } from "react-router-dom";
 
-// Fix for default marker icons in React-Leaflet
-import markerIcon from 'leaflet/dist/images/marker-icon.png';
-import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 
-let DefaultIcon = L.icon({
-    iconUrl: markerIcon,
-    shadowUrl: markerShadow,
-    iconSize: [25, 41],
-    iconAnchor: [12, 41]
-});
-L.Marker.prototype.options.icon = DefaultIcon;
-
-const getSeverityColor = (severity: string) => {
-  switch (severity) {
-    case 'CRITICAL': return '#B7131A';
-    case 'HIGH': return '#E07A00';
-    case 'MEDIUM': return '#005FAF';
-    case 'LOW': return '#2E7D32';
-    default: return '#5B403D';
-  }
+const SEVERITY_CONFIG = {
+  CRITICAL: {
+    label: "Khẩn cấp",
+    bg: "bg-red-50",
+    text: "text-red-700",
+    border: "border-red-200",
+    dot: "bg-red-500",
+    bar: "bg-red-500",
+  },
+  WARNING: {
+    label: "Cảnh báo",
+    bg: "bg-amber-50",
+    text: "text-amber-700",
+    border: "border-amber-200",
+    dot: "bg-amber-500",
+    bar: "bg-amber-500",
+  },
+  NORMAL: {
+    label: "Bình thường",
+    bg: "bg-green-50",
+    text: "text-green-700",
+    border: "border-green-200",
+    dot: "bg-green-500",
+    bar: "bg-green-500",
+  },
+  INFO: {
+    label: "Thông báo",
+    bg: "bg-blue-50",
+    text: "text-blue-700",
+    border: "border-blue-200",
+    dot: "bg-blue-500",
+    bar: "bg-blue-500",
+  },
 };
 
-export default function Page() {
-  const [showSidebar, setShowSidebar] = useState(false);
-  const [zones, setZones] = useState<any[]>([]);
-  const [rescuers, setRescuers] = useState<any[]>([]);
-  const [stats, setStats] = useState({
-    summary: {
-      total_zones: 0,
-      total_sos: 0,
-      total_teams: 0,
-    },
-    zones_by_status: {
-      ACTIVE: 0,
-      STABILIZING: 0,
-      RESOLVED: 0,
-      STANDBY: 0,
-    },
-    latest_sos_detail: {
-      sos_data_list: []
-    }
+const TEAM_STATUS_CONFIG = {
+  ON_SITE: {
+    label: "Đang xử lý",
+    dot: "bg-red-500",
+    badge: "bg-red-50 text-red-700",
+  },
+  MOVING: {
+    label: "Di chuyển",
+    dot: "bg-amber-500",
+    badge: "bg-amber-50 text-amber-700",
+  },
+  COMPLETED: {
+    label: "Hoàn thành",
+    dot: "bg-green-500",
+    badge: "bg-green-50 text-green-700",
+  },
+  AVAILABLE: {
+    label: "Sẵn sàng",
+    dot: "bg-blue-500",
+    badge: "bg-blue-50 text-blue-700",
+  },
+  ASSIGNED: {
+    label: "Đã phân công",
+    dot: "bg-purple-500",
+    badge: "bg-purple-50 text-purple-700",
+  },
+};
+
+
+export default function AdminDashboard() {
+  const [stats, setStats] = useState<any>({
+    sos_pending: 0,
+    sos_critical: 0,
+    active_zones: 0,
+    critical_zones: 0,
+    teams_on_mission: 0,
+    teams_available: 0,
+    completed_today: 0,
+    completed_yesterday: 0
   });
+  const [zones, setZones] = useState([]);
+  const [teams, setTeams] = useState([]);
+  const [sosList, setSosList] = useState([]);
+  const [alerts, setAlerts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
 
-  const total =
-    (stats.zones_by_status.ACTIVE || 0) +
-    (stats.zones_by_status.STABILIZING || 0) +
-    (stats.zones_by_status.RESOLVED || 0) +
-    (stats.zones_by_status.STANDBY || 0);
+  const fetchData = async () => {
+    setLoading(true);
+    setErrorMsg("");
+    try {
+      const [zonesRes, teamsRes, sosRes, missionsRes, alertsRes] = await Promise.all([
+        api.zones.getAll(),
+        api.rescuers.getAll(),
+        api.sos.getAll(),
+        api.missions.getAll(),
+        api.alerts.getAll()
+      ]);
 
-  const redPercent = total ? Math.round(((stats.zones_by_status.ACTIVE || 0) / total) * 100) : 0;
-  const yellowPercent = total ? Math.round(((stats.zones_by_status.STABILIZING || 0) / total) * 100) : 0;
-  const greenPercent = total ? 100 - redPercent - yellowPercent : 0;
+      const zonesData = zonesRes?.data?.results || zonesRes?.data || [];
+      const teamsData = teamsRes?.data?.results || teamsRes?.data || [];
+      const sosData = sosRes?.data?.results || sosRes?.data || [];
+      const missionsData = missionsRes?.data?.results || missionsRes?.data || [];
+      const alertsData = alertsRes?.data?.results || alertsRes?.data || [];
+
+      const mapSeverity = (sev: string) => {
+        if (!sev) return 'NORMAL';
+        const s = sev.toUpperCase();
+        if (s === 'CRITICAL' || s === 'HIGH') return 'CRITICAL';
+        if (s === 'MEDIUM' || s === 'WARNING') return 'WARNING';
+        if (s === 'LOW' || s === 'NORMAL') return 'NORMAL';
+        return 'INFO';
+      };
+
+      // Map Zones
+      const mappedZones = zonesData.map((z: any) => {
+        const assigned = missionsData.filter((m: any) => m.zone === z.id && ['ACTIVE', 'ON_MY_WAY', 'NEEDS_HELP'].includes(m.status)).length;
+        return {
+          id: z.id,
+          name: z.name,
+          severity: mapSeverity(z.severity),
+          teams_assigned: assigned,
+          teams_required: z.rescuers_needed || 0,
+          type: "Khu vực sự cố",
+        };
+      });
+
+      // Map Teams
+      const mappedTeams = teamsData.map((t: any) => {
+        const activeM = missionsData.find((m: any) => m.rescuer === t.id && ['ACTIVE', 'ON_MY_WAY'].includes(m.status));
+        const zoneName = activeM ? (zonesData.find((z: any) => z.id === activeM.zone)?.name || "Khu vực") : "—";
+        return {
+          id: t.id,
+          name: t.rescuer_profile?.unit_name || t.full_name || "Đội cứu hộ",
+          zone: zoneName,
+          status: activeM ? (activeM.status === 'ON_MY_WAY' ? 'MOVING' : 'ON_SITE') : 'AVAILABLE',
+          type: t.rescuer_profile?.specialty || "Cứu hộ",
+        };
+      });
+
+      // Map Alerts
+      const mappedAlerts = alertsData.map((a: any) => ({
+        id: a.id,
+        title: a.title,
+        severity: mapSeverity(a.severity),
+        time: new Date(a.created_at).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'}),
+        votes_danger: a.vote_count?.downvotes || 0,
+        votes_safe: a.vote_count?.upvotes || 0,
+        votes_total: (a.vote_count?.upvotes || 0) + (a.vote_count?.downvotes || 0)
+      }));
+
+      // Calculate Stats
+      const calculatedStats = {
+        sos_pending: sosData.filter((s: any) => s.status === 'PENDING').length,
+        sos_critical: sosData.filter((s: any) => s.severity === 'CRITICAL' || s.emergency_type === 'CRITICAL').length,
+        active_zones: zonesData.filter((z: any) => z.status === 'ACTIVE').length,
+        critical_zones: zonesData.filter((z: any) => z.severity === 'CRITICAL').length,
+        teams_on_mission: mappedTeams.filter((t: any) => t.status !== 'AVAILABLE').length,
+        teams_available: mappedTeams.filter((t: any) => t.status === 'AVAILABLE').length,
+        completed_today: missionsData.filter((m: any) => m.status === 'COMPLETED').length,
+        completed_yesterday: 0
+      };
+
+      setStats(calculatedStats);
+      setZones(mappedZones);
+      setTeams(mappedTeams);
+      setSosList(sosData); // if we render SOS later
+      setAlerts(mappedAlerts);
+      setLastUpdated(new Date().toLocaleTimeString("vi-VN"));
+    } catch (err: any) {
+      console.error("Dashboard fetch error:", err);
+      setErrorMsg(err?.message || "Lỗi tải dữ liệu");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [dashRes, sosRes, teamRes, zoneRes] = await Promise.all([
-          api.dashboard.getStats(),
-          api.sos.getAll({ status: 'PENDING' }),
-          api.rescuers.getAll(),
-          api.zones.getAll()
-        ]);
-
-        setStats({
-          summary: {
-            total_zones: dashRes.data.summary?.total_zones || 0,
-            total_sos: dashRes.data.summary?.total_sos || 0,
-            total_teams: teamRes.data.count || 0,
-          },
-          zones_by_status: dashRes.data.zones_by_status || {},
-          latest_sos_detail: {
-            sos_data_list: sosRes.data.results || []
-          }
-        });
-        setZones(zoneRes.data.results || []);
-        setRescuers(teamRes.data.results || []);
-      } catch (error) {
-        console.error("Lỗi lấy dữ liệu dashboard:", error);
-      }
-    };
     fetchData();
   }, []);
+  const navigate = useNavigate();
+  const handleViewNotification = async () => {
+    navigate(`/notification-broadcast`);
+  }   // ← đóng function
+  // ← dư cái này — đóng cái gì?
+
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  if (errorMsg) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-500 mb-4">{errorMsg}</p>
+          <button onClick={fetchData} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Thử lại</button>
+        </div>
+      </div>
+    );
+  }
+
+  // if (loading) {
+  //   return (
+  //     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+  //       <div className="text-center">
+  //         <div className="w-8 h-8 border-2 border-gray-200 border-t-gray-600 rounded-full animate-spin mx-auto mb-3"></div>
+  //         <p className="text-sm text-gray-400">Đang tải dữ liệu...</p>
+  //       </div>
+  //     </div>
+  //   );
+  // }
 
   return (
-    <div className="flex flex-col md:flex-row h-screen w-full bg-[#F8F9FA] overflow-hidden">
-      {/* Sidebar Overlay */}
-      {showSidebar && (
-        <div className="fixed inset-0 z-40 bg-black/40 md:hidden" onClick={() => setShowSidebar(false)} />
-      )}
-      
-      <div className={`fixed top-0 left-0 z-50 h-full w-64 bg-white shadow-lg transform transition-transform duration-200 md:static md:translate-x-0 md:block ${showSidebar ? "translate-x-0" : "-translate-x-full"} md:w-[260px]`}>
+    <div className="flex h-screen w-full bg-[#F8F9FA] overflow-hidden">
+      <div
+        className={`fixed lg:relative z-30 lg:z-auto h-full overflow-y-auto shrink-0 border-r border-slate-200 transition-transform duration-300 ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
+      >
         <SliderBar />
       </div>
 
-      <div className="flex-1 flex flex-col overflow-y-auto">
-        <Header onOpenSidebar={() => setShowSidebar(true)} />
+      <div className="flex-1 bg-[#F8F9FA] flex flex-col h-full overflow-y-auto min-w-0">
+        <Header onOpenSidebar={() => setSidebarOpen(true)} />
 
-        {/* Thống kê nhanh */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-8 pb-4">
-          <StatCard title="Vùng cứu hộ" value={stats.summary.total_zones} sub="+2% so với tuần trước" icon="zone" />
-          <StatCard title="Yêu cầu SOS" value={stats.summary.total_sos} sub="Khẩn cấp: HIGH" icon="sos" color="#B7131A" />
-          <StatCard title="Đội cứu hộ" value={stats.summary.total_teams} sub="Đang triển khai" icon="team" color="#005FAF" />
-        </div>
+        <div className="max-w-7xl mx-auto px-4 md:px-8 py-8 space-y-8">
+          {/* Stat cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <StatCard
+              label="SOS chờ xử lý"
+              value={stats.sos_pending}
+              sub={`${stats.sos_critical} khẩn cấp chưa có đội`}
+              subColor="text-red-500"
+            />
+            <StatCard
+              label="Vùng đang hoạt động"
+              value={stats.active_zones}
+              sub={`${stats.critical_zones} vùng nguy cấp`}
+              subColor="text-red-500"
+            />
+            <StatCard
+              label="Đội đang làm nhiệm vụ"
+              value={stats.teams_on_mission}
+              sub={`${stats.teams_available} đội đang rảnh`}
+              subColor="text-green-500"
+            />
+            <StatCard
+              label="Ca hoàn thành hôm nay"
+              value={stats.completed_today}
+              sub={`+${stats.completed_today - stats.completed_yesterday} so với hôm qua`}
+              subColor="text-green-500"
+            />
+          </div>
 
-        {/* Bản đồ & Thông tin chi tiết (Requirement 2.3.1) */}
-        <div className="flex flex-col lg:flex-row gap-6 p-8 pt-0">
-          <div className="flex-[2] bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden min-h-[500px]">
-            <div className="p-4 border-b border-slate-50 flex justify-between items-center">
-              <h2 className="font-bold text-slate-800">Bản đồ Giám sát Thời gian thực</h2>
-              <div className="flex gap-4 text-xs font-bold">
-                <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-[#B7131A]" /> Nguy cấp</span>
-                <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-[#005FAF]" /> Đang xử lý</span>
+          {/* Zones + Teams */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Zones */}
+            <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 p-6 shadow-md">
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-2">
+                  <LiveDot />
+                  <h2 className="text-base font-bold text-gray-900">
+                    Vùng đang theo dõi
+                  </h2>
+                </div>
+                <span className="text-xs bg-red-50 text-red-700 px-2 py-0.5 rounded font-semibold shadow-sm">
+                  {stats.critical_zones} nguy cấp
+                </span>
+              </div>
+              <div className="divide-y divide-gray-100">
+                {zones.map((z) => (
+                  <ZoneCard key={z.id} zone={z} />
+                ))}
               </div>
             </div>
-            <div className="h-[450px] w-full">
-              <MapContainer center={[10.762622, 106.660172]} zoom={13} style={{ height: '100%', width: '100%' }}>
-                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                
-                {/* Hiển thị các vùng */}
-                {zones.map(zone => (
-                  <Circle 
-                    key={zone.id}
-                    center={[parseFloat(zone.location_lat), parseFloat(zone.location_lng)]}
-                    radius={500}
-                    pathOptions={{ 
-                      color: getSeverityColor(zone.severity),
-                      fillColor: getSeverityColor(zone.severity),
-                      fillOpacity: 0.3
-                    }}
-                  >
-                    <Popup>
-                      <div className="p-1">
-                        <h3 className="font-bold text-lg">{zone.name}</h3>
-                        <p className="text-sm text-slate-600">Trạng thái: <b>{zone.status}</b></p>
-                        <p className="text-sm text-slate-600">Số SOS: <b>{zone.sos_count || 0}</b></p>
-                        <p className="text-sm text-slate-600">Số đội: <b>2</b> (Gợi ý)</p>
-                        <hr className="my-2" />
-                        <button className="text-blue-600 font-bold text-xs">XEM CHI TIẾT →</button>
-                      </div>
-                    </Popup>
-                  </Circle>
-                ))}
 
-                {/* Hiển thị vị trí các đội (Mock if real GPS not present) */}
-                {rescuers.map(r => (
-                  <Marker 
-                    key={r.id} 
-                    position={[10.76 + Math.random()*0.02, 106.66 + Math.random()*0.02]}
-                  >
-                    <Popup>
-                      <div className="text-xs">
-                        <p className="font-bold">{r.user_name}</p>
-                        <p>Đơn vị: {r.unit_name}</p>
-                        <p>Trạng thái: <b>Đang cứu hộ</b></p>
-                      </div>
-                    </Popup>
-                  </Marker>
+            {/* Teams */}
+            <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-md">
+              <h2 className="text-base font-bold text-gray-900 mb-5">
+                Các đội cứu hộ
+              </h2>
+              <div className="divide-y divide-gray-100">
+                {teams.map((t) => (
+                  <TeamRow key={t.id} team={t} />
                 ))}
-              </MapContainer>
+              </div>
+              {/* Distribution */}
             </div>
           </div>
 
-          <div className="flex-1 flex flex-col gap-6">
-            {/* Cảnh báo ưu tiên cao */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
-              <h2 className="font-bold text-[#B7131A] mb-4 text-xl">Cảnh báo Ưu tiên Cao</h2>
-              <div className="flex flex-col gap-4">
-                {stats.latest_sos_detail.sos_data_list.slice(0, 3).map((sos: any, idx) => (
-                  <div key={idx} className="p-4 bg-red-50 rounded-lg border border-red-100">
-                    <div className="flex justify-between text-[10px] font-bold text-red-700 mb-1">
-                      <span>{sos.emergency_type}</span>
-                      <span>{new Date(sos.sent_at).toLocaleTimeString()}</span>
-                    </div>
-                    <p className="text-xs text-slate-700 font-medium line-clamp-2">{sos.note || "Yêu cầu khẩn cấp tại vị trí"}</p>
-                    <div className="mt-2 flex justify-end">
-                      <button className="text-red-700 font-bold text-[10px] uppercase">Điều phối ngay →</button>
-                    </div>
-                  </div>
+          {/* SOS + Alerts */}
+          <div className="w-full gap-6">
+            {/* Alerts */}
+            <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-md">
+              <div className="flex items-center justify-between mb-5">
+                <h2 className="text-base font-bold text-gray-900">
+                  Cảnh báo 
+                </h2>
+                <button className="text-xs text-blue-600 hover:text-blue-800 font-semibold" 
+                onClick={() => handleViewNotification()}
+                >
+                  + Tạo mới
+                </button>
+              </div>
+              <div className="divide-y divide-gray-100">
+                {alerts.map((a) => (
+                  <AlertRow key={a.id} alert={a} />
                 ))}
               </div>
             </div>
-
-            {/* Trạng thái phân bổ (Requirement 2.3.1 - Phân bố vai trò) */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
-              <h2 className="font-bold text-slate-800 mb-4">Phân bổ Nguồn lực</h2>
-              <div className="space-y-4">
-                <RoleBar label="Cứu người" percent={65} color="#B7131A" />
-                <RoleBar label="Tiếp tế" percent={25} color="#005FAF" />
-                <RoleBar label="Y tế" percent={10} color="#2E7D32" />
-              </div>
-            </div>
           </div>
-        </div>
-
-        {/* Footer Logs */}
-        <div className="px-8 pb-8">
-           <div className="bg-[#F3F4F5] p-4 rounded-lg flex justify-between items-center border border-slate-200">
-             <div className="flex items-center gap-3">
-               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-               <span className="text-xs font-medium text-slate-600">Hệ thống đồng bộ hóa thực tế đang hoạt động...</span>
-             </div>
-             <button className="text-[10px] font-bold text-blue-600 uppercase">Xem nhật ký đầy đủ</button>
-           </div>
         </div>
       </div>
     </div>
   );
 }
 
-const StatCard = ({ title, value, sub, icon, color = "#191C1D" }: any) => (
-  <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex justify-between items-center">
-    <div>
-      <p className="text-slate-500 text-xs mb-1">{title}</p>
-      <p className="text-3xl font-bold" style={{ color }}>{value}</p>
-      <p className="text-[10px] text-slate-400 mt-1">{sub}</p>
-    </div>
-    <div className="w-12 h-12 bg-slate-50 rounded-lg flex items-center justify-center">
-      <div className="w-6 h-6 border-2 border-slate-200 rounded-sm" />
-    </div>
-  </div>
-);
+function SeverityBadge({ severity }) {
+  const cfg = SEVERITY_CONFIG[severity] || SEVERITY_CONFIG.INFO;
+  return (
+    <span
+      className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${cfg.bg} ${cfg.text}`}
+    >
+      {cfg.label}
+    </span>
+  );
+}
 
-const RoleBar = ({ label, percent, color }: any) => (
-  <div>
-    <div className="flex justify-between text-[11px] font-bold mb-1">
-      <span className="text-slate-600">{label}</span>
-      <span style={{ color }}>{percent}%</span>
+function LiveDot() {
+  return (
+    <span className="relative flex h-2 w-2">
+      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+      <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+    </span>
+  );
+}
+
+function StatCard({ label, value, sub, subColor = "text-gray-400" }) {
+  return (
+    <div className="border border-blue-200 border-4 rounded-xl p-4 bg-gray-50">
+      <p className="text-xs text-gray-400 uppercase tracking-widest mb-1">
+        {label}
+      </p>
+      <p className="text-3xl font-semibold text-gray-900">{value}</p>
+      <p className={`text-xs mt-1 ${subColor}`}>{sub}</p>
     </div>
-    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-      <div className="h-full rounded-full" style={{ width: `${percent}%`, backgroundColor: color }} />
+  );
+}
+function ZoneCard({ zone }) {
+  const pct = zone.teams_required > 0 ? Math.round((zone.teams_assigned / zone.teams_required) * 100) : 100;
+  const cfg = SEVERITY_CONFIG[zone.severity] || SEVERITY_CONFIG.NORMAL;
+  return (
+    <div className="flex items-center gap-3 py-3 border-b border-gray-100 last:border-0">
+      <SeverityBadge severity={zone.severity} />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-gray-900 truncate">
+          {zone.name}
+        </p>
+        <p className="text-xs text-gray-400">{zone.type}</p>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <div className="w-24 h-1.5 bg-gray-100 rounded-full">
+          <div
+            className={`h-1.5 rounded-full ${cfg.bar}`}
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        <span className="text-xs text-gray-500 w-10 text-right">
+          {zone.teams_assigned}/{zone.teams_required}
+        </span>
+      </div>
+      <button className="text-xs text-blue-600 hover:text-blue-800 shrink-0">
+        Xem →
+      </button>
     </div>
-  </div>
-);
+  );
+}
+
+function TeamRow({ team }) {
+  const cfg = TEAM_STATUS_CONFIG[team.status] || TEAM_STATUS_CONFIG.AVAILABLE;
+  return (
+    <div className="flex items-center gap-3 py-2.5 border-b border-gray-100 last:border-0">
+      <span className={`w-2 h-2 rounded-full shrink-0 ${cfg.dot}`}></span>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-gray-900">{team.name}</p>
+        
+      </div>
+      <span className={`text-xs px-2 py-0.5 rounded font-medium ${cfg.badge}`}>
+        {team.type}
+      </span>
+    </div>
+  );
+}
+
+function AlertRow({ alert }) {
+  const cfg = SEVERITY_CONFIG[alert.severity] || SEVERITY_CONFIG.INFO;
+  const dangerPct =
+    alert.votes_total > 0
+      ? Math.round((alert.votes_danger / alert.votes_total) * 100)
+      : 0;
+  const safePct =
+    alert.votes_total > 0
+      ? Math.round((alert.votes_safe / alert.votes_total) * 100)
+      : 0;
+  return (
+    <div className="py-3 border-b border-gray-100 last:border-0">
+      <div className="flex items-center gap-3">
+        <SeverityBadge severity={alert.severity} />
+        <p className="text-sm font-medium text-gray-900 flex-1">
+          {alert.title}
+        </p>
+        <span className="text-xs text-gray-400">{alert.time}</span>
+      </div>
+      {alert.votes_total > 0 && (
+        <div className="mt-2 pl-1">
+          <div className="flex gap-1 h-1.5 rounded-full overflow-hidden bg-gray-100">
+            <div
+              className="bg-red-400 h-full"
+              style={{ width: `${dangerPct}%` }}
+            />
+            <div
+              className="bg-green-400 h-full"
+              style={{ width: `${safePct}%` }}
+            />
+          </div>
+          <p className="text-xs text-gray-400 mt-1">
+            {alert.votes_danger} vẫn nguy hiểm · {alert.votes_safe} đã ổn
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DistributionBar({ label, count, total, color }) {
+  const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+  return (
+    <div className="flex-1 w-full ">
+      <p className="text-xs text-gray-400 mb-1">{label}</p>
+      <div className="h-1.5 bg-gray-100 rounded-full">
+        <div
+          className={`h-1.5 rounded-full ${color}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <p className="text-xs text-gray-500 mt-1">{count} đội</p>
+    </div>
+  );
+}
+

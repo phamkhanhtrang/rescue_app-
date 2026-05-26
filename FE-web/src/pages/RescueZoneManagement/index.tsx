@@ -164,6 +164,11 @@ export default function Page() {
       navigate(`/details-rescue-zone/${detail.id}`);
     }
   };
+  const STATUS = {
+    ACTIVE: "Đang hoạt động",
+    STABILIZING: "Đang ổn định",
+    RESOLVED: "Đã giải quyết",
+  };
 
   return (
     <div className="flex h-screen w-full bg-[#F8F9FA] overflow-hidden">
@@ -286,9 +291,9 @@ export default function Page() {
                           }
                           className="text-[10px] font-black uppercase bg-slate-100 px-2 py-1 rounded-full cursor-pointer"
                         >
-                          <option value="ACTIVE">ACTIVE</option>
-                          <option value="STABILIZING">STABILIZING</option>
-                          <option value="RESOLVED">RESOLVED</option>
+                          <option value="ACTIVE">{STATUS.ACTIVE}</option>
+<option value="STABILIZING">{STATUS.STABILIZING}</option>
+<option value="RESOLVED">{STATUS.RESOLVED}</option>
                         </select>
                       </td>
                       <td className="px-8 py-5">

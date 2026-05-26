@@ -6,6 +6,7 @@ import L from 'leaflet';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import api from "../../services/api";
+
 export default function Page() {
   // Default Leaflet icon fix
   const DefaultIcon = L.icon({
@@ -195,7 +196,7 @@ export default function Page() {
             </MapContainer>
           </div>
         </div>
-        <div className="flex flex-col shrink-0 items-start bg-[#F8F9FA] px-[1px]">
+        {/* <div className="flex flex-col shrink-0 items-start bg-[#F8F9FA] px-[1px]">
           <div className="flex flex-col items-start p-6 gap-6 border-b border-solid border-b-slate-100">
             <div className="flex items-center py-1">
               <span className="text-[#191C1D] text-base font-bold mr-[86px]">
@@ -449,7 +450,7 @@ export default function Page() {
               </span>
             </button>
           </div>
-        </div>
+        </div> */}
       </div>
     </div>
 	</div>

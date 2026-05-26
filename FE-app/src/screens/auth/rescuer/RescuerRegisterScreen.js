@@ -289,7 +289,7 @@ export default function RescuerRegisterScreen({ navigation }) {
                 </View>
 
                 <DarkField label="ĐƠN VỊ / TỔ CHỨC" icon="🏛" placeholder="PCCC Q1 / UBND TP.HCM / ..." value={unit} onChange={setUnit} {...f('unit')} hint="Tên cơ quan chủ quản của đội bạn" />
-                <DarkField label="SỐ HIỆU ĐỘI (TÙY CHỌN)" icon="🔖" placeholder="TEAM-01" value={teamId} onChange={t => setTeamId(t.toUpperCase())} hint="Nếu đội đã có mã từ chỉ huy" {...f('tid')} />
+                <DarkField label="SỐ HIỆU ĐỘI (TÙY CHỌN)" icon="🔖" placeholder="TEAM-01" value={teamId} onChange={setTeamId} hint="Nếu đội đã có mã từ chỉ huy" {...f('tid')} keyboard="default" autoCapitalize="characters" />
 
                 {/* Province picker */}
                 <View style={dfStyles.group}>

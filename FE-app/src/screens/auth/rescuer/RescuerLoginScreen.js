@@ -129,7 +129,8 @@ const RescuerLoginScreen = ({ navigation }) => {
       }
     } catch (e) {
       console.error("🔥 Lỗi hệ thống khi đăng nhập:", e);
-      setError('Xác thực thất bại. Kiểm tra lại thông tin đội.');
+      const errorMsg = e?.message || e?.data?.error || 'Xác thực thất bại. Kiểm tra lại thông tin đội.';
+      setError(errorMsg);
       shake();
     } finally {
       setLoading(false);
@@ -235,24 +236,6 @@ const RescuerLoginScreen = ({ navigation }) => {
               </View>
             </View>
 
-            {/* Mã xác thực đội */}
-            {/* <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>◈  MÃ XÁC THỰC ĐỘI (TEAM CODE)</Text>
-              <View style={[styles.inputWrap, focused === 'code' && styles.inputWrapFocus]}>
-                <Text style={styles.inputPfx}>🔑</Text>
-                <TextInput
-                  style={[styles.input, styles.codeInput]}
-                  placeholder="SENTINEL-XXXX"
-                  placeholderTextColor={C.textHint}
-                  value={teamCode}
-                  onChangeText={t => setTeamCode(t.toUpperCase())}
-                  autoCapitalize="characters"
-                  letterSpacing={3}
-                  {...f('code')}
-                />
-              </View>
-              <Text style={styles.fieldHint}>Nhận từ Chỉ huy bộ phận hoặc email kích hoạt</Text>
-            </View> */}
 
             {/* Error */}
             {error ? (

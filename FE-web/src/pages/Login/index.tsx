@@ -29,7 +29,7 @@ export default function HomeLogin() {
     setError(""); // Reset lỗi cũ
 
     try {
-      const response = await axios.post("http://192.168.1.76:8000/accounts/login/", {
+      const response = await axios.post("http://192.168.1.100:8000/accounts/login/", {
         login_input: loginInput,
         password: password,
       });

@@ -1,21 +1,27 @@
-
-
-import React from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import {
+  LayoutDashboard,
+  Map,
+  MapPinned,
+  Users,
+  UserCog,
+  Bell,
+  FileText
+} from "lucide-react";
 
 export default function SliderBar() {
   const navigate = useNavigate();
   const location = useLocation();
 
   const menuItems = [
-    { name: "Trang chủ", path: "/dashboard", icon: "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/daf4bffe-34c9-4fb2-9270-19067cfedba9" },
-    { name: "Sơ đồ", path: "/map", icon: "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/329aef61-bcf8-4795-92d2-ea50ccb8bcf1" },
-    { name: "Khu vực", path: "/rescue-zone-management", icon: "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/8d2db9a2-9cc7-479c-88bd-38b6fe1ccd2b" },
-    { name: "Đội cứu hộ", path: "/follow-the-rescue-team", icon: "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/870e1029-27cf-4562-becd-403723f772fc" },
-    { name: "Tài khoản", path: "/account", icon: "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/8a7f1969-6951-4e47-89e8-10e2996d46d3" },
-    { name: "Phát tin", path: "/notification-broadcast", icon: "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/712473a9-5f7e-470b-a9af-c6c0b4344178" },
-    { name: "Báo cáo", path: "/report", icon: "https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/465fd18e-0c33-4901-842a-de77e7e6c6c4" },
-  ];
+  { name: "Trang chủ", path: "/dashboard", icon: LayoutDashboard },
+  { name: "Sơ đồ", path: "/map", icon: Map },
+  { name: "Khu vực", path: "/rescue-zone-management", icon: MapPinned },
+  { name: "Đội cứu hộ", path: "/follow-the-rescue-team", icon: Users },
+  { name: "Tài khoản", path: "/account", icon: UserCog },
+  { name: "Phát tin", path: "/notification-broadcast", icon: Bell },
+  { name: "Báo cáo", path: "/report", icon: FileText },
+];
 
   const handleLogout = () => {
     // Xóa hết dữ liệu trong localStorage
@@ -45,35 +51,42 @@ export default function SliderBar() {
 
       
       <div className="flex flex-col items-start px-4 flex-1 overflow-y-auto">
-        {menuItems.map((item) => {
-          
-          const isActive = location.pathname === item.path;
+  {menuItems.map((item) => {
+    const isActive = location.pathname === item.path;
+    const Icon = item.icon;
 
-          return (
-            <div
-              key={item.path}
-              onClick={() => navigate(item.path)}
-              className={`flex items-center w-full py-2.5 mb-2 cursor-pointer rounded-md transition-all ${
-                isActive 
-                  ? "bg-white shadow-sm" 
-                  : "hover:bg-slate-200" 
-              }`}
-            >
-              <img
-                src={item.icon}
-                className={`w-[18px] h-[18px] mx-3 object-fill ${isActive ? "" : "grayscale opacity-70"}`}
-              />
-              <span
-                className={`text-[11px] font-bold ${
-                  isActive ? "text-blue-700" : "text-slate-500"
-                }`}
-              >
-                {item.name}
-              </span>
-            </div>
-          );
-        })}
+    return (
+      <div
+        key={item.path}
+        onClick={() => navigate(item.path)}
+        className={`flex items-center w-full py-2.5 mb-2 cursor-pointer rounded-md transition-all ${
+          isActive
+            ? "bg-white shadow-sm"
+            : "hover:bg-slate-200"
+        }`}
+      >
+        <Icon
+          size={18}
+          className={`mx-3 ${
+            isActive
+              ? "text-blue-700"
+              : "text-slate-500 opacity-70"
+          }`}
+        />
+
+        <span
+          className={`text-[11px] font-bold ${
+            isActive
+              ? "text-blue-700"
+              : "text-slate-500"
+          }`}
+        >
+          {item.name}
+        </span>
       </div>
+    );
+  })}
+</div>
 
       {/* Footer Status & Links */}
       <div className="flex flex-col items-start py-4 px-6 gap-6 shrink-0">

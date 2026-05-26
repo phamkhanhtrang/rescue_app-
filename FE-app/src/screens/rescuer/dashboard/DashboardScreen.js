@@ -18,6 +18,7 @@ import {
 } from '../../../constants/rescuer/theme';
 import API from '../../../services/api';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+
 const AI_INSIGHTS = [
   {
     icon: '🤖',
@@ -210,9 +211,27 @@ const DashboardScreen = ({ navigation }) => {
 
             {/* ─── 5. Quick actions ───────────────────────────────────────────── */}
             <View style={styles.quickRow}>
-              <QuickAction icon="🗺" label="Bản đồ" onPress={() => navigation.navigate('MapTab')} />
-              <QuickAction icon="📋" label="Nhiệm vụ" onPress={() => navigation.navigate('MissionsTab')} />
-              <QuickAction icon="📊" label="Xem báo cáo" onPress={() => navigation.navigate('MissionsTab', { screen: 'MissionHistoryScreen' })} />
+              <QuickAction
+  icon="map-outline"
+  label="Bản đồ"
+  onPress={() => navigation.navigate('MapTab')}
+/>
+
+<QuickAction
+  icon="clipboard-text-outline"
+  label="Nhiệm vụ"
+  onPress={() => navigation.navigate('MissionsTab')}
+/>
+
+<QuickAction
+  icon="chart-box-outline"
+  label="Xem báo cáo"
+  onPress={() =>
+    navigation.navigate('MissionsTab', {
+      screen: 'MissionHistoryScreen',
+    })
+  }
+/>
             </View>
 
             {/* ─── 6. Real-time intelligence ──────────────────────────────────── */}
@@ -264,8 +283,13 @@ const DashboardScreen = ({ navigation }) => {
 
 const QuickAction = ({ icon, label, onPress }) => (
   <TouchableOpacity style={qaStyles.card} onPress={onPress} activeOpacity={0.8}>
-    <Text style={qaStyles.icon}>{icon}</Text>
+    <MaterialCommunityIcons
+  name={icon}
+  size={24}
+  color="#333"
+/>
     <Text style={qaStyles.label}>{label}</Text>
+
   </TouchableOpacity>
 );
 

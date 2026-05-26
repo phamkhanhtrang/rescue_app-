@@ -1,3 +1,4 @@
+import logging
 from .pathfinding import get_rescue_route
 from rest_framework import status
 from rest_framework.decorators import api_view
@@ -150,6 +151,9 @@ def sos_image_upload(request, sos_id):
         return Response(serializer.data, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
+logger = logging.getLogger(__name__)
+
 @api_view(['POST'])
 def get_rescue_route_api(request):
 
@@ -169,6 +173,26 @@ def get_rescue_route_api(request):
                 'message': 'Missing start or target coordinates'
             }, status=400)
 
+        # =================================================
+        # VALIDATE STRUCTURE
+        # =================================================
+
+        if (
+            'lat' not in start or
+            'lng' not in start or
+            'lat' not in target or
+            'lng' not in target
+        ):
+
+            return Response({
+                'status': 'error',
+                'message': 'Invalid coordinate structure'
+            }, status=400)
+
+        # =================================================
+        # PARSE COORDINATES
+        # =================================================
+
         start_lat = float(start['lat'])
         start_lng = float(start['lng'])
 
@@ -176,10 +200,23 @@ def get_rescue_route_api(request):
         target_lng = float(target['lng'])
 
         # =================================================
-        # GET HAZARD SOS DATA
+        # SPATIAL FILTERING
+        # =================================================
+
+        padding = 0.03
+
+        min_lat = min(start_lat, target_lat) - padding
+        max_lat = max(start_lat, target_lat) + padding
+
+        min_lng = min(start_lng, target_lng) - padding
+        max_lng = max(start_lng, target_lng) + padding
+
+        # =================================================
+        # LOAD HAZARDS
         # =================================================
 
         sos_hazards = SOSSignal.objects.filter(
+
             Q(note__icontains='ngập') |
             Q(note__icontains='lụt') |
             Q(note__icontains='sạt lở') |
@@ -192,89 +229,139 @@ def get_rescue_route_api(request):
             ],
 
             location_lat__isnull=False,
-            location_lng__isnull=False
-        )
+            location_lng__isnull=False,
+
+            # spatial filtering
+            location_lat__gte=min_lat,
+            location_lat__lte=max_lat,
+            location_lng__gte=min_lng,
+            location_lng__lte=max_lng
+
+        ).only(
+            'note',
+            'location_lat',
+            'location_lng'
+        )[:500]
+
+        # =================================================
+        # BUILD HAZARD LIST
+        # =================================================
 
         hazards_list = []
 
         for sos in sos_hazards:
 
-            severity = 1
-
-            note = (sos.note or '').lower()
-
-            # =================================================
-            # SIMPLE SEVERITY SCORING
-            # =================================================
-
-            if 'cháy lớn' in note:
-                severity = 5
-
-            elif 'sạt lở' in note:
-                severity = 4
-
-            elif 'ngập nặng' in note:
-                severity = 3
-
-            elif 'ngập' in note:
-                severity = 2
+            severity = calculate_severity(
+                sos.note
+            )
 
             hazards_list.append({
+
                 'lat': float(sos.location_lat),
+
                 'lng': float(sos.location_lng),
+
                 'radius': 150,
+
                 'severity': severity
             })
 
-        print(f"Hazards loaded: {len(hazards_list)}")
+        logger.info(
+            f"Hazards loaded: {len(hazards_list)}"
+        )
 
         # =================================================
-        # RUN A* RESCUE ROUTING
+        # RUN ROUTING
         # =================================================
 
         result = get_rescue_route(
+
             (start_lat, start_lng),
+
             (target_lat, target_lng),
+
             hazards_list
         )
 
         # =================================================
-        # RETURN ERROR FROM ROUTING
+        # HANDLE ROUTING ERROR
         # =================================================
 
         if result['status'] == 'error':
 
-            return Response(result, status=500)
+            if result['message'] == 'No safe route found':
+
+                return Response(
+                    result,
+                    status=404
+                )
+
+            return Response(
+                result,
+                status=500
+            )
 
         # =================================================
         # SUCCESS RESPONSE
         # =================================================
 
         return Response({
+
             'status': 'success',
 
             'path': result['path'],
 
-            'distance_meters': result['distance_meters'],
+            'distance_meters': result[
+                'distance_meters'
+            ],
 
-            'eta_seconds': result['eta_seconds'],
+            'eta_seconds': result[
+                'eta_seconds'
+            ],
 
-            'hazards_detected': len(hazards_list)
+            'hazards_detected': len(
+                hazards_list
+            )
         })
 
     except ValueError:
 
         return Response({
+
             'status': 'error',
+
             'message': 'Invalid coordinate format'
+
         }, status=400)
 
     except Exception as e:
 
-        print(f"ROUTING API ERROR: {str(e)}")
+        logger.exception(
+            f"ROUTING API ERROR: {str(e)}"
+        )
 
         return Response({
-            'status': 'error',
-            'message': str(e)
-        }, status=500)
 
+            'status': 'error',
+
+            'message': str(e)
+
+        }, status=500)
+        
+def calculate_severity(note):
+
+    note = (note or '').lower()
+
+    if 'cháy lớn' in note:
+        return 4
+
+    if 'sạt lở' in note:
+        return 4
+
+    if 'ngập nặng' in note:
+        return 3
+
+    if 'ngập' in note:
+        return 2
+
+    return 1

@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://192.168.1.76:8000';
+const API_BASE_URL = 'http://192.168.1.118:8000';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -46,8 +46,18 @@ export const api = {
     updateStatus: (id: string, data: any) => apiClient.patch(`/reporting/missions/${id}/`, data),
     getHistory: (id: string) => apiClient.get(`/reporting/missions/${id}/history/`),
   },
+  alerts: {
+    getAll: (params?: any) => apiClient.get('/communications/alerts/', { params }),
+  },
   communications: {
     createAlert: (data: any) => apiClient.post('/communications/alerts/create/', data),
+  },
+  accounts: {
+    getRescuers: () => apiClient.get('/accounts/profiles/', { params: { role: 'RESCUER' } }),
+    getCitizens: () => apiClient.get('/accounts/profiles/', { params: { role: 'CITIZEN' } }),
+    getSummary: () => apiClient.get('/accounts/summary/'),
+    activate: (userId: string) => apiClient.post(`/accounts/profiles/${userId}/activate/`),
+    ban: (userId: string) => apiClient.post(`/accounts/profiles/${userId}/ban/`),
   },
 };
 

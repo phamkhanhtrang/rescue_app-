@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import SliderBar from "../../components/SliderBar";
 import Header from "../../components/Header";
+import { api } from "../../services/api";
 
 // Mock data for demonstration (replace with API data as needed)
 
@@ -21,18 +22,18 @@ export default function Page() {
     const fetchData = async () => {
       try {
         const [rescuerRes, citizenRes, summaryRes] = await Promise.all([
-          fetch("http://127.0.0.1:8000/accounts/profiles/?role=RESCUER").then(r => r.json()),
-          fetch("http://127.0.0.1:8000/accounts/profiles/?role=CITIZEN").then(r => r.json()),
-          fetch("http://127.0.0.1:8000/accounts/summary/").then(r => r.json())
+          api.accounts.getRescuers(),
+          api.accounts.getCitizens(),
+          api.accounts.getSummary(),
         ]);
 
         setData({
-          relief_teams: rescuerRes.results || [],
-          citizens: citizenRes.results || [],
+          relief_teams: rescuerRes.data?.results || [],
+          citizens: citizenRes.data?.results || [],
           stats: {
-             total_citizens: summaryRes.by_role?.CITIZEN || 0,
-             total_relief_teams: summaryRes.by_role?.RESCUER || 0,
-             unverified_teams_count: (rescuerRes.results || []).filter(r => !r.is_active).length
+             total_citizens: summaryRes.data?.by_role?.CITIZEN || 0,
+             total_relief_teams: summaryRes.data?.by_role?.RESCUER || 0,
+             unverified_teams_count: (rescuerRes.data?.results || []).filter(r => !r.is_active).length
           }
         });
       } catch (err) {
@@ -49,18 +50,18 @@ export default function Page() {
   const fetchUsers = async () => {
     try {
       const [rescuerRes, citizenRes, summaryRes] = await Promise.all([
-        fetch("http://127.0.0.1:8000/accounts/profiles/?role=RESCUER").then(r => r.json()),
-        fetch("http://127.0.0.1:8000/accounts/profiles/?role=CITIZEN").then(r => r.json()),
-        fetch("http://127.0.0.1:8000/accounts/summary/").then(r => r.json())
+        api.accounts.getRescuers(),
+        api.accounts.getCitizens(),
+        api.accounts.getSummary(),
       ]);
 
       setData({
-        relief_teams: rescuerRes.results || [],
-        citizens: citizenRes.results || [],
+        relief_teams: rescuerRes.data?.results || [],
+        citizens: citizenRes.data?.results || [],
         stats: {
-           total_citizens: summaryRes.by_role?.CITIZEN || 0,
-           total_relief_teams: summaryRes.by_role?.RESCUER || 0,
-           unverified_teams_count: (rescuerRes.results || []).filter(r => !r.is_active).length
+           total_citizens: summaryRes.data?.by_role?.CITIZEN || 0,
+           total_relief_teams: summaryRes.data?.by_role?.RESCUER || 0,
+           unverified_teams_count: (rescuerRes.data?.results || []).filter(r => !r.is_active).length
         }
       });
     } catch (err) {
@@ -68,39 +69,27 @@ export default function Page() {
     }
   };
 
-  const handleActivateAccount = async (userId) => {
+  const handleActivateAccount = async (userId: string) => {
     try {
-      const response = await fetch(`http://127.0.0.1:8000/accounts/profiles/${userId}/activate/`, {
-        method: "POST",
-      });
-      if (response.ok) {
-        alert("Tài khoản đã được kích hoạt thành công!");
-        fetchUsers();
-      } else {
-        const errorData = await response.json();
-        alert(`Lỗi: ${errorData.message || errorData.error}`);
-      }
-    } catch (error) {
+      const response = await api.accounts.activate(userId);
+      alert(response.data?.message || "Tài khoản đã được kích hoạt thành công!");
+      fetchUsers();
+    } catch (error: any) {
+      const msg = error?.response?.data?.message || error?.response?.data?.error || "Kích hoạt thất bại.";
+      alert(`Lỗi: ${msg}`);
       console.error("Error activating account:", error);
-      alert("Đã xảy ra lỗi khi kích hoạt tài khoản.");
     }
   };
 
-  const handleBanAccount = async (userId) => {
+  const handleBanAccount = async (userId: string) => {
     try {
-      const response = await fetch(`http://127.0.0.1:8000/accounts/profiles/${userId}/ban/`, {
-        method: "POST",
-      });
-      if (response.ok) {
-        alert("Tài khoản đã bị cấm!");
-        fetchUsers();
-      } else {
-        const errorData = await response.json();
-        alert(`Lỗi: ${errorData.message || errorData.error}`);
-      }
-    } catch (error) {
+      const response = await api.accounts.ban(userId);
+      alert(response.data?.message || "Tài khoản đã bị cấm!");
+      fetchUsers();
+    } catch (error: any) {
+      const msg = error?.response?.data?.message || error?.response?.data?.error || "Cấm tài khoản thất bại.";
+      alert(`Lỗi: ${msg}`);
       console.error("Error banning account:", error);
-      alert("Đã xảy ra lỗi khi cấm tài khoản.");
     }
   };
 

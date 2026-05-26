@@ -78,6 +78,11 @@ class RescuerProfile(models.Model):
         ('LOGISTICS', 'Hậu cần'),
         ('COMMAND', 'Chỉ huy'),
     )
+    STATUS_CHOICES = (
+        ('PENDING', 'Chờ duyệt'),
+        ('ACTIVE', 'Đang hoạt động'),
+        ('BANNED', 'Đã bị khóa'),
+    )
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.OneToOneField(
@@ -100,7 +105,7 @@ class RescuerProfile(models.Model):
     # Vị trí GPS thời gian thực (TODO: nâng cấp PostGIS)
     current_lat = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True, verbose_name='Vĩ độ hiện tại')
     current_lng = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True, verbose_name='Kinh độ hiện tại')
-    activation_code = models.CharField(max_length=20, blank=True, null=True, verbose_name='Mã kích hoạt')
+    status = models.CharField(choices=STATUS_CHOICES, default="PENDING", verbose_name='Trạng thái')
     
     class Meta:
         verbose_name = 'Hồ sơ Cứu hộ'

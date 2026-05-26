@@ -102,6 +102,16 @@ class CitizenRegisterSerializer(serializers.ModelSerializer):
         model = User
         fields = ['full_name', 'phone', 'email', 'password','address']
 
+    def validate_email(self, value):
+        if value and User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("Email này đã được sử dụng.")
+        return value
+
+    def validate_phone(self, value):
+        if value and User.objects.filter(phone=value).exists():
+            raise serializers.ValidationError("Số điện thoại này đã được sử dụng.")
+        return value
+
     def create(self, validated_data):
         password = validated_data.pop('password')
         # Tạo User mới với role CITIZEN
@@ -128,6 +138,16 @@ class RescuerRegisterSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['full_name', 'phone', 'email', 'password', 'address', 'unit_name', 'rank', 'specialty']
+
+    def validate_email(self, value):
+        if value and User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("Email này đã được sử dụng.")
+        return value
+
+    def validate_phone(self, value):
+        if value and User.objects.filter(phone=value).exists():
+            raise serializers.ValidationError("Số điện thoại này đã được sử dụng.")
+        return value
 
     def create(self, validated_data):
         password = validated_data.pop('password')

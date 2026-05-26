@@ -159,7 +159,6 @@ const ActiveMissionScreen = ({ navigation, route }) => {
         <View style={[styles.missionHeader, isLeavingZone && styles.missionHeaderDanger]}>
           <View style={styles.missionBadgeRow}>
             <View style={[styles.activeBadge, isLeavingZone && { backgroundColor: '#FFD600' }]}><Text style={[styles.activeBadgeText, isLeavingZone && { color: '#000' }]}>● {isLeavingZone ? 'CẢNH BÁO VỊ TRÍ' : 'NHIỆM VỤ ĐANG THỰC HIỆN'}</Text></View>
-            <View style={styles.codeBadge}><Text style={styles.codeBadgeText}>GPS: LIVE ✓</Text></View>
           </View>
           
           <Text style={[styles.missionWarning, isLeavingZone && styles.missionWarningDanger]}>

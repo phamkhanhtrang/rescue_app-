@@ -7,7 +7,7 @@
 // For Android emulator: use 'http://10.0.2.2:8000'
 // For iOS simulator: use 'http://127.0.0.1:8000'
 // For physical device: use your computer's local IP address e.g. 'http://192.168.x.x:8000'
-export const BASE_URL = 'http://192.168.1.76:8000';
+export const BASE_URL = 'http://192.168.1.118:8000';
 
 let authToken = null;
 
@@ -69,7 +69,19 @@ export const apiClient = async (endpoint, options = {}) => {
       console.log("--- API ERROR DETAIL ---");
       console.log("Status:", response.status);
       console.log("Response Data:", data);
-      const error = new Error(data.message || data.detail || `API Error ${response.status}`);
+      // Xử lý lỗi validation từ DRF (nếu data là object chứa mảng lỗi)
+      let errorMessage = data.message || data.detail || data.error;
+      if (!errorMessage && typeof data === 'object') {
+        // Lấy lỗi đầu tiên từ các field
+        const firstErrorKey = Object.keys(data)[0];
+        if (firstErrorKey && Array.isArray(data[firstErrorKey])) {
+          errorMessage = data[firstErrorKey][0];
+        } else if (firstErrorKey && typeof data[firstErrorKey] === 'string') {
+          errorMessage = data[firstErrorKey];
+        }
+      }
+      
+      const error = new Error(errorMessage || `API Error ${response.status}`);
       error.status = response.status;
       error.data = data;
       throw error;

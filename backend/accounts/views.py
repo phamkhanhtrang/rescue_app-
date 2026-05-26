@@ -25,19 +25,27 @@ def login_api(request):
             'error': 'Vui lòng nhập đầy đủ tài khoản và mật khẩu'
         }, status=status.HTTP_400_BAD_REQUEST)
     
-    user = None
-    try:
-        if '@' in login_input:  # Kiểm tra '@' trong chuỗi login
-            user = User.objects.get(email=login_input)
-        else:
-            user = User.objects.get(username=login_input)
-    except User.DoesNotExist:
+    user = User.objects.filter(Q(email=login_input) | Q(phone=login_input) | Q(username=login_input)).first()
+    if not user:
         return Response({
             'error': 'Tài khoản không tồn tại'
-        }, status=status.HTTP_404_NOT_FOUND)  
+        }, status=status.HTTP_404_NOT_FOUND)
     
     if user.check_password(password):
         if not user.is_active:
+            if user.role == 'RESCUER':
+                try:
+                    rp = RescuerProfile.objects.get(user=user)
+                    if rp.status == 'PENDING':
+                        return Response({
+                            'error': 'Tài khoản của bạn đang chờ quản trị viên duyệt. Vui lòng chờ thông báo qua email.'
+                        }, status=status.HTTP_403_FORBIDDEN)
+                    elif rp.status == 'BANNED':
+                        return Response({
+                            'error': 'Tài khoản của bạn đã bị khóa bởi quản trị viên.'
+                        }, status=status.HTTP_403_FORBIDDEN)
+                except RescuerProfile.DoesNotExist:
+                    pass
             return Response({
                 'error': 'Tài khoản của bạn đã bị vô hiệu hóa'
             }, status=status.HTTP_403_FORBIDDEN)
@@ -99,12 +107,10 @@ def activate_account(request, pk):
     user.is_active = True
     
     if user.role == 'RESCUER':
-        # Sinh mã 4 chữ số
-        activation_code = str(random.randint(1000, 9999))
         try:
             rp = RescuerProfile.objects.get(user=user)
-            rp.activation_code = activation_code
-            rp.save(update_fields=['activation_code'])
+            rp.status = 'ACTIVE'
+            rp.save(update_fields=['status'])
         except RescuerProfile.DoesNotExist:
             pass # Không có profile thì bỏ qua
             
@@ -113,9 +119,9 @@ def activate_account(request, pk):
             try:
                 send_mail(
                     subject='Kích hoạt tài khoản cứu hộ',
-                    message=f'Tài khoản cứu hộ của bạn đã được kích hoạt.\nMã số kích hoạt của bạn là: {activation_code}',
+                    message='Chúc mừng! Tài khoản cứu hộ của bạn đã được đăng ký và duyệt thành công. Bạn đã có thể đăng nhập vào ứng dụng.',
                     from_email='App Cứu Hộ <trangpk.22it@vku.udn.vn>',
-                    recipient_list=[user.email],
+                    recipient_list=[user.email.strip()],
                     fail_silently=False,
                 )
             except Exception as e:
@@ -131,7 +137,7 @@ def activate_account(request, pk):
                     subject='Tài khoản của bạn đã được mở lại',
                     message='Tài khoản của bạn đã được mở lại. Bạn có thể tiếp tục sử dụng ứng dụng.',
                     from_email='App Cứu Hộ <trangpk.22it@vku.udn.vn>',
-                    recipient_list=[user.email],
+                    recipient_list=[user.email.strip()],
                     fail_silently=False,
                 )
             except Exception as e:
@@ -154,6 +160,28 @@ def ban_account(request, pk):
         return Response({'message': 'Tài khoản đã bị cấm trước đó.'}, status=status.HTTP_400_BAD_REQUEST)
 
     user.is_active = False
+    
+    if user.role == 'RESCUER':
+        try:
+            rp = RescuerProfile.objects.get(user=user)
+            rp.status = 'BANNED'
+            rp.save(update_fields=['status'])
+        except RescuerProfile.DoesNotExist:
+            pass
+        
+        # Gửi email thông báo bị khóa
+        if user.email:
+            try:
+                send_mail(
+                    subject='Tài khoản cứu hộ của bạn đã bị khóa',
+                    message='Tài khoản cứu hộ của bạn đã bị quản trị viên khóa. Nếu bạn cho rằng đây là nhầm lẫn, vui lòng liên hệ với quản trị viên để được hỗ trợ.',
+                    from_email='App Cứu Hộ <trangpk.22it@vku.udn.vn>',
+                    recipient_list=[user.email.strip()],
+                    fail_silently=True,
+                )
+            except Exception:
+                pass  # Không gửi được email thì vẫn tiếp tục khóa tài khoản
+
     user.save(update_fields=['is_active'])
     return Response({'message': 'Đã cấm tài khoản thành công.'}, status=status.HTTP_200_OK)
 @api_view(['POST'])
@@ -192,7 +220,6 @@ def profile_detail(request, pk):
 # ─── CITIZEN PROFILE ─────────────────────────────────────────
 
 @api_view(['POST'])
-@permission_classes([AllowAny])
 def citizen_profile_create(request):
     """Tạo người dùng mới và hồ sơ chi tiết cho Người dân (Đăng ký)."""
     serializer = CitizenRegisterSerializer(data=request.data)

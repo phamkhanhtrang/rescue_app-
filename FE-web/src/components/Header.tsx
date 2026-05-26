@@ -27,24 +27,16 @@ export default function Header({ onOpenSidebar }) {
             </span>
           </div>
 
-          {/* <div className="hidden sm:flex shrink-0 items-center bg-slate-200 py-[7px] px-3.5 gap-[15px] rounded">
-            <img
-              src="https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/a22b0998-b5ff-48aa-be37-b378f672ab86"
-              className="w-2.5 h-2.5 object-fill"
-              alt="search"
-            />
-            <div className="flex flex-col shrink-0 items-start pb-[1px]">
-              <span className="text-gray-500 text-sm">{"Tìm kiếm..."}</span>
-            </div>
-          </div> */}
+<button
+              onClick={() => window.location.reload()}
+              className="text-xs px-3 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-100 transition font-semibold shadow-sm"
+            >
+              Làm mới
+            </button>
         </div>
 
         <div className="flex shrink-0 items-center gap-3 md:gap-8">
-          {/* <img
-            src="https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/609c9e4e-c0c0-45b8-aa59-b9bab93992f9"
-            className="hidden md:block w-[108px] h-9 object-fill"
-            alt="logo"
-          /> */}
+          
           <div className="flex shrink-0 items-center gap-2 md:gap-3">
             <div className="flex flex-col shrink-0 items-start">
               <div className="flex flex-col items-start py-0.5 px-[1px]">
@@ -58,11 +50,7 @@ export default function Header({ onOpenSidebar }) {
                 </span>
               </div>
             </div>
-            {/* <img
-              src="https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/c827b9a9-d27c-48a0-8301-ba6f7b6d0802"
-              className="w-8 h-9 md:w-[39px] md:h-10 object-fill"
-              alt="avatar"
-            /> */}
+            
           </div>
         </div>
       </div>

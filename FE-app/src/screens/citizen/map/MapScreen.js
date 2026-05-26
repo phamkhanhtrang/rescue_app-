@@ -194,7 +194,6 @@ const MapScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.safe}>
       <SentinelHeader dark />
-
       <View style={styles.mapContainer}>
         {location ? (
           <MapView
