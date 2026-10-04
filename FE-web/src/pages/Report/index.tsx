@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import SliderBar from "../../components/SliderBar";
 import Header from "../../components/Header";
 import { api } from "../../services/api";
+import DataNotice from "../../components/DataNotice";
+import { apiErrorMessage } from "../../utils/apiError";
 
 const SOS_STATUS_MAP: Record<string, string> = {
   PENDING: "Chờ xử lý",
@@ -31,25 +33,32 @@ export default function Page() {
   const [stats, setStats] = useState<any>(null);
   const [sosList, setSosList] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [reload, setReload] = useState(0);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [dashRes, sosRes] = await Promise.all([
+        const [dashRes, sosRes] = await Promise.allSettled([
           api.dashboard.getStats(),
           api.sos.getAll()
         ]);
-        setStats(dashRes.data);
-        setSosList(sosRes.data.results || []);
+        const failures: string[] = [];
+        if (dashRes.status === 'fulfilled') setStats(dashRes.value.data);
+        else failures.push(`thống kê: ${apiErrorMessage(dashRes.reason)}`);
+        if (sosRes.status === 'fulfilled') setSosList(sosRes.value.data.results || []);
+        else failures.push(`SOS: ${apiErrorMessage(sosRes.reason)}`);
+        setLoadError(failures.length ? `Không cập nhật được ${failures.join('; ')}.` : '');
       } catch (e) {
         console.error(e);
+        setLoadError(apiErrorMessage(e));
       } finally {
         setLoading(false);
       }
     };
     fetchData();
-  }, []);
+  }, [reload]);
 
   const totalSos = stats?.summary?.total_sos || 0;
   const resolvedSos = stats?.sos_by_status?.RESOLVED || 0;
@@ -118,6 +127,7 @@ export default function Page() {
         <Header onOpenSidebar={() => setSidebarOpen(true)} />
 
         <div className="p-8 space-y-10">
+          <DataNotice loading={loading} error={loadError} onRetry={() => setReload(value => value + 1)} hasData={!!stats || sosList.length > 0} />
           <div className="flex flex-col lg:flex-row justify-between items-start gap-8">
             <div>
               <h1 className="text-4xl font-black text-slate-900 leading-none mb-2">Báo cáo & Phân tích</h1>

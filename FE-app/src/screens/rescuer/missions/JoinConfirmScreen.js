@@ -1,24 +1,18 @@
 /**
  * src/screens/rescuer/missions/JoinConfirmScreen.js
  * ─────────────────────────────────────────────────────────────────────────────
- * Xác nhận Tham gia Cứu hộ (Screen 7).
- *
- * Bố cục Figma:
- *  1. Header back + AI VERIFIED ZONE badge
- *  2. "Tham gia cứu hộ" title + mô tả
- *  3. Chọn vai trò: Đội Y tế / Đội Cứu hộ (selected) / Đội Hậu cần
- *  4. BLOCKCHAIN VERIFIED LOG section (hash)
- *  5. "XÁC NHẬN THAM GIA →" red button
+ * Xác nhận Tham gia Cứu hộ.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, SafeAreaView, Alert,
+  TouchableOpacity, SafeAreaView,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import RescuerHeader from '../../../components/rescuer/common/RescuerHeader';
+import CustomModal from '../../../components/common/CustomModal';
 import { RCOLORS, RFONTS, RSPACING, RRADIUS, RSHADOWS, RLAYOUT } from '../../../constants/rescuer/theme';
 import API from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
@@ -49,16 +43,26 @@ const JoinConfirmScreen = ({ navigation, route }) => {
   const { zoneId, zoneName = 'Vùng 7G', missionsCount = 0, rescuersNeeded = 0 } = route?.params ?? {};
   const [selectedRole, setSelectedRole] = useState('rescue');
   const { userInfo } = useAuth();
+  const [modalConfig, setModalConfig] = useState({
+    visible: false,
+    type: 'info',
+    title: '',
+    message: '',
+    confirmText: 'Đồng ý',
+    onConfirm: null,
+  });
 
   const isFull = rescuersNeeded > 0 && missionsCount >= rescuersNeeded;
 
   const handleConfirm = async () => {
     if (isFull) {
-      Alert.alert(
-        'Đã đủ đội',
-        'Vùng này đã đủ đội cứu hộ, vui lòng tìm nhiệm vụ khác.',
-        [{ text: 'Đã hiểu' }]
-      );
+      setModalConfig({
+        visible: true,
+        type: 'warning',
+        title: 'Đã đủ đội',
+        message: 'Vùng này đã đủ đội cứu hộ, vui lòng tìm nhiệm vụ khác.',
+        confirmText: 'Đã hiểu',
+      });
       return;
     }
 
@@ -70,11 +74,13 @@ const JoinConfirmScreen = ({ navigation, route }) => {
           m => m.status !== 'COMPLETED' && m.status !== 'CANCELLED'
         );
         if (activeMission) {
-          Alert.alert(
-            '⚠️ Nhiệm vụ chưa hoàn tất',
-            'Bạn đang ở trong một nhiệm vụ khác. Vui lòng hoàn thành nhiệm vụ hiện tại trước khi tham gia nhiệm vụ mới.',
-            [{ text: 'Đã hiểu' }]
-          );
+          setModalConfig({
+            visible: true,
+            type: 'warning',
+            title: 'Nhiệm vụ chưa hoàn tất',
+            message: 'Bạn đang ở trong một nhiệm vụ khác. Vui lòng hoàn thành nhiệm vụ hiện tại trước khi tham gia nhiệm vụ mới.',
+            confirmText: 'Đã hiểu',
+          });
           return;
         }
       }
@@ -84,19 +90,19 @@ const JoinConfirmScreen = ({ navigation, route }) => {
         zone: zoneId,
         rescuer: userInfo?.id,
         role: ROLES.find(r => r.id === selectedRole)?.title,
-        status: 'ACTIVE'
+        status: 'ACCEPTED'
       };
 
-      await API.missions.create(missionData);
-
-      Alert.alert(
-        '✅ Đã tham gia!',
-        `Bạn đã xác nhận tham gia vùng ${zoneName} với vai trò ${missionData.role}.`,
-        [{ text: 'Bắt đầu nhiệm vụ', onPress: () => navigation.navigate('ActiveMissionScreen', { zoneName, zoneId }) }]
-      );
+      const createdMission = await API.missions.create(missionData);
+      navigation.navigate('ActiveMissionScreen', { zoneName, zoneId, missionId: createdMission.id });
     } catch (error) {
       console.error('Join mission error:', error);
-      Alert.alert('Lỗi', 'Không thể tham gia vùng cứu hộ. Vui lòng thử lại.');
+      setModalConfig({
+        visible: true,
+        type: 'error',
+        title: 'Lỗi',
+        message: error?.response?.data?.error || error?.message || 'Không thể tham gia vùng cứu hộ. Vui lòng thử lại.',
+      });
     }
   };
 
@@ -106,19 +112,19 @@ const JoinConfirmScreen = ({ navigation, route }) => {
 
       <ScrollView contentContainerStyle={styles.content}>
 
-        {/* AI badge */}
+        {/* Zone badge */}
         <View style={styles.aiBadge}>
           <MaterialCommunityIcons
             name="robot-outline"
             size={20}
             color="#666"
           />
-          <Text style={styles.aiBadgeText}>VÙNG ĐÃ XÁC THỰC AI</Text>
+          <Text style={styles.aiBadgeText}>KHU VỰC ĐIỀU PHỐI</Text>
         </View>
 
         <Text style={styles.pageTitle}>Tham gia cứu hộ</Text>
         <Text style={styles.pageDesc}>
-          Bạn đã gia nhập vùng an toàn <Text style={styles.boldText}>{zoneName}</Text>. Vui lòng xác nhận vai trò chuyên môn của mình để hệ thống phân bổ nhiệm vụ chính xác.
+          Bạn đang đăng ký tham gia <Text style={styles.boldText}>{zoneName}</Text>. Hãy chọn đúng vai trò theo nguồn lực thực tế của đội.
         </Text>
 
         {/* Role selection */}
@@ -151,17 +157,6 @@ const JoinConfirmScreen = ({ navigation, route }) => {
           })}
         </View>
 
-        {/* Blockchain log */}
-        {/* <View style={styles.blockchainLog}>
-          <View style={styles.blockchainHeader}>
-            <Text style={styles.blockchainIcon}>⛓</Text>
-            <Text style={styles.blockchainLabel}>NHẬT KÝ XÁC THỰC BLOCKCHAIN</Text>
-          </View>
-          <Text style={styles.blockchainHash}>
-            MÃ BẢO MẬT: 8zt7... •R2ik • Trạng thái của bạn sẽ được lưu vào blockchain để phục vụ truy vết sau sự cố.
-          </Text>
-        </View> */}
-
         {/* Confirm button */}
         <TouchableOpacity 
           style={[styles.confirmButton, isFull && { backgroundColor: '#9E9E9E', shadowColor: 'transparent', elevation: 0 }]} 
@@ -171,6 +166,16 @@ const JoinConfirmScreen = ({ navigation, route }) => {
         </TouchableOpacity>
 
       </ScrollView>
+
+      <CustomModal
+        visible={modalConfig.visible}
+        type={modalConfig.type}
+        title={modalConfig.title}
+        message={modalConfig.message}
+        confirmText={modalConfig.confirmText}
+        onConfirm={modalConfig.onConfirm || (() => setModalConfig(prev => ({ ...prev, visible: false })))}
+        onCancel={() => setModalConfig(prev => ({ ...prev, visible: false }))}
+      />
     </SafeAreaView>
   );
 };
@@ -179,7 +184,6 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: RCOLORS.bgApp },
   content: { padding: RLAYOUT.screenPadding, paddingBottom: 40, gap: RSPACING.md },
   aiBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#E3F2FD', alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 5, borderRadius: RRADIUS.full },
-  aiBadgeIcon: { fontSize: 12 },
   aiBadgeText: { fontSize: RFONTS.xs, fontWeight: RFONTS.bold, color: RCOLORS.bgBlue, letterSpacing: 0.5 },
   pageTitle: { fontSize: RFONTS.xxl, fontWeight: RFONTS.black, color: RCOLORS.textPrimary },
   pageDesc: { fontSize: RFONTS.sm, color: RCOLORS.textSecondary, lineHeight: 18 },
@@ -188,21 +192,12 @@ const styles = StyleSheet.create({
   roleList: { gap: RSPACING.md },
   roleCard: { backgroundColor: RCOLORS.bgWhite, borderRadius: RRADIUS.md, padding: RSPACING.base, flexDirection: 'row', alignItems: 'flex-start', gap: RSPACING.md, borderWidth: 2, borderColor: RCOLORS.border, ...RSHADOWS.card },
   roleCardActive: { borderColor: RCOLORS.primary, backgroundColor: RCOLORS.primaryLight },
-  roleIconBox: { width: 44, height: 44, borderRadius: RRADIUS.md, backgroundColor: RCOLORS.bgApp, alignItems: 'center', justifyContent: 'center' },
-  roleIconBoxActive: { backgroundColor: RCOLORS.primary },
-  roleIcon: { fontSize: 22 },
   roleInfo: { flex: 1 },
   roleTitle: { fontSize: RFONTS.base, fontWeight: RFONTS.bold, color: RCOLORS.textPrimary },
   roleTitleActive: { color: RCOLORS.primary },
   roleDesc: { fontSize: RFONTS.sm, color: RCOLORS.textSecondary, marginTop: 3, lineHeight: 16 },
   roleCheck: { width: 24, height: 24, borderRadius: 12, backgroundColor: RCOLORS.primary, alignItems: 'center', justifyContent: 'center' },
   roleCheckText: { color: RCOLORS.textWhite, fontSize: RFONTS.sm, fontWeight: RFONTS.bold },
-
-  blockchainLog: { backgroundColor: '#F0F4FF', borderRadius: RRADIUS.md, padding: RSPACING.base, gap: RSPACING.sm, borderWidth: 1, borderColor: '#DBEAFE' },
-  blockchainHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  blockchainIcon: { fontSize: 13 },
-  blockchainLabel: { fontSize: RFONTS.xs, fontWeight: RFONTS.bold, color: RCOLORS.bgBlue, letterSpacing: 1 },
-  blockchainHash: { fontSize: RFONTS.sm, color: RCOLORS.textSecondary, lineHeight: 18 },
 
   confirmButton: { backgroundColor: RCOLORS.primary, borderRadius: RRADIUS.md, paddingVertical: RSPACING.base + 2, alignItems: 'center', ...RSHADOWS.redGlow },
   confirmText: { color: RCOLORS.textWhite, fontSize: RFONTS.lg, fontWeight: RFONTS.black, letterSpacing: 0.5 },

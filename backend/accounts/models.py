@@ -30,6 +30,8 @@ class User(AbstractUser):
     address = models.CharField(max_length=100, blank=True, null=True, verbose_name='Vị trí')
     avatar_url = models.TextField(blank=True, null=True, verbose_name='Link ảnh đại diện')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Ngày tạo')
+    account_reason = models.TextField(blank=True, default='')
+    session_version = models.PositiveIntegerField(default=0)
 
     class Meta:
         verbose_name = 'Hồ sơ người dùng'
@@ -82,6 +84,7 @@ class RescuerProfile(models.Model):
         ('PENDING', 'Chờ duyệt'),
         ('ACTIVE', 'Đang hoạt động'),
         ('BANNED', 'Đã bị khóa'),
+        ('REJECTED', 'Bị từ chối'),
     )
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -93,6 +96,7 @@ class RescuerProfile(models.Model):
     )
     id_number = models.CharField(max_length=20, blank=True, null=True, verbose_name='Số CCCD/CMND')
     unit_name = models.CharField(max_length=200, blank=True, null=True, verbose_name='Tên đơn vị / Tổ chức')
+    team_code = models.CharField(max_length=50, blank=True, default='')
     rank = models.CharField(max_length=100, blank=True, null=True, verbose_name='Cấp bậc')
     specialty = models.CharField(
         max_length=20,
@@ -114,3 +118,16 @@ class RescuerProfile(models.Model):
 
     def __str__(self):
         return f"RescuerProfile - {self.user.full_name} ({self.unit_name})"
+
+
+class AccountEvent(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='account_events')
+    actor = models.ForeignKey(User, null=True, on_delete=models.SET_NULL, related_name='+')
+    action = models.CharField(max_length=20)
+    reason = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class RevokedSession(models.Model):
+    sid = models.CharField(max_length=64, primary_key=True)
+    expires_at = models.DateTimeField()

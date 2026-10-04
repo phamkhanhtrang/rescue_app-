@@ -1,10 +1,19 @@
 from django.urls import path
 from . import views
+from . import passwords
+from rest_framework_simplejwt.views import TokenRefreshView
 
 urlpatterns = [
     # Thống kê tổng quan
     path('summary/', views.accounts_summary, name='accounts-summary'),
     path('login/', views.login_api, name='login'),
+    path('token/refresh/', passwords.refresh_session, name='token-refresh'),
+    path('me/', views.me),
+    path('logout/', passwords.logout),
+    path('password/reset/', passwords.request_reset),
+    path('password/reset/confirm/', passwords.confirm_reset),
+    path('password/change/', passwords.change_password),
+    path('profiles/<uuid:pk>/reject/', views.reject_account),
 
     # Profile CRUD
     path('profiles/', views.profile_list, name='profile-list'),

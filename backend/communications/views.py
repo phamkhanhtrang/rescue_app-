@@ -1,177 +1,131 @@
+from django.db import IntegrityError, transaction
+from django.db.models import Case, When, Value, IntegerField, Exists, OuterRef
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import status
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from .models import Alert, AlertVote
+from rest_framework.exceptions import ValidationError
+from rescue_operations.flow import admin
+from .access import coordinates, visible_alerts
+from .models import Alert, AlertVote, AlertRead, PushDevice
 from .serializers import AlertSerializer, AlertListSerializer, AlertVoteSerializer
 
-# ─── ALERT ───────────────────────────────────────────────────
 
-from django.db.models import (
-    Case, When, Value, IntegerField, Q,
-    FloatField, ExpressionWrapper, F,
-)
-from django.db.models.functions import ACos, Cos, Radians, Sin
-import math
-
-
-def _get_nearby_zone_ids(user_lat: float, user_lng: float, radius_km: float = 20.0):
-    """
-    Trả về danh sách Zone ID nằm trong bán kính `radius_km` km
-    tính từ tọa độ (user_lat, user_lng) dùng công thức Haversine.
-
-    Zone.location_lat / location_lng là toạ độ tâm của từng zone.
-    Nếu khoảng cách từ user đến tâm zone <= radius_km → user "trong" zone đó.
-    """
-    from rescue_operations.models import Zone
-
-    EARTH_RADIUS_KM = 6371.0
-
-    nearby = Zone.objects.annotate(
-        distance=ExpressionWrapper(
-            EARTH_RADIUS_KM * ACos(
-                Cos(Radians(Value(user_lat, output_field=FloatField()))) *
-                Cos(Radians(F('location_lat'))) *
-                Cos(Radians(F('location_lng')) - Radians(Value(user_lng, output_field=FloatField()))) +
-                Sin(Radians(Value(user_lat, output_field=FloatField()))) *
-                Sin(Radians(F('location_lat')))
-            ),
-            output_field=FloatField()
-        )
-    ).filter(distance__lte=radius_km)
-
-    return list(nearby.values_list('id', flat=True))
+def feed(request, management=False):
+    queryset = visible_alerts(request.user, coordinates(request.query_params), management=management)
+    if request.user.is_authenticated:
+        queryset = queryset.annotate(is_read=Exists(AlertRead.objects.filter(
+            alert_id=OuterRef('pk'), user=request.user, publication=OuterRef('publication'))))
+    queryset = queryset.prefetch_related('votes__user')
+    if admin(request.user):
+        queryset = queryset.prefetch_related('reads', 'deliveries')
+    return queryset
 
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
 def alert_list(request):
-    """
-    Danh sách cảnh báo.
-
-    - Tab 'nearby' (mặc định):
-        • Ưu tiên 1: Nếu FE gửi ?lat=&lng= → dùng GPS radius (20km) khớp zone.location_lat/lng
-        • Ưu tiên 2: Nếu user đăng nhập (JWT) và không có GPS → dùng user.address khớp zone.name
-        • Luôn kèm alerts toàn quốc (zone=null)
-    - Tab 'national': chỉ alerts không gắn zone
-    """
-    queryset = Alert.objects.all()
-
-    # 1. Lọc theo source & is_active
-    source    = request.query_params.get('source')
-    is_active = request.query_params.get('is_active')
+    queryset = feed(request, management=True)
+    source = request.query_params.get('source')
     if source:
         queryset = queryset.filter(source=source.upper())
-    if is_active is not None:
-        queryset = queryset.filter(is_active=is_active.lower() == 'true')
-
-    tab = request.query_params.get('tab', 'nearby')
-
-    # 2. Lấy tọa độ GPS từ query params (AlertsScreen gửi ?lat=&lng=)
-    try:
-        user_lat = float(request.query_params.get('lat', ''))
-        user_lng = float(request.query_params.get('lng', ''))
-        has_gps = True
-    except (ValueError, TypeError):
-        has_gps = False
-
-    # 3. Lấy địa chỉ từ JWT token (fallback khi không có GPS)
-    user_address = None
-    if request.user and request.user.is_authenticated:
-        user_address = (getattr(request.user, 'address', None) or '').strip()
-
-    # 4. Lọc theo tab
-    if tab == 'national':
-        # Toàn quốc: chỉ alert không gắn zone
+    active = request.query_params.get('is_active')
+    if active is not None:
+        if active.lower() not in ('true', 'false'):
+            raise ValidationError({'is_active': 'Chỉ nhận true hoặc false.'})
+        queryset = queryset.filter(is_active=active.lower() == 'true')
+    if request.query_params.get('tab') == 'national':
         queryset = queryset.filter(zone__isnull=True)
-    elif tab == 'all':
-        # Trả về tất cả, không lọc theo vị trí
-        pass
-    else:
-        # Lân cận (nearby): luôn kèm alert toàn quốc (zone=null)
-        q_filter = Q(zone__isnull=True)
-
-        if has_gps:
-            # Ưu tiên 1: GPS — tính khoảng cách Haversine đến tâm zone, bán kính 20km
-            nearby_zone_ids = _get_nearby_zone_ids(user_lat, user_lng, radius_km=20.0)
-            if nearby_zone_ids:
-                q_filter |= Q(zone__in=nearby_zone_ids)
-        elif user_address:
-            # Ưu tiên 2: text matching địa chỉ
-            q_filter |= Q(zone__name__icontains=user_address)
-
-        queryset = queryset.filter(q_filter)
-
-    # 5. Sắp xếp: Critical → Warning → Rescue → Info → mới nhất
-    queryset = queryset.annotate(
-        priority=Case(
-            When(severity__iexact='critical', then=Value(1)),
-            When(severity__iexact='warning',  then=Value(2)),
-            When(severity__iexact='rescue',   then=Value(3)),
-            When(severity__iexact='info',     then=Value(4)),
-            default=Value(99),
-            output_field=IntegerField(),
-        )
-    ).order_by('priority', '-created_at')
-
-    serializer = AlertListSerializer(queryset, many=True)
-    return Response({'count': queryset.count(), 'results': serializer.data})
+    # tab=all never bypasses recipient access for an ordinary user.
+    queryset = queryset.annotate(priority=Case(
+        When(message_type='EMERGENCY', then=Value(1)),
+        default=Value(2), output_field=IntegerField(),
+    )).order_by('priority', '-published_at')
+    data = AlertListSerializer(queryset, many=True, context={'request': request}).data
+    return Response({'count': len(data), 'results': data})
 
 
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def alert_create(request):
-    """Tạo cảnh báo mới."""
-    serializer = AlertSerializer(data=request.data)
-    if serializer.is_valid():
-        serializer.save()
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    if not admin(request.user):
+        return Response({'error': 'Chỉ quản trị viên được phát tin.'}, status=403)
+    serializer = AlertSerializer(data=request.data, context={'request': request})
+    serializer.is_valid(raise_exception=True)
+    serializer.save()
+    return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
 @api_view(['GET', 'PUT', 'DELETE'])
+@permission_classes([AllowAny])
 def alert_detail(request, pk):
-    """Chi tiết / Cập nhật / Xóa một Alert."""
-    try:
-        alert = Alert.objects.get(pk=pk)
-    except Alert.DoesNotExist:
-        return Response({'error': 'Không tìm thấy cảnh báo.'}, status=status.HTTP_404_NOT_FOUND)
-
     if request.method == 'GET':
-        return Response(AlertSerializer(alert).data)
+        alert = get_object_or_404(feed(request, management=True), pk=pk)
+        return Response(AlertSerializer(alert, context={'request': request}).data)
+    if not admin(request.user):
+        return Response({'error': 'Chỉ quản trị viên được sửa cảnh báo.'}, status=403)
+    with transaction.atomic():
+        alert = get_object_or_404(Alert.objects.select_for_update(), pk=pk)
+        if request.method == 'DELETE':
+            alert.delete()
+            return Response(status=204)
+        serializer = AlertSerializer(alert, data=request.data, partial=True, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+    return Response(serializer.data)
 
-    if request.method == 'PUT':
-        serializer = AlertSerializer(alert, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-    if request.method == 'DELETE':
-        alert.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-
-# ─── ALERT VOTE ──────────────────────────────────────────────
 
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def alert_read(request, pk):
+    alert = get_object_or_404(feed(request), pk=pk)
+    if request.data.get('publication') != alert.publication:
+        return Response({'error': 'Bản tin đã thay đổi. Vui lòng tải lại.'}, status=409)
+    AlertRead.objects.get_or_create(alert=alert, user=request.user, publication=alert.publication)
+    return Response({'is_read': True, 'publication': alert.publication})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def alert_vote(request, alert_id):
-    """
-    Xác nhận cộng đồng cho một cảnh báo.
-    Mỗi người chỉ vote được 1 lần.
-    """
-    try:
-        Alert.objects.get(pk=alert_id)
-    except Alert.DoesNotExist:
-        return Response({'error': 'Không tìm thấy cảnh báo.'}, status=status.HTTP_404_NOT_FOUND)
-
-    data = request.data.copy()
-    data['alert'] = alert_id
-
-    # Kiểm tra đã vote chưa
-    user_id = data.get('user')
-    if AlertVote.objects.filter(alert_id=alert_id, user_id=user_id).exists():
-        return Response({'error': 'Bạn đã vote cho cảnh báo này rồi.'}, status=status.HTTP_400_BAD_REQUEST)
-
+    alert = get_object_or_404(feed(request), pk=alert_id)
+    data = {'alert': alert.pk, 'user': request.user.pk, 'verdict': request.data.get('verdict')}
+    if AlertVote.objects.filter(alert=alert, user=request.user).exists():
+        return Response({'error': 'Bạn đã phản hồi cảnh báo này rồi.'}, status=400)
     serializer = AlertVoteSerializer(data=data)
-    if serializer.is_valid():
-        serializer.save()
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    serializer.is_valid(raise_exception=True)
+    try:
+        with transaction.atomic():
+            serializer.save()
+    except IntegrityError:
+        return Response({'error': 'Bạn đã phản hồi cảnh báo này rồi.'}, status=400)
+    return Response(serializer.data, status=201)
+
+
+@api_view(['POST', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def push_device(request):
+    import re
+    token = request.data.get('token', '')
+    if not isinstance(token, str) or not re.fullmatch(r'(ExponentPushToken|ExpoPushToken)\[[A-Za-z0-9_-]+\]', token) or len(token) > 255:
+        raise ValidationError({'token': 'Expo push token không hợp lệ.'})
+    if request.method == 'DELETE':
+        PushDevice.objects.filter(user=request.user, token=token).update(is_active=False)
+        return Response(status=204)
+    location = coordinates(request.data)
+    with transaction.atomic():
+        device, created = PushDevice.objects.select_for_update().get_or_create(token=token, defaults={'user': request.user})
+        if device.user_id != request.user.pk or not device.is_active:
+            device.registered_at = timezone.now()
+            device.latitude = device.longitude = None
+            device.location_updated_at = None
+        device.user = request.user
+        device.is_active = True
+        device.last_seen = timezone.now()
+        if location:
+            device.latitude, device.longitude = location
+            device.location_updated_at = timezone.now()
+        device.save()
+    return Response({'registered': True}, status=201 if created else 200)

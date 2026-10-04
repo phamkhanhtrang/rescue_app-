@@ -16,9 +16,8 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, StatusBar, Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RCOLORS, RFONTS, RSPACING } from '../../../constants/rescuer/theme';
-
-const STATUSBAR_HEIGHT = Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 0;
 
 const RescuerHeader = ({
   dark = false,
@@ -27,6 +26,8 @@ const RescuerHeader = ({
   liveMode = false,
   showAvatar = true,
 }) => {
+  const insets = useSafeAreaInsets();
+  const topInset = Platform.OS === 'android' ? insets.top : 0;
   const navigation = useNavigation();
   const bg        = dark ? RCOLORS.bgDark   : RCOLORS.bgWhite;
   const textColor = dark ? RCOLORS.textWhite: RCOLORS.textPrimary;
@@ -34,7 +35,7 @@ const RescuerHeader = ({
   return (
     <>
       <StatusBar barStyle={dark ? 'light-content' : 'dark-content'} backgroundColor={bg} />
-      <View style={[styles.container, { backgroundColor: bg }]}>
+      <View style={[styles.container, { backgroundColor: bg, height: 56 + topInset, paddingTop: topInset }]}>
 
         {/* Left slot */}
         <View style={styles.leftSlot}>
@@ -95,8 +96,6 @@ const RescuerHeader = ({
 
 const styles = StyleSheet.create({
   container: {
-    height: 56 + STATUSBAR_HEIGHT,
-    paddingTop: STATUSBAR_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

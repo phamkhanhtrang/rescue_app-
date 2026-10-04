@@ -1,686 +1,145 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import SliderBar from "../../components/SliderBar";
 import Header from "../../components/Header";
-import { api } from "../../services/api";
+import { apiClient } from "../../services/api";
 
-// Mock data for demonstration (replace with API data as needed)
-
-const PAGE_SIZE = 3; // Show 3 rows per page for demo
-
-export default function Page() {
+const states: Record<string, string> = { PENDING: 'Chờ duyệt', ACTIVE: 'Đang hoạt động', REJECTED: 'Bị từ chối', BANNED: 'Bị khóa' };
+const roles: Record<string, string> = { CITIZEN: 'Người dân', RESCUER: 'Cứu hộ', ADMIN: 'Quản trị viên' };
+const errorText = (e: any) => e?.response?.data?.error || e?.response?.data?.detail || 'Không tải được dữ liệu. Vui lòng thử lại.';
+const fieldClass = 'border border-slate-300 rounded-lg px-3 py-2 bg-white';
+export default function Account() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState("rescue"); // rescue, admin, flagged
+  const [users, setUsers] = useState<any[]>([]);
+  const [role, setRole] = useState('');
+  const [status, setStatus] = useState('');
+  const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-
-  const [data, setData] = useState({
-    citizens: [],
-    relief_teams: [],
-    
-    stats: { total_citizens: 0, total_relief_teams: 0 ,unverified_teams_count: 0},
-  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [selected, setSelected] = useState<any>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [action, setAction] = useState('');
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState('');
+  const [reload, setReload] = useState(0);
+  const [contact, setContact] = useState({ full_name: '', phone: '', email: '', address: '' });
+  const detailGeneration = useRef(0);
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [rescuerRes, citizenRes, summaryRes] = await Promise.all([
-          api.accounts.getRescuers(),
-          api.accounts.getCitizens(),
-          api.accounts.getSummary(),
-        ]);
-
-        setData({
-          relief_teams: rescuerRes.data?.results || [],
-          citizens: citizenRes.data?.results || [],
-          stats: {
-             total_citizens: summaryRes.data?.by_role?.CITIZEN || 0,
-             total_relief_teams: summaryRes.data?.by_role?.RESCUER || 0,
-             unverified_teams_count: (rescuerRes.data?.results || []).filter(r => !r.is_active).length
-          }
-        });
-      } catch (err) {
-        console.error("Lỗi lấy dữ liệu accounts:", err);
+    const controller = new AbortController();
+    setLoading(true); setError(''); setPage(1);
+    const timer = setTimeout(() => {
+      apiClient.get('/accounts/profiles/', { params: { role, status, search }, signal: controller.signal })
+        .then(({ data }) => { if (!controller.signal.aborted) setUsers(data.results || []); })
+        .catch(e => { if (!controller.signal.aborted) { setUsers([]); setError(errorText(e)); } })
+        .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    }, 250);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [role, status, search, reload]);
+  useEffect(() => () => { detailGeneration.current += 1; }, []);
+  const openDetail = async (id: string) => {
+    const generation = ++detailGeneration.current;
+    setDetailLoading(true); setSelected(null); setError(''); setAction(''); setReason('');
+    try {
+      const { data } = await apiClient.get('/accounts/profiles/' + id + '/');
+      if (generation === detailGeneration.current) {
+        setSelected(data);
+        setContact({ full_name: data.full_name || '', phone: data.phone || '', email: data.email || '', address: data.address || '' });
       }
-    };
-    fetchData();
-  }, []);
-  // Reset page to 1 when tab changes
-  React.useEffect(() => {
-    setPage(1);
-  }, [activeTab]);
-
-  const fetchUsers = async () => {
+    } catch (e) { if (generation === detailGeneration.current) setError(errorText(e)); }
+    finally { if (generation === detailGeneration.current) setDetailLoading(false); }
+  };
+  const close = () => { if (busy) return; detailGeneration.current++; setSelected(null); setDetailLoading(false); setAction(''); };
+  const submit = async () => {
+    if (!selected || busy || !action) return;
+    if (['ban', 'reject'].includes(action) && !reason.trim()) { setError('Vui lòng nhập lý do.'); return; }
+    setBusy(true); setError(''); setNotice('');
     try {
-      const [rescuerRes, citizenRes, summaryRes] = await Promise.all([
-        api.accounts.getRescuers(),
-        api.accounts.getCitizens(),
-        api.accounts.getSummary(),
-      ]);
-
-      setData({
-        relief_teams: rescuerRes.data?.results || [],
-        citizens: citizenRes.data?.results || [],
-        stats: {
-           total_citizens: summaryRes.data?.by_role?.CITIZEN || 0,
-           total_relief_teams: summaryRes.data?.by_role?.RESCUER || 0,
-           unverified_teams_count: (rescuerRes.data?.results || []).filter(r => !r.is_active).length
-        }
-      });
-    } catch (err) {
-      console.error("Lỗi lấy dữ liệu accounts:", err);
-    }
+      const { data } = await apiClient.post('/accounts/profiles/' + selected.id + '/' + action + '/', { reason: reason.trim() });
+      setNotice(data.message); setReload(v => v + 1);
+      await openDetail(selected.id);
+    } catch (e) { setError(errorText(e)); }
+    finally { setBusy(false); }
   };
-
-  const handleActivateAccount = async (userId: string) => {
+  const pages = Math.max(1, Math.ceil(users.length / 10));
+  const saveContact = async () => {
+    if (!selected || busy) return;
+    setBusy(true); setError('');
     try {
-      const response = await api.accounts.activate(userId);
-      alert(response.data?.message || "Tài khoản đã được kích hoạt thành công!");
-      fetchUsers();
-    } catch (error: any) {
-      const msg = error?.response?.data?.message || error?.response?.data?.error || "Kích hoạt thất bại.";
-      alert(`Lỗi: ${msg}`);
-      console.error("Error activating account:", error);
-    }
+      await apiClient.put('/accounts/profiles/' + selected.id + '/', contact);
+      setNotice('Đã cập nhật thông tin liên hệ.'); setReload(v => v + 1);
+      await openDetail(selected.id);
+    } catch (e: any) {
+      const data = e?.response?.data;
+      const first = data && Object.values(data)[0];
+      setError(data?.error || (Array.isArray(first) ? first.join(' ') : errorText(e)));
+    } finally { setBusy(false); }
   };
-
-  const handleBanAccount = async (userId: string) => {
-    try {
-      const response = await api.accounts.ban(userId);
-      alert(response.data?.message || "Tài khoản đã bị cấm!");
-      fetchUsers();
-    } catch (error: any) {
-      const msg = error?.response?.data?.message || error?.response?.data?.error || "Cấm tài khoản thất bại.";
-      alert(`Lỗi: ${msg}`);
-      console.error("Error banning account:", error);
-    }
-  };
-
-  // Get data for current tab
-  let dataset = [];
-  if (activeTab === "rescue") dataset = data.relief_teams;
-  if (activeTab === "citizen") dataset = data.citizens;
-  const total = dataset.length;
-  const totalPages = Math.ceil(total / PAGE_SIZE);
-  const pagedData = dataset.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-
-  // Helper for status color
-  const statusColorClass = (color) => {
-    if (color === "green") return "bg-green-100 text-green-700";
-    if (color === "amber") return "bg-amber-100 text-amber-700";
-    if (color === "red") return "bg-[#FFDAD6] text-[#93000A]";
-    if (color === "blue") return "bg-blue-100 text-blue-700";
-    return "bg-gray-100 text-gray-700";
-  };
-
-  return (
-    <div className="flex h-screen w-full bg-[#F8F9FA] overflow-hidden">
-      {/* Mobile Overlay */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/40 z-20 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-      {/* Sidebar */}
-      <div
-        className={`
-          fixed lg:relative z-30 lg:z-auto
-          h-full overflow-y-auto shrink-0 border-r border-slate-200
-          transition-transform duration-300 ease-in-out
-          ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
-        `}
-      >
-        <SliderBar />
-      </div>
-
-      {/* Main Content */}
-      <div className="flex-1 bg-[#F8F9FA] flex flex-col h-full overflow-y-auto min-w-0">
-        {/* Header */}
-        <Header onOpenSidebar={setSidebarOpen} />
-
-        {/* Page Body */}
-        <div className="self-stretch p-4 md:p-8">
-          {/* Title + Actions */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center self-stretch mb-6 md:mb-8 gap-4 md:gap-7">
-            <div className="flex flex-1 flex-col gap-1">
-              <div className="flex flex-col items-start self-stretch py-1.5">
-                <span className="text-[#191C1D] text-2xl md:text-3xl font-bold">
-                  {"Tài khoản & phân quyền"}
-                </span>
-              </div>
-              <div className="flex flex-col items-start self-stretch py-1">
-                <span className="text-[#5B403D] text-sm md:text-base">
-                  {
-                    "Quản lý thông tin người dân dùng app và nhóm cứu hộ và phân quyền truy cập"
-                  }
-                </span>
-              </div>
-            </div>
-            
-            {/* <div className="flex flex-wrap items-center gap-3">
-              <button
-                className="flex shrink-0 items-center bg-[#E7E8E9] text-left py-3 md:py-[17px] px-4 md:px-6 gap-2 rounded-lg border-0 cursor-pointer"
-                onClick={() => alert("Pressed!")}
-              >
-                <img
-                  src="https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/c646fce6-3e48-48bd-a836-29c83a4c95b3"
-                  className="w-[18px] h-3 rounded-lg object-fill"
-                  alt="filter"
-                />
-                <span className="text-[#191C1D] text-sm md:text-base font-bold">
-                  {"Advanced Filters"}
-                </span>
-              </button>
-              <button
-                className="flex shrink-0 items-center bg-[#005FAF] text-left py-3 md:py-4 px-4 md:px-6 gap-[9px] rounded-lg border-0 cursor-pointer"
-                style={{ boxShadow: "0px 4px 6px #0000001A" }}
-                onClick={() => alert("Pressed!")}
-              >
-                <img
-                  src="https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/ddea7abe-028e-458c-bb22-057c87da8776"
-                  className="w-[22px] h-4 rounded-lg object-fill"
-                  alt="plus"
-                />
-                <span className="text-white text-sm md:text-base font-bold">
-                  {"Provision New User"}
-                </span>
-              </button>
-            </div> */}
-          </div>
-
-          {/* Stat Cards */}
-          <div className="flex flex-col sm:flex-row items-stretch self-stretch mb-6 md:mb-8 gap-4 md:gap-6">
-            {/* Pending Approvals */}
-            <div className="flex-1 bg-[#F3F4F5] p-6 rounded-xl">
-              <div className="flex flex-col items-start self-stretch pb-4">
-                <span className="text-[#005FAF] text-[10px]">
-                  {"Xác thực danh tính"}
-                </span>
-              </div>
-              <div className="flex flex-col self-stretch gap-1">
-                <span className="text-[#191C1D] text-4xl">{data.stats.unverified_teams_count}</span>
-                <span className="text-[#5B403D] text-sm">
-                  {"Đang chờ phê duyệt"}
-                </span>
-              </div>
-            </div>
-
-            {/* Security Alerts */}
-            <div className="flex flex-1 justify-between items-center bg-[#EDEEEF] py-6 md:py-[30px] px-6 rounded-xl">
-              <div className="flex flex-col shrink-0 items-start">
-                <span className="text-[#B7131A] text-[10px] font-bold mb-1">
-                  {"Cảnh báo"}
-                </span>
-                <span className="text-[#191C1D] text-4xl font-bold mb-1">
-                  {"03"}
-                </span>
-                <span className="text-[#5B403D] text-sm">
-                  {"Danh tính bị gắn cờ"}
-                </span>
-              </div>
-            </div>
-
-            {/* System Integrity */}
-            {/* <div className="flex flex-col shrink-0 items-start bg-[#E1E3E499] py-6 md:py-[29px] px-5 md:px-[25px] rounded-xl border border-solid border-[#FFFFFF33]">
-              <span className="text-[#004E5D] text-[10px] mb-2">
-                {"System Integrity"}
-              </span>
-              <div className="flex items-center gap-2 mb-2">
-                <img
-                  src="https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/8e6de61e-ea22-4647-9126-27745b368b0e"
-                  className="w-4 h-5 object-fill"
-                  alt="shield"
-                />
-                <span className="text-[#191C1D] text-xl font-bold">
-                  {"100% Secure"}
-                </span>
-              </div>
-              <span className="text-[#5B403D] text-[11px] max-w-[180px]">
-                {
-                  "All active nodes verified via decentralized ledger protocols."
-                }
-              </span>
-            </div> */}
-          </div>
-
-          {/* Users Table */}
-          <div
-            className="self-stretch bg-white pt-4 mb-8 md:mb-12 rounded-lg overflow-hidden"
-            style={{ boxShadow: "0px 1px 2px #0000000D" }}
-          >
-            {/* Table Header Tabs */}
-            <div className="flex flex-wrap justify-between items-center self-stretch p-4 md:p-6 gap-2 border-b border-solid border-b-[#EDEEEF]">
-              <div className="flex flex-wrap shrink-0 items-center gap-1">
-                <button
-                  className={`flex flex-col shrink-0 items-start py-2 md:py-3.5 px-[1px] ${activeTab === "rescue" ? "border-b-2 border-b-[#B7131A]" : ""}`}
-                  onClick={() => setActiveTab("rescue")}
-                >
-                  <span
-                    className={`text-sm md:text-base font-bold ${activeTab === "rescue" ? "text-[#B7131A]" : "text-[#5B403D]"}`}
-                  >
-                    {"Đội cứu hộ"}
-                  </span>
-                </button>
-                <button
-                  className={`flex flex-col shrink-0 items-start py-2 md:py-3.5 px-4 md:px-6 ${activeTab === "citizen" ? "border-b-2 border-b-[#005FAF]" : ""}`}
-                  onClick={() => setActiveTab("citizen")}
-                >
-                  <span
-                    className={`text-sm md:text-base font-bold ${activeTab === "citizen" ? "text-[#005FAF]" : "text-[#5B403D]"}`}
-                  >
-                    {"Người dân"}
-                  </span>
-                </button>
-                <button
-                  className={`flex shrink-0 items-center pt-1.5 pb-4 md:pb-[18px] pl-4 md:pl-[25px] gap-[9px] ${activeTab === "flagged" ? "border-b-2 border-b-[#BA1A1A]" : ""}`}
-                  onClick={() => setActiveTab("flagged")}
-                >
-                  {/* <span
-                    className={`text-sm md:text-base ${activeTab === "flagged" ? "text-[#BA1A1A] font-bold" : "text-[#5B403D]"}`}
-                  >
-                    {"Người dùng bị gắn cờ"}
-                  </span>
-                  <div className="flex flex-col shrink-0 items-start bg-[#BA1A1A] py-[5px] px-1.5 rounded-xl">
-                    <span className="text-white text-[10px]">{"3"}</span>
-                  </div> */}
-                </button>
-              </div>
-              <span className="text-[#5B403D] text-xs md:text-sm">
-                {`Showing ${(page - 1) * PAGE_SIZE + 1}-${Math.min(
-                  page * PAGE_SIZE,
-                  total,
-                )} of ${total} Users`}
-              </span>
-            </div>
-
-            {/* Table Column Headers - hide on mobile */}
-            <div className="hidden md:flex items-center self-stretch bg-[#F3F4F5]">
-              {activeTab === "rescue" ? (
-                <>
-                  <div className="flex flex-1 flex-col items-start py-[18px] pl-6">
-                    <span className="text-[#5B403D] text-[11px] font-bold">
-                      {"Tên người dùng"}
-                    </span>
-                  </div>
-                  <div className="flex flex-1 flex-col items-start py-[18px] pl-[25px]">
-                    <span className="text-[#5B403D] text-[11px] font-bold">
-                      {"Tên tổ chức"}
-                    </span>
-                  </div>
-                  <div className="flex flex-1 flex-col items-start py-[18px] pl-[25px]">
-                    <span className="text-[#5B403D] text-[11px] font-bold">
-                      {"Hình thức vận chuyển"}
-                    </span>
-                  </div>
-                  <div className="flex flex-1 flex-col items-end py-[18px] pr-[23px]">
-                    <span className="text-[#5B403D] text-[11px] font-bold">
-                      {"Số điện thoại"}
-                    </span>
-                  </div>
-                  <div className="flex flex-1 flex-col items-end py-[18px] pr-[23px]">
-                    <span className="text-[#5B403D] text-[11px] font-bold">
-                      {"Trạng thái xác nhận"}
-                    </span>
-                  </div>
-                </>
-              ) : activeTab === "citizen" ? (
-                <>
-                  <div className="flex flex-1 flex-col items-start py-[18px] pl-6">
-                    <span className="text-[#5B403D] text-[11px] font-bold">
-                      {"Tên"}
-                    </span>
-                  </div>
-                  <div className="flex flex-1 flex-col items-start py-[18px] pl-[25px]">
-                    <span className="text-[#5B403D] text-[11px] font-bold">
-                      {"Vị trí gửi"}
-                    </span>
-                  </div>
-                  <div className="flex flex-1 flex-col items-end py-[18px] pr-[23px]">
-                    <span className="text-[#5B403D] text-[11px] font-bold">
-                      {"Số phone"}
-                    </span>
-                  </div>
-                  <div className="flex flex-1 flex-col items-end py-[18px] pr-[23px]">
-                    <span className="text-[#5B403D] text-[11px] font-bold">
-                      {"Email"}
-                    </span>
-                  </div>
-                  <div className="flex flex-1 flex-col items-end py-[18px] pr-[23px]">
-                    <span className="text-[#5B403D] text-[11px] font-bold">
-                      {"Bệnh án"}
-                    </span>
-                  </div>
-                  <div className="flex flex-1 flex-col items-end py-[18px] pr-[23px]">
-                    <span className="text-[#5B403D] text-[11px] font-bold">
-                      {"CCCD"}
-                    </span>
-                  </div>
-                  <div className="flex flex-1 flex-col items-end py-[18px] pr-[23px]">
-                    <span className="text-[#5B403D] text-[11px] font-bold">
-                      {"SDT người thân"}
-                    </span>
-                  </div>
-                  <div className="flex flex-1 flex-col items-end py-[18px] pr-[23px]">
-                    <span className="text-[#5B403D] text-[11px] font-bold">
-                      {"Tùy chọn"}
-                    </span>
-                  </div>
-                </>
-              ) : (
-                // keep original header for flagged or other tabs
-                <>
-                  {/* <div className="flex flex-1 flex-col items-start py-[18px] pl-6">
-                    <span className="text-[#5B403D] text-[11px] font-bold">
-                      {"Tên người dùng"}
-                    </span>
-                  </div>
-                  <div className="flex flex-1 flex-col items-start py-[18px] pl-[25px]">
-                    <span className="text-[#5B403D] text-[11px] font-bold">
-                      {"Số điện thoại"}
-                    </span>
-                  </div>
-                  <div className="flex flex-col shrink-0 items-start py-[18px] pl-[25px] pr-[69px]">
-                    <span className="text-[#5B403D] text-[11px] font-bold">
-                      {"Lý do"}
-                    </span>
-                  </div>
-                  <div className="flex flex-1 flex-col items-end py-[18px] pr-[23px]">
-                    <span className="text-[#5B403D] text-[11px] font-bold">
-                      {"Tùy chọn"}
-                    </span>
-                  </div> */}
-                </>
-              )}
-            </div>
-
-            {/* Table Rows - All Tabs Use pagedData */}
-            <div className="self-stretch pt-4">
-              {pagedData.map((row, idx) => (
-                <div
-                  key={row.id ?? row.email ?? row.phone_number ?? idx}
-                  className={`flex flex-col md:flex-row md:items-center self-stretch mb-4 gap-3 md:gap-0 ${
-                    idx % 2 === 1
-                      ? "bg-[#F3F4F54D] py-4 md:py-[18px] border-t border-solid border-t-[#EDEEEF]"
-                      : "py-4 md:py-[18px]"
-                  }`}
-                >
-                  {/* Rescue Teams layout */}
-                  {activeTab === "rescue" && (
-                    <>
-                      <div className="flex flex-col md:flex-1 items-start gap-1 md:pl-6">
-                        <span className="text-[#191C1D] text-sm md:text-base font-bold">
-                          {row.username ?? row.full_name ?? row.name ?? "-"}
-                        </span>
-                        <span className="text-[#5B403D] text-[11px]">
-                          {row.email ?? row.identifier ?? ""}
-                        </span>
-                      </div>
-
-                      <div className="flex flex-col md:flex-1 items-start md:pl-[25px]">
-                        <span className="text-[#191C1D] text-sm">
-                          {row.rescuer_profile?.unit_name ?? "-"}
-                        </span>
-                        <span className="text-[#5B403D] text-[11px]">
-                          {row.rescuer_profile?.rank ?? ""}
-                        </span>
-                      </div>
-
-                      <div className="flex flex-col md:flex-1 items-start md:pl-[25px]">
-                        <span className="text-[#191C1D] text-sm">
-                          {row.rescuer_profile?.specialty ?? "-"}
-                        </span>
-                        <span className="text-[#5B403D] text-[11px]"></span>
-                      </div>
-
-                      <div className="flex flex-col md:flex-1 items-end md:pr-[23px]">
-                        <span className="text-[#191C1D] text-sm">
-                          {row.phone ?? "-"}
-                        </span>
-                        <span className="text-[#5B403D] text-[11px]"></span>
-                      </div>
-                      
-                      <div className="flex flex-col md:flex-1 items-end md:pr-[23px]">
-                        <button
-                          className={`flex flex-col shrink-0 items-start text-left py-2.5 px-[17px] rounded border-0 transition-colors ${
-                            row.is_active
-                              ? "bg-red-600 cursor-pointer" // Màu đỏ khi đang active -> ấn để cấm
-                              : "bg-[#005FAF] cursor-pointer" // Màu xanh khi bị disable -> ấn để kích hoạt
-                          }`}
-                          onClick={() => {
-                            if (row.is_active) {
-                              if (window.confirm("Bạn có chắc chắn muốn cấm tài khoản này?")) {
-                                handleBanAccount(row.id);
-                              }
-                            } else {
-                              handleActivateAccount(row.id);
-                            }
-                          }}
-                        >
-                          <span className="text-white text-xs font-bold">
-                            {row.is_active ? "Cấm acc" : "Kích hoạt tài khoản"}
-                          </span>
-                        </button>
-                      </div>
-                    </>
-                  )}
-
-                  {/* Citizen layout */}
-                  {activeTab === "citizen" && (
-                    <>
-                      <div className="flex flex-col md:flex-1 items-start gap-1 md:pl-6">
-                        <span className="text-[#191C1D] text-sm md:text-base font-bold">
-                          {row.full_name ?? row.name ?? row.username ?? "-"}
-                        </span>
-                      </div>
-
-                      <div className="flex flex-col md:flex-1 items-start md:pl-[25px]">
-                        <span className="text-[#191C1D] text-sm">
-                          {row.citizen_profile?.address ?? "-"}
-                        </span>
-                      </div>
-
-                      <div className="flex flex-col md:flex-1 items-end md:pr-[23px]">
-                        <span className="text-[#191C1D] text-sm">
-                          {row.phone ?? "-"}
-                        </span>
-                      </div>
-                      <div className="flex flex-col md:flex-1 items-end md:pr-[23px]">
-                        <span className="text-[#191C1D] text-sm">
-                          {row.email ?? "-"}
-                        </span>
-                      </div>
-                      <div className="flex flex-col md:flex-1 items-end md:pr-[23px]">
-                        <span className="text-[#191C1D] text-sm">
-                          {row.citizen_profile?.medical_notes ?? "-"}
-                        </span>
-                      </div>
-
-                      <div className="flex flex-col md:flex-1 items-end md:pr-[23px]">
-                        <span className="text-[#191C1D] text-sm">
-                          {row.citizen_profile?.id_number ?? "-"}
-                        </span>
-                      </div>
-                      <div className="flex flex-col md:flex-1 items-end md:pr-[23px]">
-                        <span className="text-[#191C1D] text-sm">
-                          {row.citizen_profile?.emergency_contact_phone ?? "-"}
-                        </span>
-                      </div>
-                      <div className="flex flex-col md:flex-1 items-end md:pr-[23px]">
-                        <button
-                          className={`flex flex-col shrink-0 items-start text-left py-2.5 px-[17px] rounded border-0 transition-colors ${
-                            row.is_active
-                              ? "bg-red-600 cursor-pointer" 
-                              : "bg-[#005FAF] cursor-pointer" 
-                          }`}
-                          onClick={() => {
-                            if (row.is_active) {
-                              if (window.confirm("Bạn có chắc chắn muốn cấm tài khoản này?")) {
-                                handleBanAccount(row.id);
-                              }
-                            } else {
-                              handleActivateAccount(row.id);
-                            }
-                          }}
-                        >
-                          <span className="text-white text-xs font-bold">
-                            {row.is_active ? "Cấm acc" : "Mở khoá"}
-                          </span>
-                        </button>
-                      </div>
-                    </>
-                  )}
-
-                  {/* Flagged / default layout - keep previous view */}
-                  {activeTab === "flagged" && (
-                    <>
-                      <div className="flex items-center gap-3 md:mr-6">
-                        <button
-                          className="flex flex-col shrink-0 items-start bg-[#005FAF1A] text-left py-[9px] px-2.5 rounded-xl border-0 cursor-pointer"
-                          onClick={() => alert("Pressed!")}
-                        >
-                          <img
-                            src="https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/d37f1b8b-73df-42ee-a393-7c83b128e03e"
-                            className="w-5 h-5 rounded-xl object-fill"
-                            alt="icon"
-                          />
-                        </button>
-                        <div className="flex flex-col shrink-0 items-start">
-                          <span className="text-[#191C1D] text-sm md:text-base font-bold">
-                            {row.name ?? row.full_name ?? "-"}
-                          </span>
-                          <span className="text-[#5B403D] text-[11px]">
-                            {row.email ?? row.phone ?? ""}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex flex-col shrink-0 items-start md:pl-6 md:mr-12">
-                        <span className="text-[#191C1D] text-sm">
-                          {row.role}
-                        </span>
-                        <span className="text-[#5B403D] text-[11px]">
-                          {row.permissions}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-3 md:ml-auto">
-                        <div
-                          className={`flex shrink-0 items-center py-1 px-2.5 gap-[9px] rounded-xl ${statusColorClass(row.statusColor)}`}
-                        >
-                          <div
-                            className={`w-1.5 h-1.5 rounded-xl ${row.statusColor === "green" ? "bg-green-600" : row.statusColor === "amber" ? "bg-amber-600" : row.statusColor === "red" ? "bg-[#BA1A1A]" : row.statusColor === "blue" ? "bg-blue-600" : "bg-gray-400"}`}
-                          ></div>
-                          <span className="text-xs font-bold">
-                            {row.status}
-                          </span>
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            {/* Pagination Controls */}
-            <div className="flex justify-center items-center gap-2 py-4">
-              {Array.from({ length: totalPages }, (_, i) => (
-                <button
-                  key={i}
-                  className={`px-3 py-1 rounded ${
-                    page === i + 1
-                      ? "bg-[#005FAF] text-white font-bold"
-                      : "bg-[#E7E8E9] text-[#191C1D]"
-                  }`}
-                  onClick={() => setPage(i + 1)}
-                >
-                  {i + 1}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Bottom Section – RBAC + AI Identity */}
-          <div className="flex flex-col lg:flex-row items-stretch self-stretch gap-6 md:gap-8 pb-8">
-            {/* RBAC Card */}
-            {/* <div className="flex flex-1 flex-col bg-[#EDEEEF] p-6 md:p-8 gap-4 rounded-xl">
-              <div className="flex flex-col items-start self-stretch pb-[1px]">
-                <span className="text-[#191C1D] text-base">
-                  {"Quản lý quyền truy cập"}
-                </span>
-              </div>
-              <div className="flex flex-wrap justify-center items-stretch gap-4">
-                <div className="flex flex-col items-start bg-white py-4 px-5 gap-1 rounded-lg flex-1 min-w-[120px]">
-                  <span className="text-[#191C1D] text-sm font-medium">
-                    {"Standard Responder"}
-                  </span>
-                  <span className="text-[#5B403D] text-[10px]">
-                    {"Read: Maps, Alerts"}
-                  </span>
-                  <span className="text-[#5B403D] text-[10px]">
-                    {"Write: Status Updates"}
-                  </span>
-                </div>
-                <div className="flex flex-col items-start bg-white py-4 px-5 gap-1 rounded-lg flex-1 min-w-[120px]">
-                  <span className="text-[#191C1D] text-sm font-medium">
-                    {"Incident Command"}
-                  </span>
-                  <span className="text-[#5B403D] text-[10px]">
-                    {"Read: All Nodes"}
-                  </span>
-                  <span className="text-[#5B403D] text-[10px]">
-                    {"Write: Dispatch, Broadcast"}
-                  </span>
-                </div>
-                <div className="flex flex-col items-start bg-white py-4 px-5 gap-1 rounded-lg flex-1 min-w-[120px]">
-                  <span className="text-[#191C1D] text-sm font-medium">
-                    {"System Audit"}
-                  </span>
-                  <span className="text-[#5B403D] text-[10px]">
-                    {"Read: Logs, Identities"}
-                  </span>
-                  <span className="text-[#5B403D] text-[10px]">
-                    {"Write: None"}
-                  </span>
-                </div>
-              </div>
-            </div> */}
-
-            {/* AI Identity Verification Card */}
-            {/* <div className="flex flex-col items-start bg-[#E1E3E499] py-8 md:py-[34px] px-6 rounded-xl relative">
-              <div className="flex items-center pb-4 gap-3">
-                <button
-                  className="flex flex-col shrink-0 items-start bg-[#B7131A33] text-left p-[13px] rounded-xl border-0 cursor-pointer"
-                  onClick={() => alert("Pressed!")}
-                >
-                  <img
-                    src="https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/5db41659-9fca-42d4-92c6-43eaa975253c"
-                    className="w-[22px] h-[22px] rounded-xl object-fill"
-                    alt="ai icon"
-                  />
-                </button>
-                <span className="text-[#191C1D] text-sm font-bold">
-                  {"Xác minh danh tính bằng AI"}
-                </span>
-              </div>
-              <p className="text-[#5B403D] text-xs mb-4 max-w-[280px]">
-                {
-                  "The Guardian AI is monitoring 142 login patterns for anomalies. No unusual behavior detected in the last 24 hours."
-                }
-              </p>
-              <div className="flex items-center gap-2">
-                <span className="text-[#B7131A] text-xs font-bold">
-                  {"Review AI Insights"}
-                </span>
-                <img
-                  src="https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/f7622610-17f1-4791-b1f6-95361005db92"
-                  className="w-[9px] h-[9px] object-fill"
-                  alt="arrow"
-                />
-              </div>
-              <div
-                className="bg-[#FFFFFF00] w-[200px] md:w-[217px] h-[65px] absolute bottom-[-27px] right-[1px] rounded-xl"
-                style={{ boxShadow: "0px 25px 50px #00000040" }}
-              ></div>
-            </div> */}
-          </div>
+  const visible = users.slice((page - 1) * 10, page * 10);
+  const child = selected?.rescuer_profile || selected?.citizen_profile || {};
+  const detailFields: [string, any][] = selected ? [
+    ['Họ tên', selected.full_name], ['Vai trò', roles[selected.role]], ['Trạng thái', states[selected.account_status]],
+    ['Số điện thoại', selected.phone], ['Email', selected.email], ['Địa chỉ', selected.address],
+    ['CCCD', child.id_number], ['Đơn vị', child.unit_name], ['Số hiệu đội (tự khai)', child.team_code],
+    ['Cấp bậc', child.rank], ['Chuyên môn', child.specialty_display],
+    ['Bệnh nền / dị ứng', child.medical_notes], ['Liên hệ khẩn cấp', child.emergency_contact_name],
+    ['SĐT khẩn cấp', child.emergency_contact_phone], ['Lý do xử lý gần nhất', selected.account_reason]
+  ] : [];
+  return <div className="flex h-screen bg-slate-50">
+    {sidebarOpen && <div className="fixed inset-0 bg-black/40 z-20 lg:hidden" onClick={() => setSidebarOpen(false)} />}
+    <div className={'fixed lg:relative z-30 h-full ' + (sidebarOpen ? '' : '-translate-x-full lg:translate-x-0')}><SliderBar /></div>
+    <main className="flex-1 min-w-0 overflow-auto"><Header onOpenSidebar={setSidebarOpen} />
+      <div className="p-4 md:p-8 space-y-5">
+        <h1 className="text-2xl font-bold">Quản lý tài khoản</h1>
+        <p className="text-slate-600">Xem hồ sơ trước khi duyệt; nhập lý do khi từ chối hoặc khóa tài khoản.</p>
+        <div className="flex flex-wrap gap-3">
+          <input aria-label="Tìm tài khoản" className={fieldClass} placeholder="Tên, số điện thoại, email" value={search} onChange={e => setSearch(e.target.value)} />
+          <select aria-label="Vai trò" className={fieldClass} value={role} onChange={e => setRole(e.target.value)}><option value="">Tất cả vai trò</option>{Object.entries(roles).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+          <select aria-label="Trạng thái" className={fieldClass} value={status} onChange={e => setStatus(e.target.value)}><option value="">Tất cả trạng thái</option>{Object.entries(states).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+          <button className={fieldClass} onClick={() => setReload(v => v + 1)}>Tải lại</button>
         </div>
+        {notice && <p role="status" className="p-3 bg-green-50 text-green-800">{notice}</p>}
+        {error && <p role="alert" className="p-3 bg-red-50 text-red-700">{error}</p>}
+        {loading ? <p role="status">Đang tải tài khoản…</p> : <>
+          <div className="flex flex-wrap gap-3 text-sm"><strong>{users.length} tài khoản phù hợp</strong>{Object.entries(states).map(([k, v]) => <span key={k}>{v}: {users.filter(u => u.account_status === k).length}</span>)}</div>
+          <div className="overflow-x-auto bg-white border rounded-xl"><table className="w-full text-sm text-left">
+            <thead className="bg-slate-100"><tr>{['Họ tên', 'Vai trò', 'Liên hệ', 'Trạng thái', 'Hồ sơ'].map(h => <th key={h} className="p-3">{h}</th>)}</tr></thead>
+            <tbody>{visible.map(u => <tr key={u.id} className="border-t hover:bg-slate-50">
+              <td className="p-3"><button className="text-blue-700 underline" onClick={() => openDetail(u.id)}>{u.full_name || 'Chưa có tên'}</button></td>
+              <td className="p-3">{roles[u.role] || u.role}</td><td className="p-3">{u.phone}<br />{u.email || 'Chưa có email'}</td>
+              <td className="p-3">{states[u.account_status] || u.account_status}</td>
+              <td className="p-3"><button className={fieldClass} onClick={() => openDetail(u.id)}>Xem chi tiết</button></td>
+            </tr>)}</tbody>
+          </table>{!users.length && <p className="p-6 text-slate-500">Không có tài khoản phù hợp.</p>}</div>
+          <div className="flex gap-4 items-center"><button disabled={page <= 1} onClick={() => setPage(p => p - 1)}>← Trước</button><span>Trang {page}/{pages}</span><button disabled={page >= pages} onClick={() => setPage(p => p + 1)}>Sau →</button></div>
+        </>}
       </div>
-    </div>
-  );
+    </main>
+    {(selected || detailLoading) && <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={close}>
+      <section role="dialog" aria-modal="true" aria-labelledby="account-detail-title" className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] overflow-auto p-6 space-y-4" onClick={e => e.stopPropagation()}>
+        <div className="flex justify-between"><h2 id="account-detail-title" className="text-xl font-bold">Chi tiết tài khoản</h2><button disabled={busy} onClick={close}>Đóng ✕</button></div>
+        {detailLoading ? <p>Đang tải hồ sơ…</p> : <>
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3">{detailFields.filter(([, v]) => v).map(([k, v]) => <div key={k}><dt className="text-slate-500 text-sm">{k}</dt><dd className="whitespace-pre-wrap break-words">{String(v)}</dd></div>)}</dl>
+          {error && <p role="alert" className="text-red-700">{error}</p>}
+          {selected.role !== 'ADMIN' && <details className="border-t pt-3"><summary className="cursor-pointer font-semibold">Sửa thông tin liên hệ</summary>
+            <p className="text-sm text-slate-600 my-2">Khi hỗ trợ khôi phục, cần xác minh đúng chủ tài khoản trước khi thay email nhận mã.</p>
+            {Object.entries({ full_name: 'Họ tên', phone: 'Số điện thoại', email: 'Email', address: 'Địa chỉ' }).map(([key, label]) => <label key={key} className="block my-2">{label}<input className={fieldClass + ' block w-full'} value={contact[key as keyof typeof contact]} disabled={busy} onChange={e => setContact(v => ({ ...v, [key]: e.target.value }))} /></label>)}
+            <button disabled={busy} className={fieldClass} onClick={saveContact}>Lưu thông tin liên hệ</button>
+          </details>}
+          {selected.role !== 'ADMIN' && <div className="space-y-3 border-t pt-4">
+            <div className="flex flex-wrap gap-3">
+              {selected.account_status !== 'ACTIVE' && <button disabled={busy} className={fieldClass} onClick={() => { setAction('activate'); setReason(''); }}>{selected.account_status === 'BANNED' ? 'Mở khóa' : 'Duyệt hồ sơ'}</button>}
+              {selected.account_status === 'PENDING' && <button disabled={busy} className={fieldClass} onClick={() => { setAction('reject'); setReason(''); }}>Từ chối</button>}
+              {selected.account_status === 'ACTIVE' && <button disabled={busy} className={fieldClass} onClick={() => { setAction('ban'); setReason(''); }}>Khóa tài khoản</button>}
+            </div>
+            {action && <div className="space-y-3"><p>{action === 'activate' ? 'Xác nhận cho phép tài khoản đăng nhập?' : action === 'ban' ? 'Khóa tài khoản sẽ kết thúc các phiên đăng nhập hiện tại.' : 'Xác nhận từ chối hồ sơ đăng ký?'}</p>
+              <textarea aria-label="Lý do xử lý" maxLength={2000} className={fieldClass + ' w-full'} placeholder={action === 'activate' ? 'Ghi chú (không bắt buộc)' : 'Lý do bắt buộc'} value={reason} onChange={e => setReason(e.target.value)} />
+              <button disabled={busy} className="bg-blue-700 text-white rounded-lg px-4 py-2 disabled:opacity-50" onClick={submit}>{busy ? 'Đang xử lý…' : 'Xác nhận'}</button>
+            </div>}
+          </div>}
+          <div className="border-t pt-4"><h3 className="font-bold">Lịch sử xử lý</h3>{selected.history?.length ? selected.history.map((h: any, i: number) => <p key={i} className="py-2 text-sm">{new Date(h.created_at).toLocaleString('vi-VN')} · {h.actor__full_name || 'Quản trị viên'} · {({ activate: 'Duyệt / mở khóa', ban: 'Khóa', reject: 'Từ chối', normalize_profile: 'Chuẩn hóa hồ sơ' } as Record<string, string>)[h.action]}{h.reason ? ' — ' + h.reason : ''}</p>) : <p className="text-slate-500">Chưa có lịch sử xử lý được ghi nhận.</p>}</div>
+        </>}
+      </section>
+    </div>}
+  </div>;
 }

@@ -1,3 +1,4 @@
+import PasswordScreen from '../screens/auth/PasswordScreen';
 /**
  * src/navigation/RescuerStack.js
  * ─────────────────────────────────────────────────────────────────────────────
@@ -28,6 +29,8 @@
  */
 
 import React from 'react';
+import AlertDetailScreen from '../screens/AlertDetailScreen';
+import NewsDetailScreen from '../screens/NewsDetailScreen';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -116,24 +119,45 @@ const MapNavigator = () => (
 
 // ─── Tab Bar Icon ─────────────────────────────────────────────────────────────
 
+// ─── Tab Bar Icon ─────────────────────────────────────────────────────────────
+
 const TabIcon = ({ emoji, label, focused, hasBadge }) => (
   <View style={tabIconStyles.wrapper}>
     <View style={tabIconStyles.emojiWrap}>
       <Text style={[tabIconStyles.emoji, focused && tabIconStyles.emojiActive]}>{emoji}</Text>
       {hasBadge && <View style={tabIconStyles.badge} />}
     </View>
-    <Text style={[tabIconStyles.label, { color: focused ? RCOLORS.primary : RCOLORS.textHint }]}>
+    <Text
+      style={[tabIconStyles.label, { color: focused ? RCOLORS.primary : RCOLORS.textHint }]}
+      numberOfLines={1}
+      ellipsizeMode="tail"
+      adjustsFontSizeToFit
+      minimumFontScale={0.8}
+    >
       {label}
     </Text>
   </View>
 );
 
 const tabIconStyles = StyleSheet.create({
-  wrapper: { alignItems: 'center', gap: 2, paddingTop: 4 },
+  wrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 76,
+    maxWidth: 84,
+    paddingTop: 2,
+    gap: 2,
+  },
   emojiWrap: { position: 'relative' },
-  emoji: { fontSize: 20, opacity: 0.5 },
+  emoji: { fontSize: 22, opacity: 0.5 },
   emojiActive: { opacity: 1 },
-  label: { fontSize: RFONTS.xs, fontWeight: RFONTS.semiBold, letterSpacing: 0.3 },
+  label: {
+    fontSize: 10,
+    fontWeight: RFONTS.semiBold,
+    letterSpacing: 0.2,
+    textAlign: 'center',
+    includeFontPadding: false,
+  },
   badge: { position: 'absolute', top: -2, right: -3, width: 8, height: 8, borderRadius: 4, backgroundColor: RCOLORS.primary, borderWidth: 1.5, borderColor: '#FFF' },
 });
 
@@ -153,7 +177,7 @@ const RescuerTabs = () => (
       component={DashboardScreen}
       options={{
         tabBarIcon: ({ focused }) => (
-          <TabIcon emoji="⊞" label="ĐIỀU HÀNH" focused={focused} />
+          <TabIcon emoji="⊞" label="Điều hành" focused={focused} />
         ),
         tabBarAccessibilityLabel: 'Điều hành',
       }}
@@ -165,7 +189,7 @@ const RescuerTabs = () => (
       component={MissionsNavigator}
       options={{
         tabBarIcon: ({ focused }) => (
-          <TabIcon emoji="📋" label="NHIỆM VỤ" focused={focused} hasBadge />
+          <TabIcon emoji="📋" label="Nhiệm vụ" focused={focused} hasBadge />
         ),
         tabBarAccessibilityLabel: 'Nhiệm vụ',
       }}
@@ -177,7 +201,7 @@ const RescuerTabs = () => (
       component={MapNavigator}
       options={{
         tabBarIcon: ({ focused }) => (
-          <TabIcon emoji="🗺" label="BẢN ĐỒ" focused={focused} />
+          <TabIcon emoji="🗺" label="Bản đồ" focused={focused} />
         ),
         tabBarAccessibilityLabel: 'Bản đồ',
       }}
@@ -189,7 +213,7 @@ const RescuerTabs = () => (
       component={RescuerAlertsScreen}
       options={{
         tabBarIcon: ({ focused }) => (
-          <TabIcon emoji="🔔" label="THÔNG BÁO" focused={focused} hasBadge />
+          <TabIcon emoji="🔔" label="Thông báo" focused={focused} hasBadge />
         ),
         tabBarAccessibilityLabel: 'Thông báo',
       }}
@@ -204,8 +228,8 @@ const tabBarStyles = StyleSheet.create({
     backgroundColor: RCOLORS.bgWhite,
     borderTopWidth: 1,
     borderTopColor: '#E8ECEF',
-    height: 68,
-    paddingBottom: 8,
+    height: 62,
+    paddingBottom: 4,
     paddingTop: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -3 },
@@ -222,6 +246,9 @@ const RescuerStack = () => (
 
     {/* Tab navigator là màn hình gốc */}
     <RootStack.Screen name="RescuerTabs" component={RescuerTabs} />
+    <RootStack.Screen name="Password" component={PasswordScreen} options={{ headerShown: true, title: "Tài khoản & mật khẩu" }} />
+    <RootStack.Screen name="AlertDetail" component={AlertDetailScreen} options={{ headerShown: true, title: 'Chi tiết thông báo' }} />
+    <RootStack.Screen name="NewsDetail" component={NewsDetailScreen} options={{ headerShown: true, title: 'Chi tiết tin tức' }} />
 
     {/* ── Root-level modals (không có tab bar) ──────────────────────────── */}
 

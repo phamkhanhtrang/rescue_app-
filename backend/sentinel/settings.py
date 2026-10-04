@@ -20,6 +20,8 @@ env = environ.Env(
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
+EXPO_PUSH_ENABLED = env.bool('EXPO_PUSH_ENABLED', default=False)
+EXPO_ACCESS_TOKEN = env('EXPO_ACCESS_TOKEN', default='')
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
@@ -47,7 +49,8 @@ INSTALLED_APPS = [
     "reporting",
     "communications",
     "rescue_operations",
-    "tracking"
+    "tracking",
+    "ai",
 
 ]
 
@@ -140,17 +143,22 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 AUTH_USER_MODEL = 'accounts.User'
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'accounts.authentication.AccountJWTAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ],
+}
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
-
 # Media files (Uploaded images, etc.)
-import os
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
 # Cấu hình gửi Mail
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
@@ -159,3 +167,17 @@ EMAIL_USE_TLS = True
 EMAIL_HOST_USER = env('EMAIL_ADDRESS')
 EMAIL_HOST_PASSWORD = env('EMAIL_PASSWORD')
 DEFAULT_FROM_EMAIL = f"App Cứu Hộ <{EMAIL_HOST_USER}>"
+EMAIL_TIMEOUT = 10
+PASSWORD_RESET_TIMEOUT = 15 * 60
+
+# Cấu hình Facebook Crawler (Graph API — chỉ bài của admin/token owner)
+FB_PAGE_ACCESS_TOKEN = env('FB_PAGE_ACCESS_TOKEN', default=None)
+FB_GROUP_IDS = env('FB_GROUP_IDS', default='').split(',') if env('FB_GROUP_IDS', default='') else []
+
+# Cấu hình Facebook Playwright Crawler (đăng nhập tài khoản — bài của tất cả thành viên)
+FB_EMAIL    = env('FB_EMAIL',    default=None)
+FB_PASSWORD = env('FB_PASSWORD', default=None)
+
+# Optional bundle exported by the Colab two-model training kit.
+SOS_TWO_MODEL_DIR = env('SOS_TWO_MODEL_DIR', default='')
+SOS_TWO_MODEL_DEVICE = env('SOS_TWO_MODEL_DEVICE', default='cpu')

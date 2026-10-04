@@ -6,6 +6,10 @@ node_modules/
 # Expo
 .expo/
 dist/
+dist-alert-check/
+.flow-build/
+.flow-build-web/
+.expo-review-map/
 web-build/
 expo-env.d.ts
 

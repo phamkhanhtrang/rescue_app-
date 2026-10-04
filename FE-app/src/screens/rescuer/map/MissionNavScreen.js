@@ -9,9 +9,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  SafeAreaView, Dimensions, Alert
+  SafeAreaView, Dimensions, Alert, Linking
 } from 'react-native';
-import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from '../../../components/common/AppMap';
 import * as Location from 'expo-location';
 
 import RescuerHeader from '../../../components/rescuer/common/RescuerHeader';
@@ -20,21 +20,16 @@ import API from '../../../services/api';
 
 const { width, height } = Dimensions.get('window');
 
-// Một số điểm nguy hiểm giả lập để test cảnh báo
-const HAZARDS = [
-  { id: 'h1', lat: 10.765, lng: 106.662, type: 'Bức xạ cao' },
-  { id: 'h2', lat: 10.761, lng: 106.665, type: 'Sụt lún đường' },
-];
-
 const MissionNavScreen = ({ navigation, route }) => {
   const { targetLat, targetLng, zoneName = 'Vùng mục tiêu' } = route?.params ?? {};
 
   const [currentPos, setCurrentPos] = useState(null);
   const [heading, setHeading] = useState(0);
-  const [distance, setDistance] = useState(0);
+  const [distance, setDistance] = useState(null);
   const [eta, setEta] = useState('--:--');
-  const [obstacleAlert, setObstacleAlert] = useState(null);
+  const [routeError, setRouteError] = useState('');
   const [routePath, setRoutePath] = useState([]); // Lộ trình từ A* Server
+  const [googleMapsUrl, setGoogleMapsUrl] = useState(null);
 
   const mapRef = useRef(null);
 
@@ -42,9 +37,11 @@ const MissionNavScreen = ({ navigation, route }) => {
 
   const [isRouting, setIsRouting] = useState(false);
   const targetCoords = {
-    latitude: parseFloat(targetLat) || 16.047079,
-    longitude: parseFloat(targetLng) || 108.206235
+    latitude: Number(targetLat),
+    longitude: Number(targetLng)
   };
+
+  const validTarget = targetLat != null && targetLng != null && Number.isFinite(targetCoords.latitude) && Math.abs(targetCoords.latitude) <= 90 && Number.isFinite(targetCoords.longitude) && Math.abs(targetCoords.longitude) <= 180;
 
   const fetchRouteFromServer = async (startPos) => {
 
@@ -66,10 +63,12 @@ const MissionNavScreen = ({ navigation, route }) => {
 
       if (
         response &&
-        response.status === 'success'
+        response.status === 'success' && Array.isArray(response.path) && response.path.length > 1
       ) {
 
+        setRouteError('');
         setRoutePath(response.path);
+        setGoogleMapsUrl(response.google_maps_url || null);
 
         // Distance thật từ backend
         setDistance(response.distance_meters || 0);
@@ -100,7 +99,7 @@ const MissionNavScreen = ({ navigation, route }) => {
             }
           );
         }
-      }
+      } else { throw new Error('Không có lộ trình phù hợp.'); }
 
     } catch (error) {
 
@@ -109,10 +108,8 @@ const MissionNavScreen = ({ navigation, route }) => {
         error.message
       );
 
-      setRoutePath([
-        startPos,
-        targetCoords
-      ]);
+      setRoutePath([]); setDistance(null); setEta('--');
+      setRouteError('Chưa lấy được lộ trình. Vui lòng kiểm tra kết nối và thử lại.');
 
     } finally {
 
@@ -122,11 +119,13 @@ const MissionNavScreen = ({ navigation, route }) => {
 
 
   useEffect(() => {
-    let subscription;
+    let subscription, cancelled = false;
+    if (!validTarget) return;
 
     const startNav = async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') return;
+      if (cancelled) return;
+      if (status !== 'granted') { setRouteError('Cần quyền vị trí để tìm đường.'); return; }
 
       // Theo dõi vị trí liên tục
       subscription = await Location.watchPositionAsync(
@@ -139,9 +138,6 @@ const MissionNavScreen = ({ navigation, route }) => {
           setCurrentPos({ latitude, longitude });
           setHeading(h || 0);
 
-          // 1. Tính khoảng cách
-          const dist = getDistance(latitude, longitude, targetCoords.latitude, targetCoords.longitude);
-          setDistance(Math.round(dist));
           const now = Date.now();
 
           if (
@@ -155,28 +151,17 @@ const MissionNavScreen = ({ navigation, route }) => {
               longitude
             });
           }
-          // 2. Tính ETA & Khoảng cách (đã được xử lý trong fetchRouteFromServer trên)
-          // 3. Kiểm tra vật cản/nguy hiểm xung quanh
-          const nearbyHazard = HAZARDS.find(h => getDistance(latitude, longitude, h.lat, h.lng) < 150);
-          setObstacleAlert(nearbyHazard ? nearbyHazard.type : null);
+
         }
       );
+      if (cancelled) subscription.remove();
     };
 
-    startNav();
-    return () => subscription && subscription.remove();
+    startNav().catch(() => setRouteError('Chưa lấy được vị trí hiện tại.'));
+    return () => { cancelled = true; subscription?.remove(); };
   }, []);
 
-  const getDistance = (lat1, lon1, lat2, lon2) => {
-    const R = 6371e3;
-    const φ1 = lat1 * Math.PI / 180;
-    const φ2 = lat2 * Math.PI / 180;
-    const Δφ = (lat2 - lat1) * Math.PI / 180;
-    const Δλ = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-  };
+  if (!validTarget) return <SafeAreaView style={styles.safe}><RescuerHeader showBack onBack={() => navigation.goBack()} /><Text style={{color:'#FFF',padding:20}}>Nhiệm vụ chưa có tọa độ đích hợp lệ.</Text></SafeAreaView>;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -209,7 +194,7 @@ const MissionNavScreen = ({ navigation, route }) => {
             </View>
           </Marker>
 
-          {/* Lộ trình (Đường thẳng tượng trưng cho lộ trình tối ưu) */}
+          {/* Lộ trình do máy chủ cung cấp */}
           {routePath.length > 0 && (
             <Polyline
               coordinates={routePath}
@@ -220,30 +205,12 @@ const MissionNavScreen = ({ navigation, route }) => {
             />
           )}
 
-          {/* Các điểm nguy hiểm */}
-          {HAZARDS.map(h => (
-            <Marker key={h.id} coordinate={{ latitude: h.lat, longitude: h.lng }}>
-              <Text style={{ fontSize: 20 }}>⚠️</Text>
-            </Marker>
-          ))}
         </MapView>
-
-        {/* ── Cảnh báo vật cản (Obstacle alert) ─────────────────────────────── */}
-        {obstacleAlert && (
-          <View style={styles.obstacleAlert}>
-            <View style={styles.alertLeft}>
-              <Text style={styles.alertTitle}>Vật cản trên lộ trình!</Text>
-              <Text style={styles.alertDesc}>Phát hiện {obstacleAlert}. Đề xuất chuyển hướng.</Text>
-            </View>
-            <View style={styles.alertStats}>
-              <Text style={styles.alertDist}>150m</Text>
-              <Text style={styles.alertBearing}>Cẩn trọng</Text>
-            </View>
-          </View>
-        )}
 
         {/* ── Thông tin dẫn đường (Footer) ──────────────────────────────────── */}
         <View style={styles.navFooter}>
+          {!!routeError && <Text style={{color:"#FFB4AB"}}>{routeError}</Text>}
+          {isRouting && <Text style={{color:"#FFF"}}>Đang tìm đường…</Text>}
           <View style={styles.targetInfo}>
             <Text style={styles.targetLabel}>ĐIỂM ĐẾN</Text>
             <Text style={styles.targetName}>{zoneName}</Text>
@@ -256,21 +223,39 @@ const MissionNavScreen = ({ navigation, route }) => {
             </View>
             <View style={styles.divider} />
             <View style={styles.statItem}>
-              <Text style={styles.statVal}>{distance}m</Text>
+              <Text style={styles.statVal}>{distance == null ? '--' : `${Math.round(distance)}m`}</Text>
               <Text style={styles.statLabel}>KHOẢNG CÁCH</Text>
             </View>
             <View style={styles.divider} />
             <View style={styles.statItem}>
-              <Text style={styles.statVal}>30km/h</Text>
-              <Text style={styles.statLabel}>VẬN TỐC</Text>
+              <TouchableOpacity disabled={!currentPos || isRouting} onPress={() => fetchRouteFromServer(currentPos)}><Text style={styles.statVal}>Tải lại</Text></TouchableOpacity>
             </View>
           </View>
+
+          <TouchableOpacity
+            style={styles.googleMapsButton}
+            onPress={() => {
+              let url = googleMapsUrl;
+              if (!url && currentPos && validTarget) {
+                url = `https://www.google.com/maps/dir/?api=1&origin=${currentPos.latitude},${currentPos.longitude}&destination=${targetCoords.latitude},${targetCoords.longitude}&travelmode=driving`;
+              }
+              if (url) {
+                Linking.openURL(url).catch(() => {
+                  Alert.alert('Không thể mở Google Maps', 'Vui lòng kiểm tra ứng dụng Google Maps đã cài đặt.');
+                });
+              } else {
+                Alert.alert('Chưa có vị trí', 'Vui lòng chờ tín hiệu GPS hoặc bấm Tải lại lộ trình.');
+              }
+            }}
+          >
+            <Text style={styles.googleMapsText}>🧭 MỞ CHỈ ĐƯỜNG GOOGLE MAPS (NÉ LŨ)</Text>
+          </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.arriveButton}
             onPress={() => navigation.navigate('MissionsTab', { screen: 'ActiveMissionScreen' })}
           >
-            <Text style={styles.arriveText}>XÁC NHẬN ĐÃ ĐẾN VÙNG</Text>
+            <Text style={styles.arriveText}>VỀ NHIỆM VỤ ĐỂ CẬP NHẬT</Text>
           </TouchableOpacity>
         </View>
 
@@ -311,8 +296,11 @@ const styles = StyleSheet.create({
   statLabel: { color: 'rgba(255,255,255,0.4)', fontSize: 10, fontWeight: RFONTS.bold },
   divider: { width: 1, height: 20, backgroundColor: 'rgba(255,255,255,0.1)' },
 
+  googleMapsButton: { backgroundColor: '#0288D1', paddingVertical: 14, borderRadius: RRADIUS.md, alignItems: 'center' },
+  googleMapsText: { color: '#FFF', fontSize: RFONTS.base, fontWeight: RFONTS.black },
   arriveButton: { backgroundColor: '#4CAF50', paddingVertical: 14, borderRadius: RRADIUS.md, alignItems: 'center' },
   arriveText: { color: '#FFF', fontSize: RFONTS.base, fontWeight: RFONTS.black },
 });
 
 export default MissionNavScreen;
+

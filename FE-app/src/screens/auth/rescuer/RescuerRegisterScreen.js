@@ -30,6 +30,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../../../context/AuthContext';
 import API from '../../../services/api';
+import CustomModal from '../../../components/common/CustomModal';
 
 const C = {
   bg:           '#0B1220',
@@ -51,7 +52,8 @@ const C = {
   greenGlow:    'rgba(67,160,71,0.2)',
 };
 
-const SPECIALTIES = ['Tìm kiếm cứu nạn', 'Hỗ trợ y tế', 'Cứu hộ nước', 'Hậu cần', 'Kỹ thuật'];
+const SPECIALTY_LABELS = { SEARCH_RESCUE: 'Tìm kiếm & cứu nạn', MEDICAL: 'Y tế', LOGISTICS: 'Hậu cần', COMMAND: 'Chỉ huy' };
+const SPECIALTIES = Object.keys(SPECIALTY_LABELS);
 const PROVINCES   = ['Hà Nội', 'TP. Hồ Chí Minh', 'Đà Nẵng', 'Cần Thơ', 'Quảng Ngãi', 'Khác'];
 const TOTAL_STEPS = 3;
 
@@ -63,7 +65,7 @@ const StepBar = ({ current }) => (
         <View style={[spStyles.dot, s <= current && spStyles.dotActive, s === current && spStyles.dotCurrent]}>
           {s < current
             ? <Text style={spStyles.check}>✓</Text>
-            : <Text style={spStyles.num}>{s}</Text>
+            : <Text style={spStyles.num}>{SPECIALTY_LABELS[s]}</Text>
           }
         </View>
         {s < 3 && <View style={[spStyles.line, s < current && spStyles.lineActive]} />}
@@ -142,11 +144,19 @@ export default function RescuerRegisterScreen({ navigation }) {
   const [showConf,  setShowConf]  = useState(false);
   const [agreed,    setAgreed]    = useState(false);
   const [rank, setRank] = useState('');
-  
+
   const [loading,   setLoading]   = useState(false);
   const [error,     setError]     = useState('');
   const [focused,   setFocused]   = useState(null);
-  
+  const [modalConfig, setModalConfig] = useState({
+    visible: false,
+    type: 'info',
+    title: '',
+    message: '',
+    confirmText: 'Đồng ý',
+    onConfirm: null,
+  });
+
 
   const slideAnim = useRef(new Animated.Value(0)).current;
   const shakeAnim = useRef(new Animated.Value(0)).current;
@@ -177,7 +187,7 @@ export default function RescuerRegisterScreen({ navigation }) {
     }
     if (step === 3) {
       if (!password)            { setError('Vui lòng nhập mật khẩu.'); shake(); return false; }
-      if (password.length < 6)  { setError('Mật khẩu phải có ít nhất 6 ký tự.'); shake(); return false; }
+      if (password.length < 8)  { setError('Mật khẩu phải có ít nhất 8 ký tự.'); shake(); return false; }
       if (password !== confirm)  { setError('Mật khẩu xác nhận không khớp.'); shake(); return false; }
       if (!agreed)              { setError('Vui lòng đồng ý điều khoản.'); shake(); return false; }
     }
@@ -196,28 +206,33 @@ export default function RescuerRegisterScreen({ navigation }) {
     setError('');
     try {
       const registerData = {
-        full_name: name,
-        phone: phone,
-        email: email || undefined,
+        full_name: name.trim(),
+        phone: phone.trim(),
+        email: email.trim() || undefined,
         unit_name: unit,
         rank: rank,
-        specialty: specs.join(', '),
+        specialty: specs[0],
+        team_code: teamId.trim(),
         password: password,
         address: province,
       };
 
-      console.log("📤 Đang gửi dữ liệu đăng ký cứu hộ:", registerData);
-      
-      const response = await API.rescuers.create(registerData);
-      console.log("✅ Đăng ký thành công:", response);
 
-       
-      Alert.alert(
-        "Đăng ký thành công",
-        "Tài khoản của bạn đã được gửi. Vui lòng chờ quản trị viên phê duyệt trước khi đăng nhập.",
-        [{ text: "OK", onPress: () => navigation.navigate('RescuerLogin') }]
-      ); 
-      
+
+      const response = await API.rescuers.create(registerData);
+
+
+      setModalConfig({
+        visible: true,
+        type: 'success',
+        title: 'Đăng ký thành công',
+        message: 'Tài khoản của bạn đã được gửi. Vui lòng chờ quản trị viên phê duyệt trước khi đăng nhập.',
+        confirmText: 'Đồng ý',
+        onConfirm: () => {
+          setModalConfig(prev => ({ ...prev, visible: false }));
+          navigation.navigate('RescuerLogin');
+        },
+      });
     } catch (e) {
       console.error("❌ Lỗi đăng ký cứu hộ:", e);
       const msg = e.data?.error || e.message || 'Đăng ký thất bại. Vui lòng thử lại.';
@@ -228,7 +243,7 @@ export default function RescuerRegisterScreen({ navigation }) {
     }
   };
 
-  const toggleSpec = (s) => setSpecs(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]);
+  const toggleSpec = (s) => setSpecs([s]);
   const f = (key) => ({ focused: focused === key, onFocus: () => setFocused(key), onBlur: () => setFocused(null) });
 
   const STEP_LABELS = ['THÔNG TIN CÁ NHÂN', 'THÔNG TIN ĐỘI', 'XÁC THỰC & BẢO MẬT'];
@@ -289,7 +304,7 @@ export default function RescuerRegisterScreen({ navigation }) {
                 </View>
 
                 <DarkField label="ĐƠN VỊ / TỔ CHỨC" icon="🏛" placeholder="PCCC Q1 / UBND TP.HCM / ..." value={unit} onChange={setUnit} {...f('unit')} hint="Tên cơ quan chủ quản của đội bạn" />
-                <DarkField label="SỐ HIỆU ĐỘI (TÙY CHỌN)" icon="🔖" placeholder="TEAM-01" value={teamId} onChange={setTeamId} hint="Nếu đội đã có mã từ chỉ huy" {...f('tid')} keyboard="default" autoCapitalize="characters" />
+                <DarkField label="SỐ HIỆU ĐỘI (TÙY CHỌN)" icon="🔖" placeholder="TEAM-01" value={teamId} onChange={setTeamId} hint="Thông tin tự khai, không tự cấp quyền vào đội" {...f('tid')} keyboard="default" autoCapitalize="characters" />
 
                 {/* Province picker */}
                 <View style={dfStyles.group}>
@@ -317,7 +332,7 @@ export default function RescuerRegisterScreen({ navigation }) {
 
                 {/* Specialty multi-select */}
                 <View style={dfStyles.group}>
-                  <Text style={dfStyles.label}>◈  CHUYÊN MÔN (Chọn nhiều)</Text>
+                  <Text style={dfStyles.label}>◈  CHUYÊN MÔN CHÍNH (Chọn một)</Text>
                   <View style={styles.specGrid}>
                     {SPECIALTIES.map(s => (
                       <TouchableOpacity
@@ -325,7 +340,7 @@ export default function RescuerRegisterScreen({ navigation }) {
                         style={[styles.specChip, specs.includes(s) && styles.specChipActive]}
                         onPress={() => toggleSpec(s)}
                       >
-                        <Text style={[styles.specText, specs.includes(s) && styles.specTextActive]}>{s}</Text>
+                        <Text style={[styles.specText, specs.includes(s) && styles.specTextActive]}>{SPECIALTY_LABELS[s]}</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -357,7 +372,7 @@ export default function RescuerRegisterScreen({ navigation }) {
                 <DarkField
                   label="MẬT KHẨU"
                   icon="🔒"
-                  placeholder="Tối thiểu 6 ký tự"
+                  placeholder="Tối thiểu 8 ký tự"
                   value={password}
                   onChange={setPassword}
                   secure={!showPass}
@@ -449,13 +464,26 @@ export default function RescuerRegisterScreen({ navigation }) {
 
         </ScrollView>
       </KeyboardAvoidingView>
+      <CustomModal
+        visible={modalConfig.visible}
+        type={modalConfig.type}
+        title={modalConfig.title}
+        message={modalConfig.message}
+        confirmText={modalConfig.confirmText}
+        onConfirm={modalConfig.onConfirm || (() => setModalConfig(prev => ({ ...prev, visible: false })))}
+        onCancel={() => setModalConfig(prev => ({ ...prev, visible: false }))}
+      />
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: C.bg },
-  scroll: { padding: 20, paddingBottom: 40, gap: 20 },
+  safe: {
+    flex: 1,
+    backgroundColor: C.bg,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 28) : 0,
+  },
+  scroll: { padding: 20, paddingTop: 12, paddingBottom: 40, gap: 20 },
   bgGlow: { position: 'absolute', top: -60, right: -60, width: 250, height: 250, borderRadius: 125, backgroundColor: 'rgba(229,57,53,0.06)' },
 
   // Header

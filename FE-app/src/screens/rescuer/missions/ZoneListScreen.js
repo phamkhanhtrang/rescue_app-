@@ -16,9 +16,25 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   SafeAreaView, ActivityIndicator, RefreshControl
 } from 'react-native';
+import * as Location from 'expo-location';
 import RescuerHeader from '../../../components/rescuer/common/RescuerHeader';
+import { useAuth } from '../../../context/AuthContext';
 import { RCOLORS, RFONTS, RSPACING, RRADIUS, RSHADOWS, RLAYOUT } from '../../../constants/rescuer/theme';
 import API from '../../../services/api';
+
+// Hàm tính khoảng cách theo công thức Haversine
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  if (!lat1 || !lon1 || !lat2 || !lon2) return null;
+  const R = 6371; // km
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a = 
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * 
+    Math.sin(dLon / 2) * Math.sin(dLon / 2); 
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)); 
+  return R * c;
+}
 
 const getSeverityStyles = (severity) => {
   switch (severity) {
@@ -46,6 +62,7 @@ const getStatusLabel = (status) => {
 };
 
 const ZoneListScreen = ({ navigation }) => {
+  const { userInfo } = useAuth();
   const [zones, setZones] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -53,8 +70,63 @@ const ZoneListScreen = ({ navigation }) => {
 
   const fetchZones = async () => {
     try {
-      const response = await API.zones.getAll();
-      setZones(response.results || []);
+      const [zonesRes, sosRes] = await Promise.all([
+        API.zones.getAll(),
+        API.sos.getAll()
+      ]);
+      let fetchedZones = zonesRes.results || zonesRes || [];
+      const fetchedSos = sosRes.results || sosRes || [];
+
+      // Filter active SOS
+      const activeSos = fetchedSos.filter(s => ['PENDING', 'ACKNOWLEDGED', 'IN_PROGRESS'].includes(s.status));
+
+      // Lọc các vùng đã RESOLVED hoặc không còn SOS nào cần giải quyết
+      fetchedZones = fetchedZones.filter(z => {
+        if (z.status === 'RESOLVED') return false;
+        // Kiểm tra xem vùng có SOS nào đang hoạt động không
+        const hasActiveSOS = activeSos.some(s => {
+          const zId = typeof s.zone === 'object' ? s.zone?.id : s.zone;
+          return zId === z.id;
+        });
+        return hasActiveSOS;
+      });
+      
+      // Lấy toạ độ đội cứu trợ thực tế
+      let rLat = parseFloat(userInfo?.rescuer_profile?.current_lat || userInfo?.profile?.current_lat || 0);
+      let rLng = parseFloat(userInfo?.rescuer_profile?.current_lng || userInfo?.profile?.current_lng || 0);
+
+      try {
+        let { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          let location = await Location.getLastKnownPositionAsync({});
+          if (!location) location = await Location.getCurrentPositionAsync({});
+          if (location) {
+            rLat = location.coords.latitude;
+            rLng = location.coords.longitude;
+          }
+        }
+      } catch (locErr) {
+        console.log('Không lấy được vị trí GPS:', locErr);
+      }
+
+      fetchedZones = fetchedZones.map(z => {
+        const zLat = parseFloat(z.location_lat || 0);
+        const zLng = parseFloat(z.location_lng || 0);
+        let dist = null;
+        if (rLat && rLng && zLat && zLng) {
+          dist = calculateDistance(rLat, rLng, zLat, zLng);
+        }
+        return { ...z, distance: dist };
+      });
+
+      // Sắp xếp theo khoảng cách (gần nhất lên đầu)
+      fetchedZones.sort((a, b) => {
+        if (a.distance === null) return 1;
+        if (b.distance === null) return -1;
+        return a.distance - b.distance;
+      });
+
+      setZones(fetchedZones);
       setError(null);
     } catch (err) {
       console.error('Fetch zones error:', err);
@@ -135,10 +207,13 @@ const ZoneListScreen = ({ navigation }) => {
                   <View style={{ flex: 1 }}>
                     <Text style={styles.zoneName} numberOfLines={1}>{zone.name}</Text>
                     <Text style={styles.sosCount}>Mức độ khẩn cấp: {severityLabel} </Text>
-                    <View style={styles.sosCountRow}>
+                    <Text style={styles.sosCountRow}>
                       <Text style={styles.sosCount}>{zone.rescuers_needed || 0} Yêu cầu</Text>
                       <Text style={styles.teamCount}>  ·  {zone.people_affected || 0} Người bị ảnh hưởng</Text>
-                    </View>
+                    </Text>
+                    {zone.distance !== null && (
+                      <Text style={styles.distanceText}>📍 Cách bạn: {zone.distance.toFixed(1)} km</Text>
+                    )}
                   </View>
                 </View>
                 {/* Status badge */}
@@ -191,9 +266,10 @@ const styles = StyleSheet.create({
   zoneLeft: { flexDirection: 'row', alignItems: 'flex-start', gap: RSPACING.sm, flex: 1 },
   zoneIcon: { fontSize: 22, marginTop: 2 },
   zoneName: { fontSize: RFONTS.base, fontWeight: RFONTS.bold, color: RCOLORS.textPrimary, flex: 1 },
-  sosCountRow: { flexDirection: 'row', alignItems: 'center', marginTop: 3 },
+  sosCountRow: { marginTop: 3 },
   sosCount: { fontSize: RFONTS.sm, fontWeight: RFONTS.bold, color: RCOLORS.primary },
   teamCount: { fontSize: RFONTS.sm, color: RCOLORS.textSecondary },
+  distanceText: { fontSize: RFONTS.xs, color: RCOLORS.textSecondary, marginTop: 4, fontWeight: 'bold' },
   statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: RRADIUS.full },
   statusText: { fontSize: RFONTS.xs, fontWeight: RFONTS.bold },
   divider: { height: 1, backgroundColor: RCOLORS.border },

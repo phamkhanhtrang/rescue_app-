@@ -28,22 +28,27 @@ import API from '../../../services/api';
 import { BASE_URL } from '../../../services/apiClient';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS, LAYOUT } from '../../../constants/citizen/theme';
 
-// ─── Mock log data ────────────────────────────────────────────────────────────
-
 const HistoryScreen = ({ navigation }) => {
   const { userInfo } = useAuth();
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState('');
 
   const fetchHistory = async () => {
-    if (!userInfo?.id) return;
+    if (!userInfo?.id) {
+      setLoading(false);
+      setRefreshing(false);
+      setError('Không tìm thấy thông tin tài khoản để tải lịch sử SOS.');
+      return;
+    }
     try {
       setLoading(true);
+      setError('');
       // Gọi API với tham số lọc citizen theo ID của người dùng hiện tại
       const response = await API.sos.getAll({ citizen: userInfo.id });
       
-      const formattedLogs = response.results.map(item => ({
+      const formattedLogs = (response.results || []).map(item => ({
         id: item.id.toString(),
         type: item.signal_type, 
         title: item.emergency_type === 'MEDICAL' ? 'Cấp cứu Y tế' : 
@@ -53,8 +58,6 @@ const HistoryScreen = ({ navigation }) => {
         datetime: formatDateTime(item.sent_at),
         zone: item.zone_name || 'Vùng cứu hộ',
         hazards: item.description || 'Yêu cầu trợ giúp đã gửi',
-        blockchainHash: `0x${item.id}B${Math.floor(Math.random()*1000000)}`, 
-        nodeVerified: true,
         note: item.note,
         images: item.images,
       }));
@@ -62,6 +65,7 @@ const HistoryScreen = ({ navigation }) => {
       setLogs(formattedLogs);
     } catch (error) {
       console.error('Lỗi lấy lịch sử SOS:', error);
+      setError(error.message || 'Không thể tải lịch sử SOS.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -119,16 +123,27 @@ const HistoryScreen = ({ navigation }) => {
           <Text style={styles.guardianLabel}>NHẬT KÝ BẢO VỆ</Text>
           <Text style={styles.pageTitle}>Lịch sử Tín hiệu</Text>
           <Text style={styles.pageDesc}>
-            Lưu trữ đầy đủ các lần truyền tín hiệu SOS, hình ảnh môi trường và trạng thái cứu hộ được xác thực qua blockchain.
+            Theo dõi các yêu cầu SOS, hình ảnh hiện trường và trạng thái xử lý được cập nhật từ trung tâm điều phối.
           </Text>
         </View>
 
         {/* ─── 2. Log entries ─────────────────────────────────────────────── */}
         {loading && !refreshing ? (
           <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 40 }} />
+        ) : error ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>{error}</Text>
+            <TouchableOpacity style={styles.fullReportButton} onPress={fetchHistory}>
+              <Text style={styles.fullReportText}>THỬ LẠI</Text>
+            </TouchableOpacity>
+          </View>
         ) : logs.length > 0 ? (
           logs.map((entry) => (
-            <LogCard key={entry.id} entry={entry} />
+            <LogCard
+              key={entry.id}
+              entry={entry}
+              onPress={() => navigation.navigate('SOSTrackingScreen', { sosId: entry.id })}
+            />
           ))
         ) : (
           <View style={styles.emptyContainer}>
@@ -136,21 +151,18 @@ const HistoryScreen = ({ navigation }) => {
           </View>
         )}
 
-        {/* ─── 3. AI Insight card ─────────────────────────────────────────── */}
+        {/* ─── 3. Hướng dẫn theo dõi ─────────────────────────────────────── */}
         <View style={styles.aiInsightCard}>
           <View style={styles.aiInsightHeader}>
-            <Text style={styles.aiInsightIcon}>🤖</Text>
-            <Text style={styles.aiInsightLabel}>PHÂN TÍCH BẢO VỆ AI</Text>
+            <Text style={styles.aiInsightIcon}>📍</Text>
+            <Text style={styles.aiInsightLabel}>THEO DÕI YÊU CẦU</Text>
           </View>
           <Text style={styles.aiInsightTitle}>
-            Phân tích Xu hướng: Độ ổn định tăng cao
+            Mở một yêu cầu để xem tiến độ
           </Text>
           <Text style={styles.aiInsightText}>
-            Tần suất SOS của bạn đã giảm 40% trong 7 ngày qua. Dữ liệu hiện tại cho thấy mô hình di chuyển của bạn đang nằm trong các hành lang an toàn.
+            Trạng thái xác minh, phân công và thực hiện nhiệm vụ sẽ được cập nhật trong từng yêu cầu SOS.
           </Text>
-          <TouchableOpacity style={styles.fullReportButton}>
-            <Text style={styles.fullReportText}>BÁO CÁO CHI TIẾT</Text>
-          </TouchableOpacity>
         </View>
 
 
@@ -161,8 +173,12 @@ const HistoryScreen = ({ navigation }) => {
 
 // ─── LogCard Component ────────────────────────────────────────────────────────
 
-const LogCard = ({ entry }) => (
-  <View style={[styles.logCard, { borderLeftColor: entry.statusColor }]}>
+const LogCard = ({ entry, onPress }) => (
+  <TouchableOpacity
+    style={[styles.logCard, { borderLeftColor: entry.statusColor }]}
+    onPress={onPress}
+    activeOpacity={0.85}
+  >
     {/* Header */}
     <View style={styles.logHeader}>
       <View style={styles.logIconBox}>
@@ -229,7 +245,7 @@ const LogCard = ({ entry }) => (
         </View>
       )}
     </View> */}
-  </View>
+  </TouchableOpacity>
 );
 
 // ─── Styles ───────────────────────────────────────────────────────────────────

@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 
 import SentinelHeader from '../../../components/citizen/common/SentinelHeader';
+import CustomModal from '../../../components/common/CustomModal';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS, LAYOUT } from '../../../constants/citizen/theme';
 import API from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
@@ -54,7 +55,7 @@ const CommunityVerifyScreen = ({ navigation, route }) => {
     const fetchAlert = async () => {
       try {
         setLoading(true);
-        const data = await API.alerts.getDetails(alertId);
+        const data = await API.alerts.getDetails(alertId, route.params?.location || {});
         setAlertData(data);
       } catch (e) {
         console.log('Fetch alert error:', e);
@@ -67,27 +68,42 @@ const CommunityVerifyScreen = ({ navigation, route }) => {
     }
   }, [alertId]);
 
+  const [modalConfig, setModalConfig] = useState({
+    visible: false,
+    type: 'info',
+    title: '',
+    message: '',
+    confirmText: 'Đồng ý',
+    onConfirm: null,
+  });
+
   // ─── Submit vote ────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
     if (!selected) {
-      Alert.alert('Chọn trạng thái', 'Vui lòng chọn một đánh giá trước khi gửi.');
+      setModalConfig({
+        visible: true,
+        type: 'warning',
+        title: 'Chọn trạng thái',
+        message: 'Vui lòng chọn một đánh giá trước khi gửi.',
+      });
       return;
     }
     try {
       await API.alerts.vote(alertId, {
         verdict: selected,
         user: userInfo?.id,
-      });
+      }, route.params?.location || {});
       setSubmitted(true);
-      Alert.alert(
-        'Cảm ơn!',
-        'Đánh giá của bạn đã được ghi lại.',
-        [{ text: 'Quay lại', onPress: () => navigation.goBack() }]
-      );
+      navigation.goBack();
     } catch (e) {
       console.log('Submit vote error:', e);
-      const msg = e?.error || 'Bạn đã đánh giá cảnh báo này.';
-      Alert.alert('Lỗi', msg);
+      const msg = e?.message || e?.data?.error || 'Không thể gửi đánh giá. Vui lòng thử lại.';
+      setModalConfig({
+        visible: true,
+        type: 'error',
+        title: 'Lỗi',
+        message: msg,
+      });
     }
   };
 
@@ -271,6 +287,16 @@ const CommunityVerifyScreen = ({ navigation, route }) => {
         </View> */}
 
       </ScrollView>
+
+      <CustomModal
+        visible={modalConfig.visible}
+        type={modalConfig.type}
+        title={modalConfig.title}
+        message={modalConfig.message}
+        confirmText={modalConfig.confirmText}
+        onConfirm={modalConfig.onConfirm || (() => setModalConfig(prev => ({ ...prev, visible: false })))}
+        onCancel={() => setModalConfig(prev => ({ ...prev, visible: false }))}
+      />
     </SafeAreaView>
   );
 };

@@ -14,11 +14,10 @@
 import React from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  Platform, StatusBar,
+  StatusBar, Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, FONTS, SPACING } from '../../../constants/citizen/theme';
-
-const STATUSBAR_HEIGHT = Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 0;
 
 // ─── Shield Icon SVG thay thế bằng Text emoji ────────────────────────────────
 // TODO: Thay bằng SVG hoặc @expo/vector-icons khi cài đặt
@@ -29,6 +28,8 @@ const SentinelHeader = ({
   showBack = false,
   onBack,
 }) => {
+  const insets = useSafeAreaInsets();
+  const topInset = Platform.OS === 'android' ? insets.top : 0;
   const bgColor = dark ? COLORS.bgDark   : COLORS.bgWhite;
   const textColor= dark ? COLORS.textWhite: COLORS.textPrimary;
   const logoRed  = COLORS.primary;
@@ -39,7 +40,7 @@ const SentinelHeader = ({
         barStyle={dark ? 'light-content' : 'dark-content'}
         backgroundColor={bgColor}
       />
-      <View style={[styles.container, { backgroundColor: bgColor }]}>
+      <View style={[styles.container, { backgroundColor: bgColor, height: 56 + topInset, paddingTop: topInset }]}>
 
         {/* Nút back hoặc khoảng trống */}
         <View style={styles.leftSlot}>
@@ -93,8 +94,6 @@ const SentinelHeader = ({
 
 const styles = StyleSheet.create({
   container: {
-    height: 56 + STATUSBAR_HEIGHT,
-    paddingTop: STATUSBAR_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

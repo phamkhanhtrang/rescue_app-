@@ -1,0 +1,70 @@
+﻿# ==========================================
+# Root .gitignore for rescue_app- Monorepo
+# ==========================================
+
+# OS & Editor files
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+
+# Environment variables & secrets
+.env
+.env.*
+!.env.example
+
+# Python & Virtual Environments
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv/
+.venv-sos/
+*.sqlite3
+*.db
+
+# Node & Frontend dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Frontend Build & Cache artifacts
+dist/
+dist-*/
+build/
+web-build/
+.expo/
+.expo-*/
+.flow-build/
+.flow-build-*/
+*.tsbuildinfo
+
+# Debug & Temporary dump files
+*.log
+*.dump
+*.tmp
+error.html
+files_list.txt
+nb_out.txt
+out*.json
+database.txt
+
+# Media & Uploads (Test/Dev)
+media/
+backend/media/
+
+# AI Large Model Weights & Checkpoints
+backend/ai/nlp/sos_phobert_model/model.safetensors
+*.safetensors
+*.bin

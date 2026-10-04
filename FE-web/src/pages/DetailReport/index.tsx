@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import SliderBar from "../../components/SliderBar";
-import axios from "axios";
+import { api } from '../../services/api';
 
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -9,7 +9,7 @@ export default function Page() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const res = await axios.get("http://127.0.0.1:8000/rescue_operations/dashboard/");
+        const res = await api.dashboard.getStats();
         setStats(res.data.summary);
       } catch (e) {
         console.error(e);

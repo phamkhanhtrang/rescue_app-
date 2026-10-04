@@ -15,6 +15,7 @@ import {
 import API from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
 import RescuerHeader from '../../../components/rescuer/common/RescuerHeader';
+import CustomModal from '../../../components/common/CustomModal';
 import { RCOLORS, RFONTS, RSPACING, RRADIUS, RSHADOWS } from '../../../constants/rescuer/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 const RescuerProfileScreen = ({ navigation }) => {
@@ -38,7 +39,7 @@ const RescuerProfileScreen = ({ navigation }) => {
           setIdNumber(profileData.id_number || '');
           setUnitName(profileData.unit_name || '');
           setRank(profileData.rank || '');
-          setSpecialty(profileData.specialty || '');
+          setSpecialty(profileData.specialty_display || profileData.specialty || '');
         }
       } catch (error) {
         console.error("Lỗi khi lấy profile:", error);
@@ -46,38 +47,46 @@ const RescuerProfileScreen = ({ navigation }) => {
     };
 
     fetchProfile();
-  }, [userInfo?.id]);
+  }, [userInfo?.id, userInfo?.rescuer_profile]);
+  const [modalConfig, setModalConfig] = useState({
+    visible: false,
+    type: 'info',
+    title: '',
+    message: '',
+    confirmText: 'Đồng ý',
+    cancelText: 'Hủy',
+    onConfirm: null,
+  });
+
   const handleLogout = () => {
-    Alert.alert(
-      'Xác nhận đăng xuất',
-      'Bạn có chắc chắn muốn đăng xuất khỏi hệ thống chỉ huy SENTINEL?',
-      [
-        { text: 'Hủy', style: 'cancel' },
-        {
-          text: 'Đăng xuất',
-          style: 'destructive',
-          onPress: async () => {
-            await signOut();
-          }
-        },
-      ]
-    );
+    setModalConfig({
+      visible: true,
+      type: 'confirm',
+      title: 'Xác nhận đăng xuất',
+      message: 'Bạn có chắc chắn muốn đăng xuất khỏi hệ thống chỉ huy SENTINEL?',
+      confirmText: 'Đăng xuất',
+      cancelText: 'Hủy',
+      onConfirm: async () => {
+        setModalConfig(prev => ({ ...prev, visible: false }));
+        await signOut();
+      },
+    });
   };
 
   const PROFILE_STATS = [
     {
       label: 'NHIỆM VỤ',
-      value: '42',
+      value: '—',
       icon: 'clipboard-text-outline',
     },
     {
       label: 'GIỜ TRỰC',
-      value: '128h',
+      value: '—',
       icon: 'clock-outline',
     },
     {
       label: 'UY TÍN',
-      value: '98%',
+      value: '—',
       icon: 'star-outline',
     },
   ];
@@ -100,7 +109,7 @@ const RescuerProfileScreen = ({ navigation }) => {
           </View>
 
           <Text style={styles.userName}>{userInfo?.full_name}</Text>
-          <Text style={styles.userRole}>CHỈ HUY HIỆN TRƯỜNG • UNIT-07</Text>
+          <Text style={styles.userRole}>{unitName || 'Cứu hộ viên'}</Text>
         </View>
 
         {/* ── Stats Grid ─────────────────────────────────────────────────── */}
@@ -165,6 +174,7 @@ const RescuerProfileScreen = ({ navigation }) => {
           /> */}
         </View>
 
+        <MenuButton icon="🔑" label="Email & mật khẩu" onPress={() => navigation.navigate('Password', { mode: 'change' })} />
         {/* ── Logout Button ─────────────────────────────────────────────── */}
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Text style={styles.logoutText}>ĐĂNG XUẤT HỆ THỐNG</Text>
@@ -172,10 +182,21 @@ const RescuerProfileScreen = ({ navigation }) => {
 
         <View style={styles.footer}>
           <Text style={styles.versionText}>CHỈ HUY SENTINEL v2.4.0</Text>
-          <Text style={styles.deviceId}>Mã thiết bị: SN-99-AX-421</Text>
+          <Text style={styles.deviceId}></Text>
         </View>
 
       </ScrollView>
+
+      <CustomModal
+        visible={modalConfig.visible}
+        type={modalConfig.type}
+        title={modalConfig.title}
+        message={modalConfig.message}
+        confirmText={modalConfig.confirmText}
+        cancelText={modalConfig.cancelText}
+        onConfirm={modalConfig.onConfirm}
+        onCancel={() => setModalConfig(prev => ({ ...prev, visible: false }))}
+      />
     </SafeAreaView>
   );
 };

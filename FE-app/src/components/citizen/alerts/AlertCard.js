@@ -20,26 +20,57 @@ import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../../constants/citizen/theme';
 
 import API from '../../../services/api';
+import { isEmergencyAlert } from '../../../services/alertPolicy';
 
-// Cấu hình màu theo severity
 const SEVERITY_CONFIG = {
   emergency: {
     accent:    COLORS.primary,
     badgeBg:   '#FFEBEE',
     badgeText: COLORS.primary,
     label:     'Khẩn cấp',
+    icon:      '🚨',
+  },
+  critical: { // mapped from crawler
+    accent:    COLORS.statusBlue,
+    badgeBg:   '#E3F2FD',
+    badgeText: COLORS.statusBlue,
+    label:     'Tin tức',
+    icon:      '📰',
   },
   warning: {
     accent:    COLORS.statusOrange,
     badgeBg:   '#FFF3E0',
     badgeText: COLORS.statusOrange,
     label:     'Cảnh báo',
+    icon:      '⚠️',
+  },
+  high: { // mapped from crawler
+    accent:    COLORS.statusBlue,
+    badgeBg:   '#E3F2FD',
+    badgeText: COLORS.statusBlue,
+    label:     'Tin tức',
+    icon:      '📰',
+  },
+  medium: { // mapped from crawler
+    accent:    COLORS.statusBlue,
+    badgeBg:   '#E3F2FD',
+    badgeText: COLORS.statusBlue,
+    label:     'Tin tức',
+    icon:      '📰',
+  },
+  low: { // mapped from crawler
+    accent:    COLORS.statusBlue,
+    badgeBg:   '#E3F2FD',
+    badgeText: COLORS.statusBlue,
+    label:     'Tin tức',
+    icon:      '📰',
   },
   notification: {
     accent:    COLORS.statusBlue,
     badgeBg:   '#E3F2FD',
     badgeText: COLORS.statusBlue,
     label:     'Thông báo',
+    icon:      '🔔',
   },
 };
 
@@ -51,9 +82,9 @@ const AlertCard = ({
   onVoteSuccess
 }) => {
   if (!alert) return null;
-  const { id, severity = 'info', category, title, description, source, created_at, hasRoute, verified } = alert;
+  const { id, severity = 'info', category, title, description, source, created_at, hasRoute, verified, zone_name } = alert;
 
-  const cfg = SEVERITY_CONFIG[(severity || '').toLowerCase()] || SEVERITY_CONFIG.notification || { accent: COLORS.statusBlue };
+  const cfg = isEmergencyAlert(alert) ? SEVERITY_CONFIG.emergency : SEVERITY_CONFIG.notification;
 
   // Format time (simple mockup)
   const timeStr = created_at ? new Date(created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Vừa xong';
@@ -93,8 +124,16 @@ const AlertCard = ({
 
       {/* Content */}
       <Text style={styles.title}>{title}</Text>
+      <Text style={{ color: alert.is_read ? '#64748b' : '#1d4ed8', fontSize: 12 }}>{alert.is_read ? 'Đã đọc' : 'Chưa đọc'}</Text>
+      {zone_name ? (
+        <View style={styles.zoneTag}>
+          <Text style={styles.zoneText}>📍 Khu vực: {zone_name}</Text>
+        </View>
+      ) : null}
       {description ? (
-        <Text style={styles.description} numberOfLines={2}>{description}</Text>
+        <Text style={styles.description} numberOfLines={2}>
+          {description.replace(/<[^>]+>/g, '')}
+        </Text>
       ) : null}
 
       {/* Footer actions */}
@@ -230,7 +269,17 @@ const styles = StyleSheet.create({
     color: COLORS.textWhite,
     fontSize: 10,
     fontWeight: FONTS.bold,
-  }
+  },
+  zoneTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  zoneText: {
+    fontSize: 11,
+    color: '#0284C7',
+    fontWeight: '600',
+  },
 });
 
 export default AlertCard;

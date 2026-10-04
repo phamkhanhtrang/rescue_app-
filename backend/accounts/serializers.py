@@ -1,176 +1,150 @@
+from django.db import transaction
 from rest_framework import serializers
-from .models import  CitizenProfile, RescuerProfile, User
+from .models import CitizenProfile, RescuerProfile, User
+from .validation import phone_value, email_value, password_value
 
 
-class CitizenProfileSerializer(serializers.ModelSerializer):
-    full_name = serializers.CharField(source='user.full_name')
+class ContactValidation:
+    def contact_user(self):
+        if isinstance(self.instance, User):
+            return self.instance
+        return getattr(self.instance, 'user', None)
+
+    def validate_phone(self, value):
+        return phone_value(value, self.contact_user())
+
+    def validate_email(self, value):
+        return email_value(value, self.contact_user())
+
+    def validate_full_name(self, value):
+        if not value.strip():
+            raise serializers.ValidationError('Vui lòng nhập họ tên.')
+        return value.strip()
+
+
+class CitizenProfileSerializer(ContactValidation, serializers.ModelSerializer):
+    full_name = serializers.CharField(source='user.full_name', max_length=150)
     phone = serializers.CharField(source='user.phone')
-    address = serializers.CharField(source='user.address')
+    address = serializers.CharField(source='user.address', max_length=100, allow_blank=True, allow_null=True)
+    avatar_url = serializers.CharField(source='user.avatar_url', required=False, allow_blank=True, allow_null=True)
 
     class Meta:
         model = CitizenProfile
-        fields = [
-            'id', 'id_number', 'medical_notes',
-            'emergency_contact_name', 'emergency_contact_phone',
-            'location_sharing',
-            'full_name', 'phone', 'address'
-        ]
+        fields = ['id', 'id_number', 'medical_notes', 'emergency_contact_name',
+                  'emergency_contact_phone', 'location_sharing', 'full_name', 'phone', 'address', 'avatar_url']
 
+    @transaction.atomic
     def update(self, instance, validated_data):
-        # Lấy dữ liệu user từ validated_data (nested)
         user_data = validated_data.pop('user', {})
-        user = instance.user
-        
-        # Cập nhật thông tin User
         for attr, value in user_data.items():
-            setattr(user, attr, value)
-        user.save()
-        
-        # Cập nhật thông tin CitizenProfile
+            setattr(instance.user, attr, value)
+        if 'phone' in user_data:
+            instance.user.username = user_data['phone']
+        if user_data:
+            instance.user.save(update_fields=list(user_data) + (['username'] if 'phone' in user_data else []))
         return super().update(instance, validated_data)
 
 
-class RescuerProfileSerializer(serializers.ModelSerializer):
-    full_name = serializers.CharField(source='user.full_name')
+class RescuerProfileSerializer(ContactValidation, serializers.ModelSerializer):
+    full_name = serializers.CharField(source='user.full_name', max_length=150)
     phone = serializers.CharField(source='user.phone')
-    address = serializers.CharField(source='user.address')
-    specialty = serializers.CharField(source='get_specialty_display')
+    address = serializers.CharField(source='user.address', max_length=100, allow_blank=True, allow_null=True)
+    specialty_display = serializers.CharField(source='get_specialty_display', read_only=True)
 
     class Meta:
         model = RescuerProfile
-        fields = [
-            'id', 'id_number', 'unit_name', 'rank', 'specialty',
-            'is_on_duty', 'current_lat', 'current_lng',
-            'full_name', 'phone', 'address'
-        ]
+        fields = ['id', 'id_number', 'unit_name', 'team_code', 'rank', 'specialty', 'specialty_display',
+                  'status', 'is_on_duty', 'current_lat', 'current_lng', 'full_name', 'phone', 'address']
+        read_only_fields = ['status']
 
+    @transaction.atomic
     def update(self, instance, validated_data):
-        # Lấy dữ liệu user từ validated_data (nested)
         user_data = validated_data.pop('user', {})
-        user = instance.user
-        
-        # Cập nhật thông tin User
         for attr, value in user_data.items():
-            setattr(user, attr, value)
-        user.save()
-        
-        # Cập nhật thông tin RescuerProfile
+            setattr(instance.user, attr, value)
+        if 'phone' in user_data:
+            instance.user.username = user_data['phone']
+        if user_data:
+            instance.user.save(update_fields=list(user_data) + (['username'] if 'phone' in user_data else []))
         return super().update(instance, validated_data)
 
 
-class ProfileSerializer(serializers.ModelSerializer):
-    """Serializer đầy đủ: kèm theo hồ sơ con tương ứng với role."""
+def account_status(user):
+    if user.is_active:
+        return 'ACTIVE'
+    rp = getattr(user, 'rescuer_profile', None)
+    return rp.status if rp and rp.status in ['PENDING', 'REJECTED'] else 'BANNED'
+
+
+class ProfileSerializer(ContactValidation, serializers.ModelSerializer):
     citizen_profile = CitizenProfileSerializer(read_only=True)
     rescuer_profile = RescuerProfileSerializer(read_only=True)
+    account_status = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = [
-            'id', 'role', 'full_name', 'phone', 'email', 'address',
-            'avatar_url', 'created_at', 'is_active',
-            'citizen_profile', 'rescuer_profile',
-        ]
-        read_only_fields = ['id', 'created_at']
+        fields = ['id', 'username', 'role', 'full_name', 'phone', 'email', 'address', 'avatar_url',
+                  'created_at', 'is_active', 'account_status', 'account_reason', 'citizen_profile', 'rescuer_profile']
+        read_only_fields = ['id', 'username', 'created_at', 'role', 'is_active', 'account_reason']
+
+    def get_account_status(self, obj):
+        return account_status(obj)
+
+    @transaction.atomic
     def update(self, instance, validated_data):
-        # Tách dữ liệu của citizen_profile ra
-        citizen_data = validated_data.pop('citizen_profile', None)
-        
-        # Cập nhật thông tin User (full_name, phone...)
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
-        # Cập nhật thông tin CitizenProfile (emergency_contact...)
-        if citizen_data:
-            cp = instance.citizen_profile
-            for attr, value in citizen_data.items():
-                setattr(cp, attr, value)
-            cp.save()
-            
+        if 'phone' in validated_data:
+            validated_data['username'] = validated_data['phone']
+        for key, value in validated_data.items():
+            setattr(instance, key, value)
+        if validated_data:
+            instance.save(update_fields=list(validated_data))
         return instance
 
 
-class ProfileListSerializer(serializers.ModelSerializer):
-    """Serializer gọn cho danh sách (không kèm hồ sơ con)."""
-    class Meta:
-        model = User
-        fields = ['id', 'role', 'full_name', 'phone', 'email', 'avatar_url', 'created_at', 'is_active']
-class CitizenRegisterSerializer(serializers.ModelSerializer):
-    """Serializer dành riêng cho đăng ký công dân mới."""
-    password = serializers.CharField(write_only=True)
+class ProfileListSerializer(ProfileSerializer):
+    class Meta(ProfileSerializer.Meta):
+        fields = ['id', 'role', 'full_name', 'phone', 'email', 'avatar_url', 'created_at',
+                  'is_active', 'account_status', 'account_reason']
+
+
+class CitizenRegisterSerializer(ContactValidation, serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, trim_whitespace=False)
 
     class Meta:
         model = User
-        fields = ['full_name', 'phone', 'email', 'password','address']
+        fields = ['full_name', 'phone', 'email', 'password', 'address']
 
-    def validate_email(self, value):
-        if value and User.objects.filter(email=value).exists():
-            raise serializers.ValidationError("Email này đã được sử dụng.")
-        return value
+    def validate(self, attrs):
+        password_value(attrs['password'], User(**{k: v for k, v in attrs.items() if k != 'password'}))
+        return attrs
 
-    def validate_phone(self, value):
-        if value and User.objects.filter(phone=value).exists():
-            raise serializers.ValidationError("Số điện thoại này đã được sử dụng.")
-        return value
-
+    @transaction.atomic
     def create(self, validated_data):
         password = validated_data.pop('password')
-        # Tạo User mới với role CITIZEN
-        user = User.objects.create(
-            role='CITIZEN',
-            username=validated_data['phone'], # Sử dụng SĐT làm username
-            **validated_data
-        )
-        user.set_password(password)
-        user.save()
-        
-        # Tự động tạo CitizenProfile trống liên kết với User này
+        user = User.objects.create_user(username=validated_data['phone'], password=password,
+                                        role='CITIZEN', **validated_data)
         CitizenProfile.objects.create(user=user)
-        
         return user
 
-class RescuerRegisterSerializer(serializers.ModelSerializer):
-    """Serializer dành riêng cho đăng ký cứu hộ viên mới."""
-    password = serializers.CharField(write_only=True)
-    unit_name = serializers.CharField(required=False, allow_blank=True)
-    rank = serializers.CharField(required=False, allow_blank=True)
-    specialty = serializers.CharField(required=False, allow_blank=True)
 
-    class Meta:
-        model = User
-        fields = ['full_name', 'phone', 'email', 'password', 'address', 'unit_name', 'rank', 'specialty']
+class RescuerRegisterSerializer(CitizenRegisterSerializer):
+    unit_name = serializers.CharField(max_length=200)
+    team_code = serializers.CharField(max_length=50, required=False, allow_blank=True)
+    rank = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    specialty = serializers.ChoiceField(choices=RescuerProfile.SPECIALTY_CHOICES)
 
-    def validate_email(self, value):
-        if value and User.objects.filter(email=value).exists():
-            raise serializers.ValidationError("Email này đã được sử dụng.")
-        return value
+    class Meta(CitizenRegisterSerializer.Meta):
+        fields = CitizenRegisterSerializer.Meta.fields + ['unit_name', 'team_code', 'rank', 'specialty']
 
-    def validate_phone(self, value):
-        if value and User.objects.filter(phone=value).exists():
-            raise serializers.ValidationError("Số điện thoại này đã được sử dụng.")
-        return value
+    def validate(self, attrs):
+        password_value(attrs['password'], User(full_name=attrs.get('full_name', ''), email=attrs.get('email', '')))
+        return attrs
 
+    @transaction.atomic
     def create(self, validated_data):
+        details = {key: validated_data.pop(key, '') for key in ['unit_name', 'team_code', 'rank', 'specialty']}
         password = validated_data.pop('password')
-        unit_name = validated_data.pop('unit_name', '')
-        rank = validated_data.pop('rank', '')
-        specialty = validated_data.pop('specialty', '')
-        
-        # Tạo User mới với role RESCUER
-        user = User.objects.create(
-            role='RESCUER',
-            is_active=False, # Tài khoản mặc định bị khóa để chờ duyệt
-            username=validated_data['phone'], # Sử dụng SĐT làm username
-            **validated_data
-        )
-        user.set_password(password)
-        user.save()
-        
-        # Tự động tạo RescuerProfile liên kết với User này
-        RescuerProfile.objects.create(
-            user=user,
-            unit_name=unit_name,
-            rank=rank,
-            specialty=specialty
-        )
-        
+        user = User.objects.create_user(username=validated_data['phone'], password=password,
+                                        role='RESCUER', is_active=False, **validated_data)
+        RescuerProfile.objects.create(user=user, **details)
         return user

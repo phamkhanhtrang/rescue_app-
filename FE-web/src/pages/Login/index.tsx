@@ -1,6 +1,7 @@
 import React, {useState} from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
+import { API_BASE_URL, clearSession } from '../../services/api';
 
 export default function HomeLogin() {
   const [showPassword, setShowPassword] = React.useState(false);
@@ -8,48 +9,49 @@ export default function HomeLogin() {
 
   const [loginInput, setLoginInput] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState(new URLSearchParams(window.location.search).has('expired') ? 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.' : '');
   const [loading, setLoading] = useState(false);
 
   // Kiểm tra nếu đã có token thì chuyển hướng luôn
   React.useEffect(() => {
     const token = localStorage.getItem("access_token");
     const role = localStorage.getItem("user_role");
-    if (token) {
+    if (token && !new URLSearchParams(window.location.search).has('expired')) {
       if (role === "ADMIN") {
         navigate("/dashboard");
       } else {
-        navigate("/home");
+        clearSession();
       }
     }
   }, [navigate]);
   // 4. Hàm xử lý gửi dữ liệu cho Django
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
+    setLoading(true);
     setError(""); // Reset lỗi cũ
-
     try {
-      const response = await axios.post("http://192.168.1.100:8000/accounts/login/", {
+      const response = await axios.post(`${API_BASE_URL}/accounts/login/`, {
         login_input: loginInput,
         password: password,
       });
 
       // Nếu thành công:
-      console.log("Thành công:", response.data);
+      if (response.data.user.role !== 'ADMIN') {
+        clearSession();
+        setError('Trang quản trị chỉ dành cho tài khoản admin.');
+        return;
+      }
       
       // Lưu Token vào LocalStorage để dùng cho các trang sau
       localStorage.setItem("access_token", response.data.access);
+      localStorage.setItem("refresh_token", response.data.refresh);
       localStorage.setItem("user_role", response.data.user.role);
       localStorage.setItem("user_name", response.data.user.full_name);
       localStorage.setItem("user_username", response.data.user.username);
       localStorage.setItem("user_email", response.data.user.email);
 
-      // Chuyển hướng dựa trên Role
-      if (response.data.user.role === "ADMIN") {
-        navigate("/dashboard");
-      } else {
-        navigate("/home"); 
-      }
+      navigate("/dashboard", { replace: true });
     } catch (err: any) {
       // Nếu lỗi (Sai pass, thiếu trường...)
       console.error("Chi tiết lỗi:", err);
@@ -64,7 +66,7 @@ export default function HomeLogin() {
         // Lỗi khác
         setError(err.message || "Đã có lỗi xảy ra, vui lòng thử lại.");
       }
-    }
+    } finally { setLoading(false); }
   };
 
 
@@ -98,6 +100,7 @@ export default function HomeLogin() {
             {error}
           </div>
         )}
+        <button className="text-blue-700 underline mb-4" onClick={() => navigate("/password")}>Quên mật khẩu?</button>
         <form
           className="w-full flex flex-col gap-4"
           onSubmit={handleSubmit}

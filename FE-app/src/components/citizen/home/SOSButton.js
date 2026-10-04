@@ -13,8 +13,8 @@
 
 import React, { useRef, useEffect, useState } from 'react';
 import {
-  TouchableOpacity, View, Text, StyleSheet,
-  Animated, Alert,
+  Pressable, View, Text, StyleSheet,
+  Animated,
 } from 'react-native';
 import { COLORS, FONTS, RADIUS, SHADOWS } from '../../../constants/citizen/theme';
 
@@ -24,6 +24,7 @@ const SOSButton = ({ onPress, countdownSec = 3, disabled = false }) => {
   const [pressing, setPressing] = useState(false);
   const [countdown, setCountdown] = useState(null);
   const timerRef = useRef(null);
+  const longPressTriggeredRef = useRef(false);
 
   // ── Pulse animation (liên tục) ─────────────────────────────────────────────
   useEffect(() => {
@@ -39,28 +40,38 @@ const SOSButton = ({ onPress, countdownSec = 3, disabled = false }) => {
 
   // ── Long press countdown ────────────────────────────────────────────────────
   const handlePressIn = () => {
+    if (disabled || pressing) {
+      return;
+    }
     setPressing(true);
     setCountdown(countdownSec);
+    longPressTriggeredRef.current = false;
 
     // Scale down khi nhấn
     Animated.spring(scale, { toValue: 0.93, useNativeDriver: true, speed: 20 }).start();
 
     let remaining = countdownSec;
+    clearInterval(timerRef.current);
     timerRef.current = setInterval(() => {
       remaining -= 1;
       setCountdown(remaining);
       if (remaining <= 0) {
         clearInterval(timerRef.current);
-        setPressing(false);
-        setCountdown(null);
-        Animated.spring(scale, { toValue: 1, useNativeDriver: true }).start();
-        onPress && onPress();
       }
     }, 1000);
   };
 
+  const handleLongPress = () => {
+    longPressTriggeredRef.current = true;
+    clearInterval(timerRef.current);
+    setPressing(false);
+    setCountdown(null);
+    Animated.spring(scale, { toValue: 1, useNativeDriver: true }).start();
+    onPress && onPress();
+  };
+
   const handlePressOut = () => {
-    if (pressing) {
+    if (pressing && !longPressTriggeredRef.current) {
       clearInterval(timerRef.current);
       setPressing(false);
       setCountdown(null);
@@ -93,11 +104,12 @@ const SOSButton = ({ onPress, countdownSec = 3, disabled = false }) => {
 
       {/* Nút chính */}
       <Animated.View style={{ transform: [{ scale }] }}>
-        <TouchableOpacity
+        <Pressable
           style={[styles.button, disabled && styles.disabled]}
           onPressIn={!disabled ? handlePressIn : undefined}
           onPressOut={!disabled ? handlePressOut : undefined}
-          activeOpacity={1}
+          onLongPress={!disabled ? handleLongPress : undefined}
+          delayLongPress={countdownSec * 1000}
           accessible
           accessibilityLabel="Nút SOS khẩn cấp. Giữ để gửi tín hiệu cứu hộ"
           accessibilityRole="button"
@@ -111,7 +123,7 @@ const SOSButton = ({ onPress, countdownSec = 3, disabled = false }) => {
           ) : (
             <Text style={styles.hintText}>GIỮ {countdownSec} GIÂY</Text>
           )}
-        </TouchableOpacity>
+        </Pressable>
       </Animated.View>
 
       {/* Nhãn dưới nút */}

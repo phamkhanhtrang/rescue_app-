@@ -1,5 +1,20 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
 :root {
+}
+
+/* Ensure Leaflet Popups are ALWAYS on top of map controls, legends, tooltips and markers */
+.leaflet-popup-pane {
+  z-index: 1000 !important;
+}
+.leaflet-popup {
+  z-index: 1000 !important;
+}
+.leaflet-tooltip-pane {
+  z-index: 450 !important;
+}
+.leaflet-tooltip {
+  pointer-events: none !important;
 }

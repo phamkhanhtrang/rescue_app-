@@ -6,8 +6,11 @@ import {
   Users,
   UserCog,
   Bell,
-  FileText
+  FileText,
+  Zap
 } from "lucide-react";
+
+import { apiClient, clearSession } from "../services/api";
 
 export default function SliderBar() {
   const navigate = useNavigate();
@@ -18,14 +21,17 @@ export default function SliderBar() {
   { name: "Sơ đồ", path: "/map", icon: Map },
   { name: "Khu vực", path: "/rescue-zone-management", icon: MapPinned },
   { name: "Đội cứu hộ", path: "/follow-the-rescue-team", icon: Users },
+  { name: "AI Tìm tin",   path: "/ai-crawler",    icon: FileText },
   { name: "Tài khoản", path: "/account", icon: UserCog },
   { name: "Phát tin", path: "/notification-broadcast", icon: Bell },
   { name: "Báo cáo", path: "/report", icon: FileText },
 ];
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    const refresh = localStorage.getItem("refresh_token");
+    try { if (refresh) await apiClient.post("/accounts/logout/", { refresh }); } catch { /* Clear local session even offline. */ }
     // Xóa hết dữ liệu trong localStorage
-    localStorage.clear();
+    clearSession();
     // Chuyển về trang login
     navigate("/");
   };

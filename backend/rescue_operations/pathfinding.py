@@ -22,11 +22,11 @@ try:
 
         BASE_GRAPH = ox.load_graphml(GRAPH_PATH)
 
-        print("✅ Graph loaded successfully!")
+        print("[SUCCESS] Graph loaded successfully!")
 
     else:
 
-        print(f"❌ Graph file not found: {GRAPH_PATH}")
+        print(f"[ERROR] Graph file not found: {GRAPH_PATH}")
 
 except Exception as e:
 

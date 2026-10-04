@@ -21,6 +21,7 @@ import {
 } from 'react-native';
 
 import SentinelHeader from '../../../components/citizen/common/SentinelHeader';
+import CustomModal from '../../../components/common/CustomModal';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS, LAYOUT } from '../../../constants/citizen/theme';
 
 const OfflineModeScreen = ({ navigation }) => {
@@ -38,12 +39,20 @@ const OfflineModeScreen = ({ navigation }) => {
     return () => anim.stop();
   }, []);
 
+  const [modalConfig, setModalConfig] = React.useState({
+    visible: false,
+    type: 'info',
+    title: '',
+    message: '',
+  });
+
   const handleOfflineSOS = () => {
-    Alert.alert(
-      '📡 SOS Offline',
-      'Tín hiệu SOS đã được lưu cục bộ. Sẽ tự động gửi khi có kết nối mạng hoặc qua mạng lưới mesh.',
-      [{ text: 'Đã hiểu', style: 'default' }]
-    );
+    setModalConfig({
+      visible: true,
+      type: 'info',
+      title: '📡 SOS Offline',
+      message: 'Tín hiệu SOS đã được lưu cục bộ. Sẽ tự động gửi khi có kết nối mạng hoặc qua mạng lưới mesh.',
+    });
   };
 
   return (
@@ -121,6 +130,15 @@ const OfflineModeScreen = ({ navigation }) => {
         </View>
 
       </ScrollView>
+
+      <CustomModal
+        visible={modalConfig.visible}
+        type={modalConfig.type}
+        title={modalConfig.title}
+        message={modalConfig.message}
+        onConfirm={() => setModalConfig(prev => ({ ...prev, visible: false }))}
+        onCancel={() => setModalConfig(prev => ({ ...prev, visible: false }))}
+      />
     </SafeAreaView>
   );
 };

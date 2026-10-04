@@ -1,5 +1,7 @@
 import uuid
 from django.db import models
+from django.conf import settings
+from django.utils import timezone
 
 
 # ============================================================
@@ -20,7 +22,7 @@ class Alert(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     zone = models.ForeignKey(
         'rescue_operations.Zone',
-        on_delete=models.SET_NULL,
+        on_delete=models.PROTECT,
         null=True, blank=True,
         related_name='alerts',
         verbose_name='Vùng sự cố liên quan'
@@ -30,6 +32,11 @@ class Alert(models.Model):
     category = models.CharField(max_length=100, blank=True, null=True, verbose_name='Loại cảnh báo')
     severity = models.CharField(max_length=20, blank=True, null=True, verbose_name='Mức độ nghiêm trọng')
     source = models.CharField(max_length=15, choices=SOURCE_CHOICES, default='SYSTEM', verbose_name='Nguồn phát tin')
+    message_type = models.CharField(max_length=12, choices=(('EMERGENCY', 'Khẩn cấp'), ('BROADCAST', 'Chỉ đạo')), blank=True, default='')
+    audience = models.CharField(max_length=10, choices=(('ALL', 'Tất cả'), ('CITIZEN', 'Người dân'), ('RESCUER', 'Cứu hộ')), default='ALL')
+    expires_at = models.DateTimeField(null=True, blank=True)
+    publication = models.PositiveIntegerField(default=1)
+    published_at = models.DateTimeField(default=timezone.now)
 
     # Vị trí sự cố (TODO: nâng cấp PostGIS)
     location_lat = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True, verbose_name='Vĩ độ')
@@ -37,6 +44,14 @@ class Alert(models.Model):
 
     is_active = models.BooleanField(default=True, verbose_name='Còn hiệu lực')
     created_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        # Preserve compatibility with AI/crawler producers using category/severity.
+        if not self.message_type:
+            self.message_type = 'EMERGENCY' if (self.severity or '').upper() in ('EMERGENCY', 'CRITICAL', 'HIGH') or self.category == 'emergency' else 'BROADCAST'
+        if self.category == 'teams' and self.audience == 'ALL':
+            self.audience = 'RESCUER'
+        super().save(*args, **kwargs)
 
     class Meta:
         verbose_name = 'Cảnh báo'
@@ -84,3 +99,40 @@ class AlertVote(models.Model):
 
     def __str__(self):
         return f"{self.user.full_name} vote [{self.verdict}] cho: {self.alert.title}"
+
+
+class AlertRead(models.Model):
+    alert = models.ForeignKey(Alert, on_delete=models.CASCADE, related_name='reads')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    publication = models.PositiveIntegerField()
+    read_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['alert', 'user', 'publication'], name='unique_alert_read')]
+
+
+class PushDevice(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='push_devices')
+    token = models.CharField(max_length=255, unique=True)
+    is_active = models.BooleanField(default=True)
+    registered_at = models.DateTimeField(default=timezone.now)
+    last_seen = models.DateTimeField(default=timezone.now)
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
+    location_updated_at = models.DateTimeField(null=True, blank=True)
+
+
+class PushDelivery(models.Model):
+    alert = models.ForeignKey(Alert, on_delete=models.CASCADE, related_name='deliveries')
+    device = models.ForeignKey(PushDevice, on_delete=models.CASCADE)
+    recipient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    publication = models.PositiveIntegerField()
+    status = models.CharField(max_length=20, default='PENDING')
+    attempts = models.PositiveIntegerField(default=0)
+    next_attempt_at = models.DateTimeField(default=timezone.now)
+    ticket_id = models.CharField(max_length=255, blank=True)
+    error = models.CharField(max_length=255, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['alert', 'device', 'publication'], name='unique_alert_push')]

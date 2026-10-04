@@ -1,6 +1,12 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
-export default function Header({ onOpenSidebar }) {
+interface HeaderProps {
+  onOpenSidebar?: (open: boolean) => void;
+}
+
+export default function Header({ onOpenSidebar }: HeaderProps) {
+  const navigate = useNavigate();
   const [userName, setUserName] = useState(localStorage.getItem("user_username")  );
   const [userRole, setUserRole] = useState(localStorage.getItem("user_role") || "Staff");
 
@@ -13,7 +19,7 @@ export default function Header({ onOpenSidebar }) {
           {/* Mobile menu button */}
           <button
             className="lg:hidden flex flex-col justify-center items-center w-8 h-8 gap-1.5 rounded border-0 bg-transparent cursor-pointer"
-            onClick={() => onOpenSidebar(true)}
+            onClick={() => onOpenSidebar?.(true)}
             aria-label="Open sidebar"
           >
             <span className="w-5 h-0.5 bg-slate-700 rounded" />
@@ -37,6 +43,7 @@ export default function Header({ onOpenSidebar }) {
 
         <div className="flex shrink-0 items-center gap-3 md:gap-8">
           
+          <button className="text-xs text-blue-700" onClick={() => navigate("/password?mode=change")}>Email & mật khẩu</button>
           <div className="flex shrink-0 items-center gap-2 md:gap-3">
             <div className="flex flex-col shrink-0 items-start">
               <div className="flex flex-col items-start py-0.5 px-[1px]">

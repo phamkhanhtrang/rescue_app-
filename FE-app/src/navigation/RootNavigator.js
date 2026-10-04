@@ -14,7 +14,8 @@
 
 import React from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, useNavigationContainerRef } from '@react-navigation/native';
+import usePushNotifications from '../hooks/usePushNotifications';
 
 import { useAuth } from '../context/AuthContext';
 import AuthStack from './AuthStack';
@@ -36,7 +37,9 @@ const LoadingScreen = () => (
 // ─── Root Navigator ───────────────────────────────────────────────────────────
 
 const RootNavigator = () => {
-  const { userRole, isLoading } = useAuth();
+  const { userRole, userInfo, isLoading } = useAuth();
+  const navigationRef = useNavigationContainerRef();
+  const onReady = usePushNotifications(userInfo ? { ...userInfo, role: userRole } : null, navigationRef);
 
   // Đang kiểm tra auth state (khởi động app, đăng nhập/xuất)
   if (isLoading) {
@@ -44,11 +47,11 @@ const RootNavigator = () => {
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef} onReady={onReady}>
       {/* Phân quyền dựa trên userRole */}
-      {userRole === null && <AuthStack />}
       {userRole === 'CITIZEN' && <CitizenStack />}
       {userRole === 'RESCUER' && <RescuerStack />}
+      {!['CITIZEN', 'RESCUER'].includes(userRole) && <AuthStack />}
     </NavigationContainer>
   );
 };

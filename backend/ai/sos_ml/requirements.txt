@@ -1,0 +1,8 @@
+# Install in a dedicated environment; Colab already provides torch.
+torch>=2.2
+transformers==4.57.6
+tokenizers==0.22.2
+safetensors>=0.4.5
+pyvi==0.1.1
+scikit-learn>=1.5,<2
+openpyxl==3.1.5

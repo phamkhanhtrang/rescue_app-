@@ -1,3 +1,5 @@
+import PasswordScreen from '../screens/auth/PasswordScreen';
+import SOSRequestsScreen from '../screens/citizen/sos/SOSRequestsScreen';
 /**
  * src/navigation/CitizenStack.js
  * ─────────────────────────────────────────────────────────────────────────────
@@ -27,6 +29,8 @@
  */
 
 import React from 'react';
+import AlertDetailScreen from '../screens/AlertDetailScreen';
+import NewsDetailScreen from '../screens/NewsDetailScreen';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -38,6 +42,8 @@ import HomeScreen           from '../screens/citizen/home/HomeScreen';
 // ── Screens: SOS (full-screen flow, nằm trong root stack) ─────────────────
 import SOSScreen            from '../screens/citizen/sos/SOSScreen';
 import SOSConfirmScreen     from '../screens/citizen/sos/SOSConfirmScreen';
+import SOSTrackingScreen    from '../screens/citizen/sos/SOSTrackingScreen';
+import AnonymousSOSScreen   from '../screens/citizen/sos/AnonymousSOSScreen';
 
 // ── Screens: Map ───────────────────────────────────────────────────────────
 import MapScreen            from '../screens/citizen/map/MapScreen';
@@ -64,9 +70,12 @@ const AlertsStack = createNativeStackNavigator();
 // Bao gồm các màn hình liên quan đến cảnh báo, lịch sử, xác thực, offline.
 
 const AlertsNavigator = () => (
-  <AlertsStack.Navigator screenOptions={{ headerShown: false }}>
+  <AlertsStack.Navigator
+    initialRouteName="AlertsScreen"
+    screenOptions={{ headerShown: false }}
+  >
     {/* Màn hình chính của tab ALERTS */}
-    <AlertsStack.Screen name="AlertsScreen"          component={AlertsScreen} />
+    <AlertsStack.Screen name="AlertsScreen" component={AlertsScreen} />
 
     {/* Lịch sử tín hiệu SOS */}
     <AlertsStack.Screen name="HistoryScreen"         component={HistoryScreen} />
@@ -153,7 +162,7 @@ const CitizenTabs = () => (
       component={HomeScreen}
       options={{
         tabBarIcon: ({ focused }) => (
-          <TabIcon name="home-outline" label="TRANG CHỦ" focused={focused} />
+          <TabIcon name="home-outline" label="Trang chủ" focused={focused} />
         ),
         tabBarAccessibilityLabel: 'Trang chủ',
       }}
@@ -163,7 +172,7 @@ const CitizenTabs = () => (
       component={MapScreen}
       options={{
         tabBarIcon: ({ focused }) => (
-          <TabIcon name="map-outline" label="BẢN ĐỒ" focused={focused} />
+          <TabIcon name="map-outline" label="Bản đồ" focused={focused} />
         ),
         tabBarAccessibilityLabel: 'Bản đồ',
       }}
@@ -172,8 +181,9 @@ const CitizenTabs = () => (
       name="AlertsTab"
       component={AlertsNavigator}
       options={{
+        unmountOnBlur: true,
         tabBarIcon: ({ focused }) => (
-          <TabIcon name="alert-circle-outline" label="CẢNH BÁO" focused={focused} />
+          <TabIcon name="alert-circle-outline" label="Cảnh báo" focused={focused} />
         ),
         tabBarAccessibilityLabel: 'Cảnh báo',
       }}
@@ -183,7 +193,7 @@ const CitizenTabs = () => (
       component={ProfileScreen}
       options={{
         tabBarIcon: ({ focused }) => (
-          <TabIcon name="account-outline" label="HỒ SƠ" focused={focused} />
+          <TabIcon name="account-outline" label="Hồ sơ" focused={focused} />
         ),
         tabBarAccessibilityLabel: 'Hồ sơ',
       }}
@@ -212,10 +222,14 @@ const tabBarStyles = StyleSheet.create({
 // ─── CitizenStack: Root Stack ─────────────────────────────────────────────────
 
 const CitizenStack = () => (
-  <RootStack.Navigator screenOptions={{ headerShown: false }}>
+  <RootStack.Navigator initialRouteName="CitizenTabs" screenOptions={{ headerShown: false }}>
 
     {/* Tab navigator là màn hình mặc định */}
+    <RootStack.Screen name="Password" component={PasswordScreen} options={{ headerShown: true, title: "Tài khoản & mật khẩu" }} />
+    <RootStack.Screen name="SOSRequestsScreen" component={SOSRequestsScreen} />
     <RootStack.Screen name="CitizenTabs" component={CitizenTabs} />
+    <RootStack.Screen name="AlertDetail" component={AlertDetailScreen} options={{ headerShown: true, title: 'Chi tiết thông báo' }} />
+    <RootStack.Screen name="NewsDetail" component={NewsDetailScreen} options={{ headerShown: true, title: 'Chi tiết tin tức' }} />
 
     {/* ── SOS flow (full-screen, không có tab bar) ────────────────────────── */}
     <RootStack.Screen
@@ -233,21 +247,21 @@ const CitizenStack = () => (
       component={SOSConfirmScreen}
       options={{
         animation: 'slide_from_right',
-        gestureEnabled: false, // Ngăn swipe back từ màn hình xác nhận
+        gestureEnabled: false,
       }}
     />
 
-    {/*
-     * SOSTrackingScreen sẽ được thêm vào đây khi triển khai.
-     * (Màn hình "ZONE ALPHA-7" theo dõi đội cứu hộ)
-     *
-     * <RootStack.Screen
-     *   name="SOSTrackingScreen"
-     *   component={SOSTrackingScreen}
-     *   options={{ animation: 'slide_from_right' }}
-     * />
-     */
-     }
+    <RootStack.Screen
+      name="SOSTrackingScreen"
+      component={SOSTrackingScreen}
+      options={{ animation: 'slide_from_right' }}
+    />
+
+    <RootStack.Screen
+      name="AnonymousSOSScreen"
+      component={AnonymousSOSScreen}
+      options={{ animation: 'slide_from_bottom' }}
+    />
 
   </RootStack.Navigator>
 );

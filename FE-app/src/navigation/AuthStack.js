@@ -1,3 +1,5 @@
+import PasswordScreen from '../screens/auth/PasswordScreen';
+import SOSRequestsScreen from '../screens/citizen/sos/SOSRequestsScreen';
 /**
  * src/navigation/AuthStack.js
  * ─────────────────────────────────────────────────────────────────────────────
@@ -24,6 +26,9 @@ import CitizenLoginScreen     from '../screens/auth/citizen/CitizenLoginScreen';
 import CitizenRegisterScreen  from '../screens/auth/citizen/CitizenRegisterScreen';
 import RescuerLoginScreen     from '../screens/auth/rescuer/RescuerLoginScreen';
 import RescuerRegisterScreen  from '../screens/auth/rescuer/RescuerRegisterScreen';
+import AnonymousSOSScreen     from '../screens/citizen/sos/AnonymousSOSScreen';
+import SOSConfirmScreen     from '../screens/citizen/sos/SOSConfirmScreen';
+import SOSTrackingScreen        from '../screens/citizen/sos/SOSTrackingScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -33,18 +38,43 @@ const AuthStack = () => (
     screenOptions={{
       headerShown: false,
       animation: 'slide_from_right',
-      // Không cho phép swipe back từ màn hình Welcome để tránh crash
       gestureEnabled: true,
     }}
   >
     {/* ── Màn hình gốc: Chọn vai trò ──────────────────────────────────── */}
+    <Stack.Screen name="Password" component={PasswordScreen} options={{ headerShown: true, title: "Tài khoản & mật khẩu" }} />
+    <Stack.Screen name="SOSRequestsScreen" component={SOSRequestsScreen} />
     <Stack.Screen
       name="Welcome"
       component={WelcomeScreen}
       options={{
         animation: 'fade',
-        gestureEnabled: false,       // Không swipe back từ màn hình gốc
+        gestureEnabled: false,
       }}
+    />
+
+    {/* ── Anonymous SOS ────────────────────────────────────────────────── */}
+    <Stack.Screen
+      name="AnonymousSOSScreen"
+      component={AnonymousSOSScreen}
+      options={{ animation: 'slide_from_bottom' }}
+    />
+    <Stack.Screen
+      name="SOSScreen"
+      component={AnonymousSOSScreen}
+      options={{ animation: 'slide_from_bottom' }}
+    />
+
+    <Stack.Screen
+      name="SOSConfirmScreen"
+      component={SOSConfirmScreen}
+      options={{ animation: 'slide_from_right', gestureEnabled: false }}
+    />
+
+    <Stack.Screen
+      name="SOSTrackingScreen"
+      component={SOSTrackingScreen}
+      options={{ animation: 'slide_from_right' }}
     />
 
     {/* ── CITIZEN: Đăng nhập ───────────────────────────────────────────── */}

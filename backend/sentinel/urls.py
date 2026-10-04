@@ -26,6 +26,7 @@ urlpatterns = [
     path("rescue_operations/", include("rescue_operations.urls")),
     path("communications/", include("communications.urls")),
     path("reporting/", include("reporting.urls")),
+    path("ai/", include("ai.urls")),
 ]
 
 if settings.DEBUG:

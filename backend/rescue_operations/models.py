@@ -102,15 +102,44 @@ class SOSSignal(models.Model):
         verbose_name='Vùng sự cố'
     )
     sent_at = models.DateTimeField(auto_now_add=True, verbose_name='Thời điểm gửi')
+    request_key = models.UUIDField(null=True, unique=True, editable=False)
+    contact_name = models.CharField(max_length=150, blank=True)
+    contact_phone = models.CharField(max_length=30, blank=True)
+    address = models.CharField(max_length=500, blank=True)
+    location_source = models.CharField(max_length=20, default='GPS')
+    verification_status = models.CharField(max_length=20, default='UNVERIFIED', choices=[
+        ('UNVERIFIED', 'Chưa xác minh'), ('CHECKING', 'Đang xác minh'),
+        ('VERIFIED', 'Đã xác minh'), ('INCORRECT', 'Thông tin không chính xác')])
+    assigned_mission = models.ForeignKey('reporting.Mission', null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='assigned_sos')
+    supplies_needed = models.JSONField(default=dict, blank=True, verbose_name='Nhu cầu cứu trợ')
+    supplies_delivered = models.JSONField(default=dict, blank=True, verbose_name='Đã tiếp tế')
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         verbose_name = 'Tín hiệu SOS'
         verbose_name_plural = 'Tín hiệu SOS'
         db_table = 'sos_signals'
         ordering = ['-sent_at']
+        indexes = [
+            models.Index(fields=['zone', 'status'], name='idx_sos_zone_status'),
+            models.Index(fields=['status', '-sent_at'], name='idx_sos_status_sent'),
+            models.Index(fields=['verification_status', 'status'], name='idx_sos_verify_status'),
+        ]
 
     def __str__(self):
         return f"SOS [{self.signal_type}] - {self.status} tại ({self.location_lat}, {self.location_lng})"
+
+
+class SOSEvent(models.Model):
+    sos = models.ForeignKey(SOSSignal, on_delete=models.CASCADE, related_name='events')
+    kind = models.CharField(max_length=40)
+    message = models.TextField()
+    actor = models.ForeignKey('accounts.User', null=True, on_delete=models.SET_NULL)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at', 'id']
 
 
 class SOSImage(models.Model):

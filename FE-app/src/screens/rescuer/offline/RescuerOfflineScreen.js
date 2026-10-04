@@ -21,6 +21,7 @@ import {
 } from 'react-native';
 
 import RescuerHeader from '../../../components/rescuer/common/RescuerHeader';
+import CustomModal from '../../../components/common/CustomModal';
 import { RCOLORS, RFONTS, RSPACING, RRADIUS, RSHADOWS, RLAYOUT } from '../../../constants/rescuer/theme';
 
 const OFFLINE_TASKS = [
@@ -43,11 +44,23 @@ const RescuerOfflineScreen = ({ navigation }) => {
     return () => anim.stop();
   }, []);
 
+  const [modalConfig, setModalConfig] = useState({
+    visible: false,
+    type: 'info',
+    title: '',
+    message: '',
+  });
+
   const handleRetry = () => {
     setRetrying(true);
     setTimeout(() => {
       setRetrying(false);
-      Alert.alert('Không thành công', 'Vẫn chưa có kết nối mạng. Hệ thống tiếp tục ở chế độ ngoại tuyến.');
+      setModalConfig({
+        visible: true,
+        type: 'warning',
+        title: 'Không thành công',
+        message: 'Vẫn chưa có kết nối mạng. Hệ thống tiếp tục ở chế độ ngoại tuyến.',
+      });
     }, 2500);
   };
 
@@ -139,6 +152,15 @@ const RescuerOfflineScreen = ({ navigation }) => {
         </View>
 
       </ScrollView>
+
+      <CustomModal
+        visible={modalConfig.visible}
+        type={modalConfig.type}
+        title={modalConfig.title}
+        message={modalConfig.message}
+        onConfirm={() => setModalConfig(prev => ({ ...prev, visible: false }))}
+        onCancel={() => setModalConfig(prev => ({ ...prev, visible: false }))}
+      />
     </SafeAreaView>
   );
 };

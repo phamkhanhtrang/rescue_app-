@@ -85,7 +85,41 @@ const WelcomeScreen = ({ navigation }) => {
 
       {/* ── Role picker cards ────────────────────────────────────────────── */}
       <Animated.View style={[styles.cardsSection, { opacity: cardsOpacity, transform: [{ translateY: cardsY }] }]}>
-        <Text style={styles.chooseLabel}>CHỌN VAI TRÒ CỦA BẠN</Text>
+        {/* ── ANONYMOUS SOS BUTTON (RED HERO) ─────────────────────────────── */}
+        <TouchableOpacity
+          style={styles.anonymousSosBtn}
+          onPress={() => navigation.navigate('AnonymousSOSScreen')}
+          activeOpacity={0.88}
+        >
+          <View style={styles.anonymousSosIconBox}>
+            <MaterialCommunityIcons name="bell-ring" size={28} color="#FFF" />
+          </View>
+          <View style={styles.cardBody}>
+            <Text style={styles.anonymousSosTitle}>GỬI SOS KHẨN CẤP</Text>
+            <Text style={styles.anonymousSosDesc}>
+              Không cần đăng nhập · Định vị GPS · Gửi ngay
+            </Text>
+          </View>
+          <View style={styles.anonymousArrow}>
+            <Text style={styles.anonymousArrowText}>⚡</Text>
+          </View>
+        </TouchableOpacity>
+
+        {/* Sub action: Track sent SOS requests */}
+        <TouchableOpacity
+          onPress={() => navigation.navigate('SOSRequestsScreen')}
+          style={styles.historySubBtn}
+          activeOpacity={0.7}
+        >
+          <MaterialCommunityIcons name="history" size={18} color="rgba(255,255,255,0.7)" />
+          <Text style={styles.historySubText}>Theo dõi các yêu cầu SOS đã gửi</Text>
+        </TouchableOpacity>
+
+        <View style={styles.dividerRow}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.chooseLabel}>ĐĂNG NHẬP VÀO HỆ THỐNG</Text>
+          <View style={styles.dividerLine} />
+        </View>
 
         {/* ── CITIZEN card ─────────────────────────────────────────────── */}
         <TouchableOpacity
@@ -98,7 +132,7 @@ const WelcomeScreen = ({ navigation }) => {
             <MaterialCommunityIcons
               name="account-outline"
               size={26}
-              color="#000"
+              color="#1565C0"
             />
           </View>
           <View style={styles.cardBody}>
@@ -120,12 +154,12 @@ const WelcomeScreen = ({ navigation }) => {
           accessibilityLabel="Đăng nhập với vai trò Đội cứu hộ"
         >
           <View style={[styles.cardIconBox, { backgroundColor: 'rgba(229,57,53,0.15)' }]}>
-  <MaterialCommunityIcons
-    name="fire-truck"
-    size={26}
-    color="#fff"
-  />
-</View>
+            <MaterialCommunityIcons
+              name="shield-account"
+              size={26}
+              color="#E53935"
+            />
+          </View>
           <View style={styles.cardBody}>
             <Text style={styles.rescuerCardTitle}>Đội cứu hộ</Text>
             <Text style={styles.rescuerCardDesc}>
@@ -242,15 +276,87 @@ const styles = StyleSheet.create({
   cardsSection: {
     paddingHorizontal: 20,
     paddingBottom: 16,
-    gap: 14,
+    gap: 12,
+  },
+  historySubBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    alignSelf: 'center',
+  },
+  historySubText: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.7)',
+    fontWeight: '500',
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 6,
+    gap: 12,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.1)',
   },
   chooseLabel: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
     color: C.textDim,
-    letterSpacing: 2,
+    letterSpacing: 1.5,
     textAlign: 'center',
-    marginBottom: 4,
+  },
+
+  // Anonymous SOS button
+  anonymousSosBtn: {
+    backgroundColor: '#E53935',
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    gap: 14,
+    shadowColor: '#E53935',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 14,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: '#FF1744',
+  },
+  anonymousSosIconBox: {
+    width: 52, height: 52,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  anonymousSosTitle: {
+    fontSize: 17,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  anonymousSosDesc: {
+    fontSize: 12,
+    color: '#FFEBEE',
+    marginTop: 3,
+    lineHeight: 16,
+  },
+  anonymousArrow: {
+    width: 36, height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  anonymousArrowText: {
+    fontSize: 18,
   },
 
   // Citizen card (light background)

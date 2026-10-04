@@ -1,0 +1,8 @@
+{
+  "EVACUATION": 0,
+  "INFO": 1,
+  "MEDICAL": 2,
+  "RESCUE": 3,
+  "SPAM": 4,
+  "SUPPLY": 5
+}

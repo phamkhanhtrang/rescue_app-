@@ -1,0 +1,15 @@
+{
+  "model_id": "sos_phobert_classifier",
+  "backbone": "vinai/phobert-base",
+  "max_length": 256,
+  "task": "SOS text classification",
+  "labels": [
+    "EVACUATION",
+    "INFO",
+    "MEDICAL",
+    "RESCUE",
+    "SPAM",
+    "SUPPLY"
+  ],
+  "save_dir": "/content/drive/MyDrive/SOS_PhoBERT/saved_sos_phobert"
+}

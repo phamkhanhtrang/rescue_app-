@@ -4,7 +4,7 @@
  * Màn hình Điều hành — "Command Center" (Tab ĐIỀU HÀNH).
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
   TouchableOpacity, SafeAreaView, ActivityIndicator,
@@ -17,65 +17,80 @@ import {
   RCOLORS, RFONTS, RSPACING, RRADIUS, RSHADOWS, RLAYOUT,
 } from '../../../constants/rescuer/theme';
 import API from '../../../services/api';
+import useLiveRefresh from '../../../hooks/useLiveRefresh';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
-const AI_INSIGHTS = [
-  {
-    icon: '🤖',
-    text: 'AI dự đoán tỷ lệ thành công 76% tại khu vực Delta. Đang điều động đội SENTINEL-13.',
-  },
-  {
-    icon: '⛓',
-    text: 'Xác thực Blockchain: Nhật ký cứu hộ #AZ-98 đã được xác nhận bởi 3 nút.',
-  },
-];
-
-const UNIT_DISTRIBUTION = [
-  { label: 'Tìm kiếm & Cứu nạn', count: 43, color: RCOLORS.primary, pct: 0.70 },
-  { label: 'Hỗ trợ Y tế', count: 18, color: RCOLORS.bgBlue, pct: 0.30 },
-];
-
 const DashboardScreen = ({ navigation }) => {
-  const [stats, setStats] = useState(null);
   const [zones, setZones] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [extraStats, setExtraStats] = useState({ completed: 0, staff: 1 });
+  const [aiRecommendation, setAiRecommendation] = useState(null); // Gợi ý AI cho Rescuer này
+  const [error, setError] = useState('');
+  const [news, setNews] = useState([]);
+  const [newsError, setNewsError] = useState('');
+
+  const loadNews = useCallback(async isCurrent => {
+    try {
+      const result = await API.news.getPublished({ limit: 5 });
+      if (!isCurrent()) return;
+      setNews(result.results || []);
+      setNewsError('');
+    } catch (e) {
+      if (isCurrent()) setNewsError(e.message || 'Không tải được tin tức.');
+    }
+  }, []);
+  useLiveRefresh(loadNews, 30000);
 
   const { userInfo } = useAuth();
 
   const fetchData = async () => {
     try {
-      const [statsData, zonesData, missionsData, resourcesData] = await Promise.all([
-        API.zones.getDashboardStats(),
+      const [zonesData, missionsData, resourcesData] = await Promise.all([
         API.zones.getAll(),
-        API.missions.getAll(),
-        API.resources.getAll()
+        API.missions.getAll({ rescuer_id: userInfo?.id }),
+        API.resources.current()
       ]);
-      setStats(statsData);
+      setError('');
 
       const rawMissions = Array.isArray(missionsData) ? missionsData : (missionsData?.results || []);
-      const activeStatuses = ['ACTIVE', 'ON_MY_WAY', 'NEEDS_HELP'];
-      const myActiveMissionZoneIds = rawMissions
-        .filter(m => m.rescuer === userInfo?.id && activeStatuses.includes(m.status))
-        .map(m => m.zone);
+      const activeStatuses = ['PENDING_ACCEPTANCE', 'ACCEPTED', 'ACTIVE', 'ON_MY_WAY', 'NEEDS_HELP'];
+      const myMissions = rawMissions.filter(m => activeStatuses.includes(m.status));
 
       const rawZones = Array.isArray(zonesData) ? zonesData : (zonesData?.results || []);
-      const myZones = rawZones.filter(z => myActiveMissionZoneIds.includes(z.id));
+      const myZones = myMissions.map(m => {
+        const matchedZone = rawZones.find(z => z.id === m.zone);
+        const directSos = m.sos?.[0];
+        return {
+          ...matchedZone,
+          id: m.zone || m.id,
+          name: m.zone_name || 'SOS đơn lẻ',
+          description: matchedZone?.description || directSos?.address || directSos?.note || 'Ca cứu hộ ngoài vùng',
+          severity: matchedZone?.severity || 'HIGH',
+          _mission: m,
+          _isDirect: !m.zone,
+        };
+      });
 
       setZones(myZones);
 
-      // Tính toán Ca đã hoàn thành và Nhân sự trong nhóm
-      const completedCount = rawMissions.filter(m => m.rescuer === userInfo?.id && m.status === 'COMPLETED').length;
-      
-      const rawResources = Array.isArray(resourcesData) ? resourcesData : (resourcesData?.results || []);
-      const myResources = rawResources.filter(r => r.rescuer === userInfo?.id);
-      // Lấy tổng số staff từ các resources khai báo, mặc định là 1 (chính họ) nếu chưa có
-      const totalStaff = myResources.reduce((sum, r) => sum + (r.number_staff || 0), 0) || 1;
-      
+      const completedCount = rawMissions.filter(m => m.status === 'COMPLETED').length;
+      const totalStaff = resourcesData?.resource?.number_staff || 0;
       setExtraStats({ completed: completedCount, staff: totalStaff });
+
+      // Lấy gợi ý AI phân công (chỉ lấy 1 gợi ý phù hợp nhất cho Rescuer này)
+      try {
+        const aiData = await API.ai.getRecommendations(3);
+        const recs = aiData?.recommendations || [];
+        // Lọc gợi ý dành cho chính Rescuer này (không fallback sang người khác)
+        const myRec = recs.find(r => r.rescuer_id === userInfo?.id) || null;
+        setAiRecommendation(myRec);
+      } catch (_) {
+        // AI không ảnh hưởng luồng chính
+      }
+
     } catch (err) {
-      console.error('Fetch dashboard data error:', err);
+      setError(err.message || 'Không thể tải dữ liệu điều hành.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -103,6 +118,15 @@ const DashboardScreen = ({ navigation }) => {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} color={RCOLORS.primary} />
         }
       >
+        <View style={{ marginBottom: 18, padding: 16, backgroundColor: RCOLORS.bgWhite, borderRadius: 16 }}>
+          <Text style={{ fontWeight: '800', color: RCOLORS.textPrimary, marginBottom: 8 }}>BẢN TIN BÁO CHÍ THIÊN TAI</Text>
+          {newsError ? <Text style={{ color: '#B91C1C' }}>{newsError}</Text> : news.length === 0 ? <Text style={{ color: '#64748B' }}>Chưa có tin đã xuất bản.</Text> : news.map(item => (
+            <TouchableOpacity key={item.id} onPress={() => navigation.navigate('NewsDetail', { newsId: item.id })} style={{ paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#E2E8F0' }}>
+              <Text style={{ fontWeight: '700', color: RCOLORS.textPrimary }} numberOfLines={2}>{item.title}</Text>
+              <Text style={{ color: '#64748B', fontSize: 12 }}>{item.source_platform} · {item.location || 'Chưa rõ địa điểm'}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
         {loading && !refreshing ? (
           <View style={styles.centerLoading}>
             <ActivityIndicator size="large" color={RCOLORS.primary} />
@@ -147,7 +171,7 @@ const DashboardScreen = ({ navigation }) => {
 
             {/* ─── 4. Priority Watch Zones ────────────────────────────────────── */}
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Vùng Theo dõi Ưu tiên</Text>
+              <Text style={styles.sectionTitle}>Nhiệm vụ đang phụ trách</Text>
               <View style={styles.liveBadge}>
                 <Text style={styles.liveBadgeText}>{zones.length} ĐANG HOẠT ĐỘNG</Text>
               </View>
@@ -174,22 +198,7 @@ const DashboardScreen = ({ navigation }) => {
                       <Text style={styles.zoneDesc} numberOfLines={1}>{zone.description}</Text>
                     </View>
                   </View>
-                  {/* Progress (Mocked) */}
-                  <View style={styles.progressRow}>
-                    <Text style={styles.progressLabel}>TIẾN ĐỘ</Text>
-                    <Text style={styles.progressValue}>{zone.severity === 'CRITICAL' ? '20%' : '60%'}</Text>
-                  </View>
-                  <View style={styles.progressBg}>
-                    <View
-                      style={[
-                        styles.progressFill,
-                        {
-                          width: zone.severity === 'CRITICAL' ? '20%' : '60%',
-                          backgroundColor: zone.severity === 'CRITICAL' ? RCOLORS.primary : RCOLORS.statusOrange
-                        }
-                      ]}
-                    />
-                  </View>
+                  <View style={styles.progressRow}><Text style={styles.progressLabel}>TRẠNG THÁI NHIỆM VỤ</Text><Text style={styles.progressValue}>{zone._mission?.status}</Text></View>
                   {/* Action button */}
                   <TouchableOpacity
                     style={[
@@ -198,7 +207,7 @@ const DashboardScreen = ({ navigation }) => {
                     ]}
                     onPress={() => navigation.navigate('MissionsTab', {
                       screen: 'ActiveMissionScreen',
-                      params: { zoneId: zone.id, zoneName: zone.name }
+                      params: { missionId: zone._mission?.id, zoneId: zone._isDirect ? null : zone.id, zoneName: zone.name }
                     })}
                   >
                     <Text style={styles.zoneActionText}>
@@ -209,7 +218,35 @@ const DashboardScreen = ({ navigation }) => {
               ))
             )}
 
-            {/* ─── 5. Quick actions ───────────────────────────────────────────── */}
+            {/* ─── 5. AI Gợi ý Phân công ──────────────────────────────────── */}
+            {aiRecommendation && (
+              <TouchableOpacity
+                style={styles.aiCard}
+                onPress={() => navigation.navigate('MissionsTab', {
+                  screen: 'ZoneDetailScreen',
+                  params: { zoneId: aiRecommendation.zone_id, zoneName: aiRecommendation.zone_name }
+                })}
+                activeOpacity={0.85}
+              >
+                <View style={styles.aiCardHeader}>
+                  <Text style={styles.aiCardTag}>🤖  AI GỢI Ý CHO BẠN</Text>
+                  <View style={styles.aiScoreBadge}>
+                    <Text style={styles.aiScoreText}>{aiRecommendation.match_score}đ</Text>
+                  </View>
+                </View>
+                <Text style={styles.aiCardZone}>{aiRecommendation.zone_name}</Text>
+                <View style={styles.aiCardReasons}>
+                  {(aiRecommendation.reasons || []).map((r, i) => (
+                    <Text key={i} style={styles.aiCardReason}>• {r}</Text>
+                  ))}
+                </View>
+                <View style={styles.aiCardAction}>
+                  <Text style={styles.aiCardActionText}>Xem chi tiết Zone →</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+
+            {/* ─── 6. Quick actions ───────────────────────────────────────────── */}
             <View style={styles.quickRow}>
               <QuickAction
   icon="map-outline"
@@ -233,37 +270,9 @@ const DashboardScreen = ({ navigation }) => {
   }
 />
             </View>
+            {!!error && <TouchableOpacity style={styles.errorCard} onPress={fetchData}><Text style={styles.errorText}>{error}</Text><Text style={styles.retryText}>CHẠM ĐỂ THỬ LẠI</Text></TouchableOpacity>}
 
             {/* ─── 6. Real-time intelligence ──────────────────────────────────── */}
-            <View style={styles.rtiCard}>
-              <View style={styles.rtiHeader}>
-                <View style={styles.rtiDot} />
-                <Text style={styles.rtiTitle}>DỮ LIỆU TỨC THỜI (RTI)</Text>
-              </View>
-              {AI_INSIGHTS.map((insight, idx) => (
-                <View key={idx} style={styles.insightRow}>
-                  <Text style={styles.insightIcon}>{insight.icon}</Text>
-                  <Text style={styles.insightText}>{insight.text}</Text>
-                </View>
-              ))}
-              <View style={styles.rtiImagePlaceholder}>
-                <Text style={styles.rtiImageText}>📡  Dữ liệu Cảm biến Trực tiếp</Text>
-              </View>
-            </View>
-
-            {/* ─── 7. Unit Distribution ───────────────────────────────────────── */}
-            {/* <View style={styles.unitCard}>
-              <Text style={styles.unitTitle}>Phân bổ Đội ngũ</Text>
-              {UNIT_DISTRIBUTION.map((unit, idx) => (
-                <View key={idx} style={styles.unitRow}>
-                  <Text style={styles.unitLabel}>{unit.label}</Text>
-                  <View style={styles.unitBarBg}>
-                    <View style={[styles.unitBarFill, { width: `${unit.pct * 100}%`, backgroundColor: unit.color }]} />
-                  </View>
-                  <Text style={styles.unitCount}>{unit.count}</Text>
-                </View>
-              ))}
-            </View> */}
 
             {/* ─── Resource Declare button ─────────────────────────────────────── */}
             <TouchableOpacity
@@ -298,6 +307,9 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   centerLoading: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 100 },
   content: { padding: RLAYOUT.screenPadding, paddingBottom: 32, gap: RSPACING.md },
+  errorCard: { backgroundColor: '#FFF3F3', borderRadius: RRADIUS.md, padding: RSPACING.md, borderWidth: 1, borderColor: '#FFCDD2' },
+  errorText: { color: RCOLORS.primary, fontSize: RFONTS.sm },
+  retryText: { color: RCOLORS.primary, fontSize: RFONTS.xs, fontWeight: RFONTS.black, marginTop: 5 },
 
   titleSection: { gap: RSPACING.xs },
   opLabel: { fontSize: RFONTS.xs, fontWeight: RFONTS.bold, color: RCOLORS.textSecondary, letterSpacing: 1.5 },
@@ -367,6 +379,26 @@ const styles = StyleSheet.create({
   resourceIcon: { fontSize: 20 },
   resourceText: { flex: 1, fontSize: RFONTS.base, fontWeight: RFONTS.semiBold, color: RCOLORS.textPrimary },
   resourceArrow: { fontSize: RFONTS.xl, color: RCOLORS.textHint },
+
+  // ── AI Recommendation Card ────────────────────────────────────────────
+  aiCard: {
+    backgroundColor: '#1A237E',
+    borderRadius: RRADIUS.md,
+    padding: RSPACING.base,
+    gap: RSPACING.sm,
+    ...RSHADOWS.card,
+    borderLeftWidth: 4,
+    borderLeftColor: '#7986CB',
+  },
+  aiCardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  aiCardTag: { fontSize: RFONTS.xs, fontWeight: RFONTS.bold, color: 'rgba(255,255,255,0.7)', letterSpacing: 1 },
+  aiScoreBadge: { backgroundColor: 'rgba(255,255,255,0.15)', paddingHorizontal: 10, paddingVertical: 3, borderRadius: RRADIUS.full },
+  aiScoreText: { fontSize: RFONTS.sm, fontWeight: RFONTS.black, color: '#fff' },
+  aiCardZone: { fontSize: RFONTS.lg, fontWeight: RFONTS.bold, color: '#fff' },
+  aiCardReasons: { gap: 2 },
+  aiCardReason: { fontSize: RFONTS.xs, color: 'rgba(255,255,255,0.65)', lineHeight: 18 },
+  aiCardAction: { alignSelf: 'flex-start', marginTop: 2 },
+  aiCardActionText: { fontSize: RFONTS.sm, fontWeight: RFONTS.bold, color: '#7986CB' },
 });
 
 const qaStyles = StyleSheet.create({

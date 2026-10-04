@@ -1,27 +1,40 @@
 import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import SliderBar from "../../components/SliderBar";
-import axios from "axios";
+import { api } from "../../services/api";
+import { apiErrorMessage } from "../../utils/apiError";
 
 export default function Page() {
   const { id } = useParams();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [zone, setZone] = useState<any>(null);
+  const [loadError, setLoadError] = useState('');
+  const [loading, setLoading] = useState(Boolean(id));
 
   useEffect(() => {
     const fetchZoneDetail = async () => {
       if (!id) return;
       try {
-        const res = await axios.get(`http://127.0.0.1:8000/rescue_operations/zones/${id}/`);
+        setLoading(true);
+        const res = await api.zones.getDetail(id);
         setZone(res.data);
+        setLoadError('');
       } catch (e) {
         console.error(e);
+        setLoadError(apiErrorMessage(e));
+      } finally {
+        setLoading(false);
       }
     };
     fetchZoneDetail();
   }, [id]);
 
-  if (!zone && id) return <div className="p-8 text-center">Đang tải dữ liệu...</div>;
+  if (!zone && id) return <div className="min-h-screen bg-slate-50 p-8 text-center" role={loadError ? 'alert' : 'status'}>
+    <p>{loadError || (loading ? 'Đang tải dữ liệu khu vực...' : 'Không tìm thấy khu vực.')}</p>
+    {loadError && <button type="button" onClick={() => window.location.reload()} className="mt-3 rounded-lg bg-blue-700 px-4 py-2 text-white">Thử lại</button>}
+  </div>;
+
+  return (
     <div className="flex h-screen w-full bg-[#F8F9FA] overflow-hidden">
       {/* Mobile Overlay */}
       {sidebarOpen && (
@@ -307,5 +320,5 @@ export default function Page() {
         </div>
       </div>
     </div>
-  
+  );
 }

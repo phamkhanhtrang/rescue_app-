@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import RescuerHeader from '../../../components/rescuer/common/RescuerHeader';
+import CustomModal from '../../../components/common/CustomModal';
 import { RCOLORS, RFONTS, RSPACING, RRADIUS, RSHADOWS, RLAYOUT } from '../../../constants/rescuer/theme';
 import API from '../../../services/api';
 
@@ -33,7 +34,13 @@ const ZoneDetailScreen = ({ navigation, route }) => {
   const [missions, setMissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const total = zone?.rescuers_needed - missionsCount;
+  const [modalConfig, setModalConfig] = useState({
+    visible: false,
+    type: 'info',
+    title: '',
+    message: '',
+  });
+  const total = Math.max(0, (zone?.rescuers_needed || 0) - missionsCount);
   useEffect(() => {
     const fetchData = async () => {
       if (!zoneId) {
@@ -48,8 +55,10 @@ const ZoneDetailScreen = ({ navigation, route }) => {
         ]);
         setZone(zoneData);
         setSosSignals(sosData.results || []);
-        setMissions(missionData.results || []);
-        setMissionsCount(missionData.count || 0);
+        const allMissions = missionData.results || [];
+        const activeMissions = allMissions.filter(m => ['PENDING_ACCEPTANCE', 'ACCEPTED', 'ACTIVE', 'ON_MY_WAY', 'NEEDS_HELP'].includes(m.status));
+        setMissions(allMissions);
+        setMissionsCount(activeMissions.length);
       } catch (err) {
         console.error('Fetch detail error:', err);
         setError('Không thể tải thông tin.');
@@ -93,6 +102,10 @@ const ZoneDetailScreen = ({ navigation, route }) => {
 
         {/* ── Image header ──────────────────────────────────────────────────── */}
         <View style={styles.imageHeader}>
+          <View style={styles.zoneVisual}>
+            <MaterialCommunityIcons name="map-marker-radius-outline" size={72} color="rgba(255,255,255,0.82)" />
+            <Text style={styles.zoneVisualText}>KHU VỰC ĐIỀU PHỐI CỨU HỘ</Text>
+          </View>
           <View style={[styles.levelBadge, { backgroundColor: severityColor }]}>
             <Text style={styles.levelBadgeText}>⚠ {getSeverityLabel(displayZone.severity)}</Text>
           </View>
@@ -116,12 +129,19 @@ const ZoneDetailScreen = ({ navigation, route }) => {
 
         {/* ── Nhu cầu cấp thiết ──────────────────────────────────────────────── */}
         <View style={styles.demandCard}>
-          <Text style={styles.demandLabel}>Tống số SOS mà người dân gửi {sosSignals.length} SOS</Text>
+          <Text style={styles.demandLabel}>Tổng số yêu cầu trong vùng</Text>
           <View style={styles.demandRow}>
             <Text style={styles.demandNumber}>{displayZone.people_affected || 0} Người</Text>
             <TouchableOpacity
               style={styles.sosMini}
-              onPress={() => Alert.alert('Chi tiết SOS', notes.join('\n\n') || 'Không có ghi chú cụ thể.')}
+              onPress={() =>
+                setModalConfig({
+                  visible: true,
+                  type: 'info',
+                  title: 'Chi tiết SOS',
+                  message: notes.join('\n\n') || 'Không có ghi chú cụ thể.',
+                })
+              }
             >
               <Text style={styles.sosMiniText}>SOS</Text>
             </TouchableOpacity>
@@ -167,7 +187,7 @@ const ZoneDetailScreen = ({ navigation, route }) => {
                   const activeMissionCount = missions.filter(m => {
                     const r = m.role?.toLowerCase() || '';
                     return (r.includes(n.label.toLowerCase()) || r.includes(n.roleName.toLowerCase())) &&
-                      ['ACTIVE', 'ON_MY_WAY', 'NEEDS_HELP'].includes(m.status);
+                      ['PENDING_ACCEPTANCE', 'ACCEPTED', 'ACTIVE', 'ON_MY_WAY', 'NEEDS_HELP'].includes(m.status);
                   }).length;
 
                   return activeMissionCount > 0
@@ -204,6 +224,15 @@ const ZoneDetailScreen = ({ navigation, route }) => {
         </TouchableOpacity>
 
       </ScrollView>
+
+      <CustomModal
+        visible={modalConfig.visible}
+        type={modalConfig.type}
+        title={modalConfig.title}
+        message={modalConfig.message}
+        onConfirm={() => setModalConfig(prev => ({ ...prev, visible: false }))}
+        onCancel={() => setModalConfig(prev => ({ ...prev, visible: false }))}
+      />
     </SafeAreaView>
   );
 };
@@ -214,7 +243,9 @@ const styles = StyleSheet.create({
   loadingText: { fontSize: RFONTS.sm, color: RCOLORS.textSecondary },
   content: { paddingBottom: 32, gap: RSPACING.md },
 
-  imageHeader: { height: 260, position: 'relative', overflow: 'hidden', backgroundColor: '#1A2E40' },
+  imageHeader: { height: 190, position: 'relative', overflow: 'hidden', backgroundColor: '#1A2E40' },
+  zoneVisual: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', gap: 8, paddingBottom: 34 },
+  zoneVisualText: { color: 'rgba(255,255,255,0.72)', fontSize: RFONTS.xs, fontWeight: RFONTS.black, letterSpacing: 1.4 },
   imageBg: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   imageBgText: { fontSize: 80 },
   levelBadge: { position: 'absolute', top: RSPACING.base, left: RSPACING.base, paddingHorizontal: 10, paddingVertical: 5, borderRadius: RRADIUS.full },
