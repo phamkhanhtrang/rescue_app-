@@ -42,10 +42,15 @@ class SOSPredictor:
 
     def predict(self, raw_text, mode='both'):
         self.ensure(mode)
-        text = unicodedata.normalize('NFC', raw_text)
+        from .text_normalizer import clean_text_for_pipeline
+        from .hybrid_guardrails import apply_guardrails
+
+        cleaned = clean_text_for_pipeline(raw_text)
+        text = cleaned if cleaned else unicodedata.normalize('NFC', raw_text)
         tasks = ['a', 'b'] if mode == 'both' else [mode]
         meta = [self.metadata[t] for t in tasks]
         result = {'method': 'phobert_two_model_v1', 'mode': mode, 'text': text,
+                  'original_text': raw_text,
                   'demo': any(m.get('demo', False) for m in meta),
                   'evaluation_domains': [m.get('evaluation_domain', 'unknown') for m in meta],
                   'model_versions': [m['run_id'] for m in meta], 'requires_review': True,
@@ -68,4 +73,6 @@ class SOSPredictor:
                     logits = self.b(**inputs).logits[0]
                     tags = [BIO[logits[index].argmax().item()] for index in item['first']]
                     result['entities'] = decode_spans(text, item['words'], tags)
+        result = apply_guardrails(text, result)
         return result
+

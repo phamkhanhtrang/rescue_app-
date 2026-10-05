@@ -13,6 +13,32 @@ export default function ModelResults({ result }: { result: any }) {
       {result.elapsed_ms != null && <span>Thời gian: {(result.elapsed_ms / 1000).toFixed(2)} giây (gồm nạp model lần đầu)</span>}
       {result.chunks?.length > 1 && <span>Bài được phân tích thành {result.chunks.length} đoạn, giữ toàn bộ nội dung.</span>}
     </div>
+    {result.decision_source && (
+      <div className={`rounded-xl border p-4 text-sm ${
+        result.decision_source === 'MODEL' 
+          ? 'border-emerald-300 bg-emerald-50 text-emerald-950' 
+          : result.decision_source === 'RULE_FALLBACK'
+          ? 'border-amber-300 bg-amber-50 text-amber-950'
+          : 'border-rose-300 bg-rose-50 text-rose-950'
+      }`}>
+        <div className="flex items-center justify-between font-bold">
+          <span>
+            {result.decision_source === 'MODEL' && '🤖 NGUỒN QUYẾT ĐỊNH: MODEL PHOBERT'}
+            {result.decision_source === 'RULE_FALLBACK' && '🛡️ NGUỒN QUYẾT ĐỊNH: RULE FALLBACK (CỨU NGUY)'}
+            {result.decision_source === 'RULE_FILTER' && '⛔ NGUỒN QUYẾT ĐỊNH: RULE CHẶN LỌC (TỪ THIỆN / BÁN HÀNG)'}
+          </span>
+          <span className="text-xs font-semibold px-2 py-0.5 rounded bg-white/70 border border-current">
+            {result.decision_source === 'MODEL' ? 'Thuần AI (PhoBERT)' : 'Rule Can Thiệp'}
+          </span>
+        </div>
+        <p className="mt-1.5 text-xs leading-relaxed">{result.decision_detail}</p>
+        {result.raw_model_score != null && result.decision_source !== 'MODEL' && (
+          <div className="mt-2 text-xs font-mono bg-white/60 p-2 rounded border border-black/5">
+            📌 <b>Điểm PhoBERT gốc:</b> {(result.raw_model_score * 100).toFixed(1)}% | <b>PhoBERT dự đoán gốc:</b> {result.raw_model_is_request ? 'CÓ yêu cầu cứu trợ' : 'KHÔNG yêu cầu cứu trợ'}
+          </div>
+        )}
+      </div>
+    )}
     {typeof result.is_request === 'boolean' && <section className="rounded-xl border border-blue-200 bg-blue-50/40 p-4 space-y-3">
       <h3 className="font-semibold">Model A · Nhận diện yêu cầu và nhu cầu</h3>
       <p>{result.is_request ? 'Có yêu cầu hỗ trợ' : 'Không nhận diện yêu cầu hỗ trợ'} · Điểm mô hình: {(result.request_score * 100).toFixed(1)}%</p>
