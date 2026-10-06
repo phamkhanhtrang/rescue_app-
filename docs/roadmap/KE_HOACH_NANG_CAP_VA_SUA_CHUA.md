@@ -1,157 +1,127 @@
 # 📋 ĐẶC TẢ CHI TIẾT KẾ HOẠCH NÂNG CẤP & SỬA ĐỔI HỆ THỐNG
 ## Dự án: Guardian Pulse — Hệ thống Điều phối Cứu hộ & Quản lý Thiên tai
-**Phiên bản:** 2.1 (Bản chuẩn hóa phục vụ Đồ án Tốt nghiệp)  
+**Phiên bản:** 2.3 (Bản tinh gọn thực tế — Đã loại bỏ Telegram Bot và các phần đã xong)  
 **Ngày cập nhật:** 06/10/2026  
-**Căn cứ:** Rà soát hiện trạng mã nguồn `D:\rescue_app-`, mô hình thực chiến từ `nuoclen.com` và thực tiễn cứu hộ bão lũ Việt Nam.
+**Căn cứ:** Rà soát trực tiếp mã nguồn `backend/`, `FE-web/`, `FE-app/` và định hướng tinh giản cho Đồ án Tốt nghiệp.
 
 ---
 
-## 🧭 BẢNG MA TRẬN TỔNG QUAN (EXECUTIVE DASHBOARD)
+## ✅ CÁC HẠNG MỤC ĐÃ HOÀN THÀNH XONG TRONG MÃ NGUỒN
+> Các hạng mục dưới đây đã được lập trình hoàn chỉnh và hoạt động tốt trong mã nguồn, **được loại khỏi danh sách cần làm** để tránh nhầm lẫn:
 
-> Giúp người đọc, giảng viên và hội đồng nắm bắt toàn bộ 18 hạng mục công việc trong 1 phút trước khi đi vào chi tiết kỹ thuật.
+| Mã cũ | Tên hạng mục | Trạng thái hiện tại trong Codebase |
+| :---: | :--- | :--- |
+| **S2** | Luồng Yêu cầu Chi viện (`NEEDS_HELP`) | ✅ **Đã xong:** Giao diện `ActiveMissionScreen.js` có nút báo động chi viện; backend `reporting/flow.py` đã xử lý luồng `NEEDS_HELP` chuẩn xác. |
+| **S3** | Nén ảnh SOS (Client-side Resize) | ✅ **Đã xong:** `SOSScreen.js` đã dùng `expo-image-manipulator` nén ảnh xuống width 1280px (~300KB), gửi gộp 1 request multipart duy nhất. |
+| **S7** | Phân quyền Bảo mật JWT & Route Guard | ✅ **Đã xong:** Web Admin bọc `<AdminRoutes>` chặn truy cập trái phép; Backend cấu hình `AccountJWTAuthentication`. |
+| **T1** | Nút Mở Chỉ đường Google Maps né lũ | ✅ **Đã xong:** `MissionNavScreen.js` đã có nút *"🧭 MỞ CHỈ ĐƯỜNG GOOGLE MAPS (NÉ LŨ)"* mở trực tiếp URL Scheme ngoài. |
 
-### 1. Phân nhóm Sửa lỗi Hệ thống Cốt lõi (S1 – S7)
+---
+
+## 🧭 BẢNG MA TRẬN CÔNG VIỆC CÒN LẠI (PENDING WORK)
+
+### 1. Hạng mục Cốt lõi Cần Sửa Chữa (S1 – S4)
 | Mã | Tên hạng mục | Phân hệ | Mức độ | Mục tiêu cốt lõi |
 | :---: | :--- | :---: | :---: | :--- |
-| **S1** | Động cơ Dẫn đường Né ngập (Pathfinding) | Backend / App | 🔴 Khẩn cấp | Thay thế đồ thị giả lập Đà Nẵng bằng OSRM né ngập an toàn. |
-| **S2** | Luồng Yêu cầu Chi viện (`NEEDS_HELP`) | Backend / App | 🔴 Khẩn cấp | Sửa lỗi endpoint `/complete/`, cho phép cứu hộ xin chi viện thực tế. |
-| **S3** | Nén ảnh SOS Hiện trường (Client Resize) | App (Citizen) | 🔴 Khẩn cấp | Nén ảnh từ 15MB xuống ~300KB trước khi upload, chống sập khi sóng 3G yếu. |
-| **S4** | Thẻ Trạng thái GPS Thông minh | App (Citizen) | 🟡 Quan trọng | Chuyển câu tĩnh "Bạn đang an toàn" thành đánh giá nguy cơ theo GPS thật. |
-| **S5** | Vòng đời Đóng Dữ liệu Tự động | Backend | 🟡 Quan trọng | Tự động cập nhật trạng thái liên hoàn: SOS ➔ Nhiệm vụ ➔ Zone cứu hộ. |
-| **S6** | Xác minh Cảnh báo bằng Lượt Vote | Backend / App | 🟡 Quan trọng | Ngưỡng tin cậy cộng đồng (AlertVote) để lọc cảnh báo rác. |
-| **S7** | Hoàn thiện Phân quyền & JWT | Web / Backend | 🟡 Quan trọng | Bọc `ProtectedRoute` trên Web Admin và cấu hình JWT bảo vệ API nhạy cảm. |
+| **S1** | Động cơ Dẫn đường OSRM Né ngập | Backend / App | 🔴 Khẩn cấp | Thay thế đồ thị hardcode Đà Nẵng bằng động cơ OSRM né ngập toàn quốc. |
+| **S2** | Thẻ Trạng thái GPS Thông minh | App (Citizen) | 🟡 Quan trọng | Gọi API phân tích nguy cơ trong bán kính 1km thay vì câu chữ cố định. |
+| **S3** | Vòng đời Đóng Dữ liệu Tự động | Backend | 🟡 Quan trọng | Tự động chuyển Zone sang `RESOLVED` khi toàn bộ SOS bên trong đã được cứu. |
+| **S4** | Xác minh Cảnh báo bằng Lượt Vote | Backend / App | 🟡 Quan trọng | Cài đặt ngưỡng Vote tin cậy (AlertVote) để tự động ẩn các cảnh báo rác. |
 
-### 2. Phân nhóm Tính năng Nâng cấp & Đổi mới Sáng tạo (T1 – T11)
+### 2. Tính năng Nâng cấp & Đổi mới Sáng tạo (T1 – T9)
 | Mã | Tên hạng mục | Phân hệ | Mức độ | Mục tiêu cốt lõi |
 | :---: | :--- | :---: | :---: | :--- |
-| **T1** | Mở Google Maps né Vùng nguy hiểm | App (Rescuer) | 🟢 Tiện ích | Xuất Waypoints né ngập sang Google Maps ngoài để tài xế rảnh tay. |
-| **T2** | Lớp Bản đồ Radar Mưa Động | Web / App | 🟢 Tiện ích | Tích hợp lớp phủ mây mưa thời gian thực (RainViewer API) lên bản đồ. |
-| **T3** | Báo cáo Hiện trường từ Người dân | App (Citizen) | 🌟 Đổi mới | Biến người dân thành cảm biến: báo mực nước, cây đổ, sạt lở có cấu trúc. |
-| **T4** | Xác minh Chéo Cộng đồng (150m) | Backend | 🌟 Đổi mới | Tự động gom cụm các báo cáo gần nhau trong 150m để phát hiện sự cố thật. |
-| **T5** | Báo Tín hiệu An toàn / Nước rút | App / Backend | 🟢 Tiện ích | Dọn dẹp hiện trường bản đồ khi nước rút, tránh cứu trợ trùng lặp. |
-| **T6** | Phòng Chat Điều phối Vi mô theo Vùng | Web / App | 🟢 Tiện ích | Kênh giao tiếp có kiểm duyệt giữa Đội cứu hộ và Dân trong cùng 1 Zone. |
-| **T7** | Báo động Tức thì Real-time (SSE) | Backend / Web | 🟡 Quan trọng | Loại bỏ Polling 15s; Web Admin nhận tín hiệu SOS nhảy điểm tức thì (<1s). |
-| **T8** | Telegram Bot Báo động Đỏ Chỉ huy | Backend | 🟡 Quan trọng | Bắn tin khẩn và phân công đội cứu hộ trực tiếp qua Telegram của Chỉ huy. |
-| **T9** | Theo dõi Bán kính & Thông báo Đẩy | App / Backend | 🟢 Tiện ích | Nhận Push Notification khi khu vực nhà người thân có lệnh sơ tán. |
-| **T10**| Geocoding Ngõ ngách VN (Goong API) | Backend | 🟡 Quan trọng | Dịch chính xác địa chỉ ngõ/ngách/thôn/xóm cào từ Facebook ra tọa độ GPS. |
-| **T11**| ⭐ **Cứu Nạn Ngoại Tuyến Bluetooth** | **Mobile App** | 👑 **Đột phá** | **Cứu hộ tầm gần không cần Internet: Radar Sonar, còi/flash, chat BLE.** |
+| **T1** | Lớp Bản đồ Radar Mưa Động | Web / App | 🟢 Tiện ích | Tích hợp lớp phủ radar mây mưa thời gian thực (RainViewer API) lên bản đồ. |
+| **T2** | Báo cáo Hiện trường từ Người dân | App (Citizen) | 🌟 Đổi mới | Biến người dân thành cảm biến: báo mực nước, cây đổ, sạt lở có cấu trúc. |
+| **T3** | Xác minh Chéo Cộng đồng (150m) | Backend | 🌟 Đổi mới | Tự động gom cụm các báo cáo gần nhau trong 150m để phát hiện sự cố thật. |
+| **T4** | Báo Tín hiệu An toàn / Nước rút | App / Backend | 🟢 Tiện ích | Dọn dẹp hiện trường bản đồ khi nước rút (Clear Signal), tránh cứu hộ trùng. |
+| **T5** | Phòng Chat Điều phối Vi mô theo Vùng | Web / App | 🟢 Tiện ích | Kênh giao tiếp có kiểm duyệt giữa Đội cứu hộ và Dân trong cùng 1 Zone. |
+| **T6** | Báo động Tức thì Real-time (SSE) | Backend / Web | 🟡 Quan trọng | Loại bỏ Polling 15s; Web Admin nhận tín hiệu SOS nhảy điểm tức thì (<1s). |
+| **T7** | Theo dõi Bán kính & Thông báo Đẩy | App / Backend | 🟢 Tiện ích | Nhận Push Notification khi khu vực nhà người thân có lệnh sơ tán. |
+| **T8** | Geocoding Ngõ ngách VN (Goong API) | Backend | 🟡 Quan trọng | Dịch chính xác địa chỉ ngõ/ngách/thôn/xóm cào từ Facebook ra tọa độ GPS. |
+| **T9** | ⭐ **Cứu Nạn Ngoại Tuyến Bluetooth** | **Mobile App** | 👑 **Đột phá** | **Cứu hộ tầm gần không cần Internet: Radar Sonar, còi/flash, chat BLE.** |
 
 ---
 
 ## 📑 MỤC LỤC CHI TIẾT
 
-1. [PHẦN I: CHI TIẾT 7 HẠNG MỤC SỬA LỖI CỐT LÕI (S1 – S7)](#phần-i-chi-tiết-7-hạng-mục-sửa-lỗi-cốt-lõi-s1--s7)
-   * [Trụ cột A: Điều hướng Cứu hộ & Nghiệp vụ Tác chiến (S1, S2)](#trụ-cột-a-điều-hướng-cứu-hộ--nghiệp-vụ-tác-chiến)
-   * [Trụ cột B: Tối ưu Hiện trường & Người dân (S3, S4)](#trụ-cột-b-tối-ưu-hiện-trường--người-dân)
-   * [Trụ cột C: Toàn vẹn Dữ liệu & Bảo mật (S5, S6, S7)](#trụ-cột-c-toàn-vẹn-dữ-liệu--bảo-mật)
-2. [PHẦN II: CHI TIẾT 11 TÍNH NĂNG NÂNG CẤP & ĐMST (T1 – T11)](#phần-ii-chi-tiết-11-tính-năng-nâng-cấp--đmst-t1--t11)
-   * [Trụ cột 1: Tác chiến Hiện trường & Dẫn đường (T1, T2)](#trụ-cột-1-tác-chiến-hiện-trường--dẫn-đường)
-   * [Trụ cột 2: Cảm biến Cộng đồng & Hiện trường (T3, T4, T5, T6)](#trụ-cột-2-cảm-biến-cộng-đồng--hiện-trường)
-   * [Trụ cột 3: Thời gian thực & Hạ tầng Báo động (T7, T8, T9, T10)](#trụ-cột-3-thời-gian-thực--hạ-tầng-báo-động)
-   * [Trụ cột 4: ⭐ Đột phá Công nghệ — Cứu nạn Ngoại tuyến Bluetooth (T11)](#trụ-cột-4--đột-phá-công-nghệ--cứu-nạn-ngoại-tuyến-bluetooth-t11)
+1. [PHẦN I: CHI TIẾT 4 HẠNG MỤC SỬA LỖI CỐT LÕI (S1 – S4)](#phần-i-chi-tiết-4-hạng-mục-sửa-lỗi-cốt-lõi-s1--s4)
+   * [S1. Động cơ Dẫn đường Cứu hộ Né ngập (Pathfinding)](#s1-động-cơ-dẫn-đường-cứu-hộ-né-ngập-pathfinding)
+   * [S2. Thẻ Trạng thái Thông minh trên Trang chủ Người dân](#s2-thẻ-trạng-thái-thông-minh-trên-trang-chủ-người-dân)
+   * [S3. Vòng đời Tự động Đóng Dữ liệu (SOS ➔ Mission ➔ Zone)](#s3-vòng-đời-tự-động-đóng-dữ-liệu-sos--mission--zone)
+   * [S4. Cơ chế Xác minh Cảnh báo bằng Lượt Vote (AlertVote)](#s4-cơ-chế-xác-minh-cảnh-báo-bằng-lượt-vote-alertvote)
+2. [PHẦN II: CHI TIẾT 9 TÍNH NĂNG NÂNG CẤP & ĐMST (T1 – T9)](#phần-ii-chi-tiết-9-tính-năng-nâng-cấp--đmst-t1--t9)
+   * [T1. Lớp Bản đồ Radar Mưa Động (RainViewer API)](#t1-lớp-bản-đồ-radar-mưa-động-rainviewer-api)
+   * [T2. Báo cáo Hiện trường từ Người dân (Field Reporting)](#t2-báo-cáo-hiện-trường-từ-người-dân-field-reporting)
+   * [T3. Cơ chế Xác minh Chéo Cộng đồng (Corroboration)](#t3-cơ-chế-xác-minh-chéo-cộng-đồng-corroboration)
+   * [T4. Báo Tín hiệu An toàn / Nước rút (Clear Signal)](#t4-báo-tín-hiệu-an-toàn--nước-rút-clear-signal)
+   * [T5. Phòng Chat Điều phối Vi mô theo Vùng (Zone Incident Chat)](#t5-phòng-chat-điều-phối-vi-mô-theo-vùng-zone-incident-chat)
+   * [T6. Kênh Báo động Tức thì Real-time (Server-Sent Events)](#t6-kênh-báo-động-tức-thì-real-time-server-sent-events)
+   * [T7. Đặt Theo dõi Bán kính & Thông báo Đẩy (Push Notifications)](#t7-đặt-theo-dõi-bán-kính--thông-báo-đẩy-push-notifications)
+   * [T8. Tích hợp Geocoding Ngõ ngách Chi tiết (Goong API)](#t8-tích-hợp-geocoding-ngõ-ngách-chi-tiết-goong-api)
+   * [T9. ⭐ Hệ Thống Cứu Nạn Ngoại Tuyến Qua Bluetooth (BLE Offline Rescue)](#t9--hệ-thống-cứu-nạn-ngoại-tuyến-qua-bluetooth-ble-offline-rescue)
 3. [PHẦN III: MA TRẬN LIÊN THÔNG VÀ TRẢI NGHIỆM NGƯỜI DÙNG](#phần-iii-ma-trận-liên-thông-và-trải-nghiệm-người-dùng)
 4. [PHẦN IV: KẾ HOẠCH TRIỂN KHAI THEO GIAI ĐOẠN (SPRINT PLAN)](#phần-iv-kế-hoạch-triển-khai-theo-giai-đoạn-sprint-plan)
 
 ---
 
-# PHẦN I: CHI TIẾT 7 HẠNG MỤC SỬA LỖI CỐT LÕI (S1 – S7)
+# PHẦN I: CHI TIẾT 4 HẠNG MỤC SỬA LỖI CỐT LÕI (S1 – S4)
 
-### Trụ cột A: Điều hướng Cứu hộ & Nghiệp vụ Tác chiến
-
-#### 🔹 S1. Động cơ Dẫn đường Cứu hộ Né ngập (Pathfinding)
-* **Vị trí code:** `backend/rescue_operations/pathfinding.py` & `FE-app/src/screens/rescuer/missions/MissionNavScreen.js`.
+### 🔹 S1. Động cơ Dẫn đường Cứu hộ Né ngập (Pathfinding)
+* **Vị trí code:** `backend/rescue_operations/pathfinding.py` & `FE-app/src/screens/rescuer/map/MissionNavScreen.js`.
 * **Hiện trạng lỗi:**
-  * Thuật toán $A^*$ đang chạy trên đồ thị hardcode tọa độ thủ công tại Đà Nẵng; cứu hộ ở tỉnh khác sẽ lỗi.
-  * Khi API lỗi, code app tự vẽ một **đường thẳng** nối từ xe đến đích (rất nguy hiểm vì xe có thể lao xuống sông).
+  * Thuật toán $A^*$ hiện tại vẫn đang tải đồ thị tĩnh `danang.graphml` (chỉ chạy được tại Đà Nẵng).
+  * Khi gặp sự cố mạng hoặc lỗi tọa độ ngoài Đà Nẵng, hệ thống không tính được đường đi.
 * **Giải pháp & Kịch bản mới:**
-  1. Tích hợp động cơ định tuyến mở toàn quốc: **OSRM (Open Source Routing Machine)**.
+  1. Loại bỏ đồ thị file cứng `danang.graphml`. Tích hợp động cơ định tuyến mở toàn quốc: **OSRM (Open Source Routing Machine)**.
   2. Backend quét tất cả các `Zone` đang ngập sâu nằm trên hành lang di chuyển, dựng rào cản ảo (`exclude_polygons`).
-  3. Trả về lộ trình an toàn đi qua các trục đường còn thông suốt.
-  4. Nếu mất mạng: Hiện cảnh báo an toàn rõ ràng, tuyệt đối không vẽ đường thẳng qua sông hồ.
-
-#### 🔹 S2. Luồng Cập nhật Trạng thái & Yêu cầu Chi viện (`NEEDS_HELP`)
-* **Vị trí code:** `FE-app/src/screens/rescuer/missions/StatusUpdateScreen.js` & `backend/reporting/views.py`.
-* **Hiện trạng lỗi:** Màn hình cho chọn `NEEDS_HELP` (Cần chi viện), nhưng code luôn gọi cố định vào endpoint `/complete/`, biến yêu cầu chi viện thành "Hoàn thành nhiệm vụ", làm gãy nghiệp vụ cứu nạn.
-* **Giải pháp & Kịch bản mới:**
-  1. Khi ca-nô hỏng máy hoặc nước chảy xiết: Cứu hộ bấm **"Cần chi viện khẩn cấp" (`NEEDS_HELP`)**.
-  2. Gửi `PATCH /api/missions/{id}/status/` với payload `{ "status": "NEEDS_HELP", "reason": "Thuyền hỏng máy..." }`.
-  3. Dashboard Admin Web lập tức phát chuông báo động, nhấp nháy đỏ cảnh báo: *"Đội A cần chi viện gấp!"*.
+  3. Trả về lộ trình an toàn uốn lượn đi qua các trục đường còn thông suốt.
+  4. Nếu mất mạng: Hiện cảnh báo an toàn rõ ràng, tuyệt đối không vẽ đường thẳng cắt qua sông hồ.
 
 ---
 
-### Trụ cột B: Tối ưu Hiện trường & Người dân
-
-#### 🔹 S3. Tối ưu Luồng gửi SOS & Nén ảnh Hiện trường (Client-side Resize)
-* **Vị trí code:** `FE-app/src/screens/citizen/sos/SendSOSScreen.js` & Backend upload.
-* **Hiện trạng lỗi:** Ảnh chụp camera nặng 10MB–20MB; vùng lũ sóng yếu tải ảnh sẽ đơ app hoặc rớt mạng khiến người dân bấm liên tục tạo SOS trùng lặp.
-* **Giải pháp & Kịch bản mới:**
-  1. Tích hợp thư viện `expo-image-manipulator` co ảnh lại tối đa chiều dài 1280px, nén JPEG 80%.
-  2. Dung lượng ảnh giảm từ **15MB xuống còn ~300KB – 500KB** (giảm 97%).
-  3. Đóng gói cả tọa độ GPS, nội dung văn bản và ảnh đã nén vào cùng 1 request duy nhất (Multipart form-data) gửi thành công trong 2–3 giây.
-
-#### 🔹 S4. Thẻ Trạng thái Thông minh trên Trang chủ Người dân
+### 🔹 S2. Thẻ Trạng thái Thông minh trên Trang chủ Người dân
 * **Vị trí code:** `FE-app/src/screens/citizen/home/HomeScreen.js`.
-* **Hiện trạng lỗi:** Trang chủ gắn cứng chữ tĩnh: *"Bạn đang an toàn"*, không dựa trên thực tế.
+* **Hiện trạng lỗi:** Trang chủ hiện tại đang hiển thị một dòng thông tin đơn giản: *"📍 Vị trí GPS: Đã xác định & sẵn sàng"*, chưa thực sự đánh giá mức độ nguy hiểm xung quanh người dùng.
 * **Giải pháp & Kịch bản mới:**
   1. Khi mở app, hệ thống lấy GPS hiện tại và gọi API `/api/citizen/status-summary/?lat=...&lng=...`.
-  2. Quét dữ liệu bán kính 1km và hiển thị thẻ hành động trực quan trên đầu trang chủ:
+  2. Backend quét dữ liệu các điểm ngập và Zone trong bán kính 1km và trả về thẻ trạng thái hành động rõ ràng:
      * 🟢 *An toàn:* "Khu vực của bạn hiện chưa có cảnh báo ngập lụt."
      * 🟡 *Cảnh giác:* "Có điểm ngập sâu cách bạn 400m. Hãy theo dõi sát."
      * 🔴 *Khẩn cấp:* "Bạn đang nằm trong vùng nguy cơ cao! Hãy di chuyển lên vị trí cao hoặc gửi SOS."
 
 ---
 
-### Trụ cột C: Toàn vẹn Dữ liệu & Bảo mật
-
-#### 🔹 S5. Vòng đời Tự động Đóng Dữ liệu (SOS ➔ Mission ➔ Zone)
-* **Vị trí code:** `backend/rescue_operations/models.py` & Django Signals.
-* **Hiện trạng lỗi:** Khi cứu hộ hoàn thành nhiệm vụ, SOS đã cứu nhưng Zone vẫn mở vĩnh viễn, khiến bản đồ ngập tràn các vùng sự cố cũ.
+### 🔹 S3. Vòng đời Tự động Đóng Dữ liệu (SOS ➔ Mission ➔ Zone)
+* **Vị trí code:** `backend/rescue_operations/flow.py` & Django Signals.
+* **Hiện trạng lỗi:** Hàm `recount(zone_id)` hiện tại mới chỉ cập nhật lại số người và số cứu hộ cần thiết, chưa tự động chuyển trạng thái của `Zone` sang `RESOLVED` khi tất cả SOS bên trong đã được cứu xong.
 * **Giải pháp & Kịch bản mới:**
-  * Cài đặt máy trạng thái tự động qua Django Signals:
+  * Bổ sung logic tự động đóng dữ liệu:
     $$\text{Tất cả SOS trong Zone đã RESOLVED} \implies \text{Zone tự chuyển sang RESOLVED} \implies \text{Đội cứu hộ chuyển về SẴN SÀNG}$$
 
-#### 🔹 S6. Cơ chế Xác minh Cảnh báo bằng Lượt Vote (AlertVote)
+---
+
+### 🔹 S4. Cơ chế Xác minh Cảnh báo bằng Lượt Vote (AlertVote)
 * **Vị trí code:** `FE-app/src/screens/citizen/alerts/AlertsScreen.js` & `backend/communications/views.py`.
-* **Hiện trạng lỗi:** Cảnh báo có nút "Xác nhận tin này đúng/sai" nhưng bấm vào chưa cập nhật độ tin cậy.
+* **Hiện trạng lỗi:** API `alert_vote` mới chỉ ghi nhận lượt vote của người dùng vào bảng `AlertVote`, chưa có cơ chế tính ngưỡng để đổi giao diện hoặc tự ẩn tin rác.
 * **Giải pháp & Kịch bản mới:**
   * Mỗi cảnh báo tính điểm tin cậy: $\text{Confidence} = \text{Vote\_Đúng} - \text{Vote\_Sai}$.
   * Nếu $\text{Confidence} \ge 3$: Cảnh báo gắn huy hiệu *"Đã xác thực bởi cộng đồng"*.
-  * Nếu $\text{Confidence} \le -3$: Tự động ẩn khỏi bản đồ để tránh tin đồn giả mạo.
-
-#### 🔹 S7. Hoàn thiện Xác thực & Phân quyền Bảo mật
-* **Vị trí code:** `FE-web/src/App.tsx`, `CitizenLoginScreen.js`, `backend/settings.py`.
-* **Hiện trạng lỗi:** Web Admin chưa có Route Protection (gõ link trực tiếp vẫn vào được trang trong); Backend thiếu xác thực JWT đồng bộ.
-* **Giải pháp & Kịch bản mới:**
-  * Bọc toàn bộ các trang Admin bằng component `<ProtectedRoute allowedRoles={['ADMIN']} />`.
-  * Cấu hình `DEFAULT_AUTHENTICATION_CLASSES = ['rest_framework_simplejwt.authentication.JWTAuthentication']` trong Django để khóa các API nhạy cảm.
+  * Nếu $\text{Confidence} \le -3$: Tự động ẩn khỏi bản đồ để loại bỏ các tin đồn giả mạo.
 
 ---
 
-# PHẦN II: CHI TIẾT 11 TÍNH NĂNG NÂNG CẤP & ĐMST (T1 – T11)
+# PHẦN II: CHI TIẾT 9 TÍNH NĂNG NÂNG CẤP & ĐMST (T1 – T9)
 
-### Trụ cột 1: Tác chiến Hiện trường & Dẫn đường
-
-#### 🔹 T1. Mở Ứng dụng Google Maps né Vùng nguy hiểm (Waypoints)
-* **Mục đích:** Tận dụng Google Maps ngoài đời để tài xế cứu hộ nghe chỉ đường Turn-by-Turn bằng giọng nói quen thuộc mà vẫn né được đường ngập.
-* **Cách thực hiện:**
-  1. Backend tính toán tuyến đường an toàn né ngập bằng OSRM, trích xuất 2–3 điểm ngoặt quan trọng (Waypoints).
-  2. App mở URL Scheme Google Maps:
-     ```text
-     https://www.google.com/maps/dir/?api=1&origin={lat1},{lng1}&destination={lat2},{lng2}&waypoints={lat_w1},{lng_w1}|{lat_w2},{lng_w2}&travelmode=driving
-     ```
-  3. Google Maps tự động dẫn đường tài xế đi vòng qua đúng các điểm an toàn đã chỉ định.
-
-#### 🔹 T2. Lớp Bản đồ Radar Mưa Động (RainViewer API)
+### 🔹 T1. Lớp Bản đồ Radar Mưa Động (RainViewer API)
 * **Mục đích:** Chỉ huy và Đội cứu hộ quan sát mây bão thời gian thực trước khi quyết định cho xuồng xuất kích.
 * **Cách thực hiện:**
-  * Tích hợp lớp phủ mây mưa động từ **RainViewer API** lên bản đồ Leaflet.
-  * Hiển thị thanh trượt thời gian 2 giờ qua kèm nút Play ▶ để xem hướng di chuyển của cơn bão.
+  * Tích hợp lớp phủ mây mưa động từ **RainViewer Tile Layer API** lên bản đồ Leaflet (`FE-web`) và bản đồ Mobile (`FE-app`).
+  * Bổ sung thanh trượt thời gian 2 giờ qua kèm nút Play ▶ để xem hướng di chuyển của cơn bão.
 
 ---
 
-### Trụ cột 2: Cảm biến Cộng đồng & Hiện trường
-
-#### 🔹 T3. Báo cáo Hiện trường từ Người dân (Field Reporting)
+### 🔹 T2. Báo cáo Hiện trường từ Người dân (Field Reporting)
 * **Mục đích:** Biến người dân thành cảm biến sống báo cáo tình hình đường sá (ngập nước, sạt lở, cây đổ).
 * **Giao diện & Dữ liệu:**
   * Nút xanh trên app: **"Báo tình hình đường sá"**.
@@ -160,19 +130,25 @@
     2. *Loại sự cố:* Ngập sâu | Cây đổ | Cầu gãy | Dây điện đứt | Đường bị cô lập.
     3. *Tùy chọn:* Chấm 1 điểm hoặc chạm 2 điểm báo ngập cả một đoạn đường.
 
-#### 🔹 T4. Cơ chế Xác minh Chéo Cộng đồng (Corroboration)
+---
+
+### 🔹 T3. Cơ chế Xác minh Chéo Cộng đồng (Corroboration)
 * **Mục đích:** Lọc tin báo đùa, tự động khẳng định sự cố thật khi có nhiều người cùng báo cáo.
 * **Cách thực hiện:**
   * Khi người dân B gửi báo cáo trong bán kính **150 mét** của người dân A:
   * Thuật toán tự động gom vào cùng 1 cụm, nhân đôi điểm ưu tiên (`priority_score`). Ghim trên bản đồ chuyển sang màu đỏ đậm kèm huy hiệu `+2`, `+5` người xác nhận.
 
-#### 🔹 T5. Báo Tín hiệu An toàn / Nước rút (Clear Signal)
+---
+
+### 🔹 T4. Báo Tín hiệu An toàn / Nước rút (Clear Signal)
 * **Mục đích:** Dọn dẹp hiện trường bản đồ, tránh cứu hộ lần hai gây lãng phí nguồn lực.
 * **Cách thực hiện:**
   * Nạn nhân hoặc cứu hộ bấm nút: **"Tôi đã an toàn / Nước đã rút"**.
   * Ghim đỏ lập tức đổi thành màu xám/xanh kèm dấu tích xanh `✓` (nhãn *"Vừa hết ngập 15 phút trước"*). Tự động gỡ cảnh báo bán kính 300m xung quanh.
 
-#### 🔹 T6. Phòng Chat Điều phối Vi mô theo Vùng (Zone Incident Chat)
+---
+
+### 🔹 T5. Phòng Chat Điều phối Vi mô theo Vùng (Zone Incident Chat)
 * **Mục đích:** Kênh giao tiếp vi mô có kiểm soát giữa Đội cứu hộ và Dân trong cùng 1 Zone ngập lụt.
 * **Quy tắc vận hành nghiêm ngặt chống spam:**
   1. Chỉ người có GPS thực tế nằm trong Zone hoặc Đội cứu hộ phụ trách mới được vào nhắn tin.
@@ -182,33 +158,23 @@
 
 ---
 
-### Trụ cột 3: Thời gian thực & Hạ tầng Báo động
-
-#### 🔹 T7. Kênh Báo động Tức thì Real-time (Server-Sent Events)
+### 🔹 T6. Kênh Báo động Tức thì Real-time (Server-Sent Events)
 * **Mục đích:** Loại bỏ việc Web Admin phải gọi API liên tục mỗi 15 giây (Polling) gây chậm máy.
 * **Cách thực hiện:**
   * Backend Django cung cấp endpoint SSE: `GET /api/feed/stream/`.
   * Khi thực địa có SOS mới, Django bắn sự kiện JSON về trình duyệt tức thì: Điểm ghim nhấp nháy đỏ trên bản đồ Web và phát chuông báo động trong vòng **< 1 giây**.
 
-#### 🔹 T8. Kênh Thông báo Khẩn cấp qua Telegram Bot cho Chỉ huy
-* **Mục đích:** Báo động di động tức thì đến các cấp lãnh đạo mà không cần mở laptop.
-* **Cách thực hiện:**
-  * Khi có ca SOS đặc biệt nguy kịch, Telegram Bot tự động bắn tin vào nhóm Chỉ huy:
-    ```text
-    🚨 BÁO ĐỘNG ĐỎ: YÊU CẦU CỨU HỘ KHẨN CẤP!
-    📍 Địa chỉ: Ngõ 86 Nhân Hòa, Thanh Xuân, Hà Nội
-    ⚠️ Tình trạng: Nước ngập ngực, 1 cụ già tai biến, 2 trẻ nhỏ
-    [🗺 Xem Bản Đồ Điều Phối]   [✅ Nhận Điều Động Đội A]
-    ```
-  * Chỉ huy bấm nút duyệt ngay trên Telegram để giao nhiệm vụ cho đội cơ động.
+---
 
-#### 🔹 T9. Đặt Theo dõi Bán kính & Thông báo Đẩy (Push Notifications)
+### 🔹 T7. Đặt Theo dõi Bán kính & Thông báo Đẩy (Push Notifications)
 * **Mục đích:** Người dân nhận cảnh báo chủ động khi vắng nhà hoặc theo dõi người thân ở vùng lũ.
 * **Cách thực hiện:**
   * Bấm nút *"🔔 Theo dõi khu vực này (Bán kính 500m)"* trên app.
   * Khi khu vực đó có cảnh báo ngập sâu hoặc lệnh di dân khẩn cấp, máy tự động phát chuông và hiện thông báo đẩy ra màn hình khóa qua **Expo Push Notifications**.
 
-#### 🔹 T10. Tích hợp Geocoding Ngõ ngách Chi tiết (Goong API)
+---
+
+### 🔹 T8. Tích hợp Geocoding Ngõ ngách Chi tiết (Goong API)
 * **Mục đích:** Khắc phục nhược điểm của OpenStreetMap vốn rất kém khi tìm ngõ, ngách, thôn, xóm ở làng quê Việt Nam.
 * **Cách thực hiện:**
   * Tích hợp **Goong Geocoding API** ở tầng Backend.
@@ -216,7 +182,7 @@
 
 ---
 
-### Trụ cột 4: ⭐ Đột phá Công nghệ — Cứu nạn Ngoại tuyến Bluetooth (T11)
+### 🔹 T9. ⭐ Hệ Thống Cứu Nạn Ngoại Tuyến Qua Bluetooth (BLE Offline Rescue)
 
 > 🌟 **TÍNH NĂNG CỐT LÕI ĐỘT PHÁ CHO ĐỒ ÁN TỐT NGHIỆP (ĐỊNH HƯỚNG ĐỔI MỚI SÁNG TẠO & KHỞI NGHIỆP)**  
 > **Giải quyết nút thắt sống còn:** Khi bão lũ làm sập cột sóng 4G/BTS, cắt điện, đứt cáp viễn thông toàn vùng, hệ thống chuyển sang chế độ cứu nạn cự ly gần độc lập hoàn toàn với Internet.
@@ -294,10 +260,9 @@ sequenceDiagram
     participant S as Máy chủ Backend & DB
 
     Note over C,S: 1. Phát hiện sự cố & Báo tin
-    C->>C: Nén ảnh chụp hiện trường (Canvas 1280px)
+    C->>C: Nén ảnh chụp hiện trường (1280px)
     C->>S: Gửi SOS khẩn cấp (GPS + Nhu cầu + Ảnh nén)
     S-->>A: Đẩy SSE Stream tức thì -> Nhấp nháy đỏ trên Bản đồ (<1s)
-    S-->>A: Telegram Bot bắn tin khẩn vào nhóm Chỉ huy
 
     Note over A,R: 2. Điều phối & Nhận nhiệm vụ
     A->>S: Phê duyệt phân công Đội cứu hộ
@@ -322,34 +287,28 @@ sequenceDiagram
 
 # PHẦN IV: KẾ HOẠCH TRIỂN KHAI THEO GIAI ĐOẠN (SPRINT PLAN)
 
-### 📌 Giai đoạn 1: Sửa các lỗi nghẽn nghiệp vụ cốt lõi (2 ngày)
-* [ ] **Sửa S2:** Sửa API cập nhật trạng thái nhiệm vụ của cứu hộ, khơi thông luồng `NEEDS_HELP`.
-* [ ] **Sửa S3:** Tích hợp bộ nén ảnh trước khi tải lên trong `FE-app` gửi SOS.
-* [ ] **Sửa S7:** Bọc `ProtectedRoute` trên Web Admin và cấu hình xác thực JWT ở Backend.
-* [ ] **Thêm T1:** Thêm nút xuất tọa độ mở Google Maps né ngập bằng URL Scheme cho tài xế cứu hộ.
-
-### 📌 Giai đoạn 2: Nâng cấp Năng lực Định vị & Bản đồ (Tuần tiếp theo)
+### 📌 Giai đoạn 1: Sửa các lỗi dẫn đường & Vòng đời dữ liệu (Tuần 1)
 * [ ] **Sửa S1:** Xóa bỏ đồ thị hardcode Đà Nẵng, tích hợp API OSRM né vùng ngập.
-* [ ] **Thêm T2:** Tích hợp lớp ảnh Radar mưa động RainViewer lên bản đồ Web Admin và App.
-* [ ] **Thêm T10:** Tích hợp Goong Maps API để hỗ trợ dịch địa chỉ ngõ ngách chi tiết.
+* [ ] **Sửa S3:** Cài đặt tín hiệu Django Signal tự động đóng Zone khi tất cả SOS chuyển sang `RESOLVED`.
+* [ ] **Sửa S4:** Hoàn thiện cơ chế ngưỡng Vote cộng đồng để lọc cảnh báo rác trên Mobile.
 
-### 📌 Giai đoạn 3: Nâng cấp Luồng Người dân & Chat Vùng
-* [ ] **Sửa S4:** Chuyển câu tĩnh "Bạn đang an toàn" thành thẻ tóm tắt tình hình theo GPS thực tế.
-* [ ] **Thêm T3:** Bổ sung giao diện "Báo cáo tình hình đường sá" (Mức nước, cây đổ, cầu sập).
-* [ ] **Thêm T4 & T5:** Cài đặt cơ chế xác minh chéo bán kính 150m và nút báo "Đã được cứu an toàn".
-* [ ] **Thêm T6:** Xây dựng tính năng Phòng chat theo Vùng (Zone Incident Chat) có phân quyền.
+### 📌 Giai đoạn 2: Trải nghiệm Hiện trường & Bản đồ Thời tiết (Tuần 2)
+* [ ] **Sửa S2:** Chuyển câu tĩnh "Vị trí GPS sẵn sàng" thành thẻ đánh giá nguy cơ bán kính 1km.
+* [ ] **Thêm T1:** Tích hợp lớp ảnh Radar mưa động RainViewer lên bản đồ Web Admin và Mobile App.
+* [ ] **Thêm T2:** Bổ sung giao diện "Báo cáo tình hình đường sá" (Field Reporting).
+* [ ] **Thêm T3 & T4:** Cơ chế xác minh chéo trong 150m và nút báo an toàn (Clear Signal).
 
-### 📌 Giai đoạn 4: Hoàn thiện Tự động hóa & Kênh Real-time
-* [ ] **Thêm T7:** Thay thế cơ chế Polling bằng Server-Sent Events (SSE) trên Dashboard Admin.
-* [ ] **Thêm T8:** Viết kịch bản Telegram Bot bắn tin báo động đỏ cho Ban chỉ huy.
-* [ ] **Thêm T9:** Tích hợp hệ thống thông báo đẩy (Push Notifications) cho tính năng theo dõi khu vực.
-* [ ] **Sửa S5 & S6:** Hoàn thiện máy trạng thái đóng dữ liệu tự động (SOS → Mission → Zone) và xử lý ngưỡng Vote.
+### 📌 Giai đoạn 3: Hạ tầng Thời gian thực & Định vị Nâng cao (Tuần 3)
+* [ ] **Thêm T5:** Xây dựng tính năng Phòng chat theo Vùng (Zone Incident Chat) có phân quyền.
+* [ ] **Thêm T6:** Thay thế cơ chế Polling bằng Server-Sent Events (SSE) trên Dashboard Admin.
+* [ ] **Thêm T7:** Tích hợp hệ thống thông báo đẩy (Push Notifications) cho tính năng theo dõi khu vực.
+* [ ] **Thêm T8:** Tích hợp Goong Maps API để hỗ trợ dịch địa chỉ ngõ ngách thôn xóm từ Facebook.
 
-### 📌 Giai đoạn 5: ⭐ Hệ Thống Cứu Nạn Ngoại Tuyến Bluetooth (Đột phá ĐATN)
-* [ ] **T11.1 - PoC Cốt lõi:** Cấu hình Expo Development Build với `react-native-ble-plx` & BLE Peripheral, thử nghiệm phát và quét gói tin 16 bytes giữa 2 điện thoại khi tắt hoàn toàn Wi-Fi/4G.
-* [ ] **T11.2 - Radar Tầm Soát & Đo Cự Ly:** Xây dựng màn hình `RadarProximityScreen.js`, hiển thị vòng quét Sonar 360°, ước tính khoảng cách mượt bằng Moving Average RSSI, tích hợp âm thanh bíp Sonar (`expo-av`) và rung phản hồi (`expo-haptics`).
-* [ ] **T11.3 - Định Vị Khẩn Cấp (Ping):** Thêm nút lệnh Ping từ xa kích hoạt chớp đèn Flash camera SOS (`expo-camera`) và hú còi 100% âm lượng trên máy nạn nhân trong đêm tối.
-* [ ] **T11.4 - Quick Chat & Đồng Bộ:** Xây dựng bộ đàm tin nhắn nhanh 1-chạm qua BLE GATT; cơ chế Store-and-Forward tự động gom dữ liệu và đồng bộ lên Django Backend khi ra vùng có sóng.
+### 📌 Giai đoạn 4: ⭐ Hệ Thống Cứu Nạn Ngoại Tuyến Bluetooth (Tuần 4 - Đột phá ĐATN)
+* [ ] **T9.1 - PoC Cốt lõi:** Cấu hình Expo Development Build với `react-native-ble-plx` & BLE Peripheral, thử nghiệm phát và quét gói tin 16 bytes giữa 2 điện thoại khi tắt hoàn toàn Wi-Fi/4G.
+* [ ] **T9.2 - Radar Tầm Soát & Đo Cự Ly:** Xây dựng màn hình `RadarProximityScreen.js`, hiển thị vòng quét Sonar 360°, ước tính khoảng cách mượt bằng Moving Average RSSI, tích hợp âm thanh bíp Sonar (`expo-av`) và rung phản hồi (`expo-haptics`).
+* [ ] **T9.3 - Định Vị Khẩn Cấp (Ping):** Thêm nút lệnh Ping từ xa kích hoạt chớp đèn Flash camera SOS (`expo-camera`) và hú còi 100% âm lượng trên máy nạn nhân trong đêm tối.
+* [ ] **T9.4 - Quick Chat & Đồng Bộ:** Xây dựng bộ đàm tin nhắn nhanh 1-chạm qua BLE GATT; cơ chế Store-and-Forward tự động gom dữ liệu và đồng bộ lên Django Backend khi ra vùng có sóng.
 
 ---
 *Tài liệu này đóng vai trò là bản đặc tả kỹ thuật (Specification Document) chuẩn để đội ngũ phát triển căn cứ triển khai, kiểm thử và nghiệm thu dự án.*

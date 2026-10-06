@@ -127,6 +127,15 @@ const MissionNavScreen = ({ navigation, route }) => {
       if (cancelled) return;
       if (status !== 'granted') { setRouteError('Cần quyền vị trí để tìm đường.'); return; }
 
+      // Lấy ngay vị trí gần nhất từ cache (0.05s) để tải lộ trình ngay lập tức
+      const last = await Location.getLastKnownPositionAsync();
+      if (last && !cancelled) {
+        setCurrentPos(last.coords);
+        setHeading(last.coords.heading || 0);
+        lastRouteFetchRef.current = Date.now();
+        fetchRouteFromServer(last.coords);
+      }
+
       // Theo dõi vị trí liên tục
       subscription = await Location.watchPositionAsync(
         {

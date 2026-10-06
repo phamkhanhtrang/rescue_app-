@@ -116,10 +116,13 @@ const RescuerMapScreen = ({ navigation }) => {
             message: 'Vui lòng cho phép truy cập vị trí để điều phối tác chiến.',
           });
         } else {
-          let loc = await Location.getCurrentPositionAsync({});
-          setCurrentLocation(loc.coords);
+          const lastLoc = await Location.getLastKnownPositionAsync();
+          if (lastLoc) setCurrentLocation(lastLoc.coords);
+          Location.getCurrentPositionAsync({}).then(loc => {
+            if (loc) setCurrentLocation(loc.coords);
+          }).catch(() => {});
         }
-        await fetchData();
+        fetchData();
       } catch (err) {
         console.error('Init map error:', err);
         setLoading(false);

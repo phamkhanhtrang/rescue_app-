@@ -61,9 +61,9 @@ const ResourceDeclareScreen = ({ navigation }) => {
   const { userInfo } = useAuth();
 
   useEffect(() => {
-    (async () => {
-      try {
-        const state = await API.resources.current();
+    // 1. Tải thông tin tài nguyên hiện tại
+    API.resources.current()
+      .then((state) => {
         setResourceState(state);
         if (state.resource) {
           const r = state.resource;
@@ -71,20 +71,31 @@ const ResourceDeclareScreen = ({ navigation }) => {
           setVehicleCount(r.vehicle_count || 0);
           setNumberStaff(r.number_staff || 1);
           setSelectedTypes(r.specialties || []);
-          setSupplies({ ...supplies, ...r.supplies });
+          setSupplies((prev) => ({ ...prev, ...r.supplies }));
           setAvailable(r.is_available);
         }
-      } catch (e) {
+      })
+      .catch((e) => {
         setErrorMsg(e.message);
-      }
+      });
+
+    // 2. Lấy tọa độ GPS tức thì từ bộ đệm (0.05s) cho bản đồ
+    (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         setErrorMsg('Quyền truy cập vị trí bị từ chối');
         return;
       }
 
-      let loc = await Location.getCurrentPositionAsync({});
-      setLocation(loc.coords);
+      const lastKnown = await Location.getLastKnownPositionAsync().catch(() => null);
+      if (lastKnown) {
+        setLocation(lastKnown.coords);
+      }
+
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).catch(() => null);
+      if (loc) {
+        setLocation(loc.coords);
+      }
     })();
   }, []);
 

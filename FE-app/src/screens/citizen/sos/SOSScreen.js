@@ -89,8 +89,20 @@ const SOSScreen = ({ navigation }) => {
         return;
       }
 
+      // 1. Lấy vị trí cache gần nhất để hiển thị bản đồ & vị trí lập tức (0.05s)
+      const lastKnown = await Location.getLastKnownPositionAsync().catch(() => null);
+      if (lastKnown) {
+        const cachedCoords = {
+          latitude: lastKnown.coords.latitude,
+          longitude: lastKnown.coords.longitude,
+        };
+        setLocation(cachedCoords);
+        setLocationSource('GPS');
+      }
+
+      // 2. Cập nhật vị trí chính xác
       let loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
+        accuracy: Location.Accuracy.Balanced,
       });
       const coords = {
         latitude: loc.coords.latitude,

@@ -180,7 +180,7 @@ export default function AdminMapPage() {
   const fetchData = useCallback(async () => {
     if (requestInFlight.current) { refreshQueued.current = true; return; }
     requestInFlight.current = true;
-    setLoading(true);
+    if (!lastUpdated) setLoading(true);
     try {
       const requests = [
         api.zones.getAll(),
@@ -556,8 +556,10 @@ export default function AdminMapPage() {
               </div>
 
               <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                attribution='&copy; <a href="https://maps.google.com">Google Maps</a>'
+                url="https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
+                subdomains={['mt0', 'mt1', 'mt2', 'mt3']}
+                maxZoom={20}
               />
 
               {/* 1. Lớp Vùng sự cố (Incident Zones) */}

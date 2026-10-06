@@ -118,24 +118,37 @@ const MapScreen = ({ navigation }) => {
   const [showLegend, setShowLegend]           = useState(true);
   const [isBottomCollapsed, setIsBottomCollapsed] = useState(false);
 
-  // ─── Lấy GPS ────────────────────────────────────────────────────────────────
+  // ─── Lấy GPS (Tức thì qua cache + cập nhật ngầm độ chính xác cao) ────────
   useEffect(() => {
     (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') return;
 
-      let loc = await Location.getCurrentPositionAsync({});
-      setLocation(loc.coords);
-
-      let reverse = await Location.reverseGeocodeAsync({
-        latitude:  loc.coords.latitude,
-        longitude: loc.coords.longitude,
-      });
-      if (reverse && reverse.length > 0) {
-        setAddressName(
-          `${reverse[0].streetNumber ? reverse[0].streetNumber + ' ' : ''}${reverse[0].street || reverse[0].subregion || ''}, ${reverse[0].district || reverse[0].city || ''}`
-        );
+      // 1. Tức thì: Lấy ngay tọa độ lưu gần nhất từ cache máy (0.05s) để hiện map lập tức
+      const lastLoc = await Location.getLastKnownPositionAsync();
+      if (lastLoc) {
+        setLocation(lastLoc.coords);
       }
+
+      // 2. Chạy ngầm: Lấy tọa độ GPS tươi mới và Geocode không làm treo giao diện
+      Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+        .then(async (loc) => {
+          if (loc) {
+            setLocation(loc.coords);
+            try {
+              let reverse = await Location.reverseGeocodeAsync({
+                latitude: loc.coords.latitude,
+                longitude: loc.coords.longitude,
+              });
+              if (reverse && reverse.length > 0) {
+                setAddressName(
+                  `${reverse[0].streetNumber ? reverse[0].streetNumber + ' ' : ''}${reverse[0].street || reverse[0].subregion || ''}, ${reverse[0].district || reverse[0].city || ''}`
+                );
+              }
+            } catch (err) {}
+          }
+        })
+        .catch(() => {});
     })();
   }, []);
 

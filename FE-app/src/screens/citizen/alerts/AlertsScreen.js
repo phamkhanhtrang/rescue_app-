@@ -46,6 +46,8 @@ const AlertsScreen = ({ navigation }) => {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status === 'granted') {
+          const last = await Location.getLastKnownPositionAsync().catch(() => null);
+          if (last) update(last);
           const loc = await Location.getCurrentPositionAsync({
             accuracy: Location.Accuracy.Balanced,
           });
