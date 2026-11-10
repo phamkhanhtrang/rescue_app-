@@ -4,13 +4,9 @@
  * Dịch vụ Tác chiến Cứu nạn Ngoại tuyến BLE (Guardian Pulse Offline Mesh Grid).
  * Quản lý vòng đời Phao cứu sinh (Citizen Beacon) và Radar tầm soát (Rescuer Radar).
  *
- * Tính năng chính:
- * 1. Phát xung BLE Advertising (16-Bytes Compact 0xGP Protocol).
- * 2. Quét sóng Sonar, đo RSSI & khoảng cách (Logarithmic Distance Model).
- * 3. Bộ lọc trung bình động làm mượt tín hiệu (Exponential Moving Average).
- * 4. Lệnh Ping từ xa: Chớp đèn Flash SOS và Hú còi âm lượng 100%.
- * 5. Bộ đàm tin nhắn nhanh 1-chạm (Quick Chat).
- * 6. Bồ câu đưa thư số (Store-and-Forward / Bulk Offline Sync lên Django).
+ * Hỗ trợ Dual-Mode:
+ *  - Offline hoàn toàn (Local Storage / P2P Simulation).
+ *  - Virtual RF Relay (khi test giữa Điện thoại thật và Trình duyệt Web trên máy tính).
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
@@ -18,6 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Audio } from 'expo-av';
+import { BASE_URL } from './apiClient';
 import {
   encodeSOSPacket,
   decodeSOSPacket,
@@ -47,9 +44,7 @@ let broadcastTimer = null;
 let scanTimer = null;
 let currentPulseCount = 0;
 let soundInstance = null;
-
-// Âm thanh Beep Sonar ngắn (Data URI wav 800Hz PCM)
-const SONAR_BEEP_WAV = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQQAAAAAAP//';
+let lastHandledPingTime = 0;
 
 /**
  * Phát rung phản hồi xúc giác (Haptics)
@@ -64,9 +59,7 @@ export async function triggerHaptic(type = 'impact') {
     } else {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
-  } catch (err) {
-    // Không hỗ trợ trên một số thiết bị hoặc giả lập
-  }
+  } catch (err) {}
 }
 
 /**
@@ -75,12 +68,10 @@ export async function triggerHaptic(type = 'impact') {
 export async function playSonarBeep() {
   try {
     triggerHaptic('impact');
-    // Khởi tạo audio mode
     await Audio.setAudioModeAsync({
       playsInSilentModeIOS: true,
       staysActiveInBackground: true,
     });
-    // Phát âm thanh
     const { sound } = await Audio.Sound.createAsync(
       { uri: 'https://actions.google.com/sounds/v1/alarms/beep_short.ogg' },
       { shouldPlay: true, volume: 1.0 }
@@ -92,7 +83,6 @@ export async function playSonarBeep() {
       }
     });
   } catch (err) {
-    // Fallback qua haptics nếu mạng tắt không tải được audio URL ngoài
     triggerHaptic('alarm');
   }
 }
@@ -100,7 +90,7 @@ export async function playSonarBeep() {
 /**
  * Phát còi hú báo động khẩn cấp khi nhận lệnh PING
  */
-export async function playAlarmSiren(durationMs = 8000) {
+export async function playAlarmSiren(durationMs = 6000) {
   try {
     triggerHaptic('alarm');
     await Audio.setAudioModeAsync({
@@ -114,7 +104,6 @@ export async function playAlarmSiren(durationMs = 8000) {
     );
     soundInstance = sound;
 
-    // Rung dồn dập
     const hapticInterval = setInterval(() => {
       triggerHaptic('alarm');
     }, 700);
@@ -165,6 +154,25 @@ export async function startCitizenBeacon(config) {
   await AsyncStorage.setItem(STORAGE_KEYS.MY_BEACON, JSON.stringify(state));
   await AsyncStorage.setItem(STORAGE_KEYS.BROADCAST_STATE, 'ACTIVE');
 
+  // Đăng ký lên virtual mesh relay backend (cho kịch bản test Web + Phone)
+  try {
+    fetch(`${BASE_URL}/rescue_operations/ble-grid/beacon/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sos_id: packet.decodedSummary.sosId,
+        hex: packet.hexString,
+        lat: packet.decodedSummary.lat,
+        lng: packet.decodedSummary.lng,
+        people_count: packet.decodedSummary.peopleCount,
+        has_elderly: packet.decodedSummary.hasElderly,
+        has_children: packet.decodedSummary.hasChildren,
+        has_injury: packet.decodedSummary.hasInjury,
+        severity: packet.decodedSummary.severity,
+      }),
+    }).catch(() => {});
+  } catch (e) {}
+
   currentPulseCount = 0;
 
   // Vòng lặp phát xung quảng bá (mỗi 800ms)
@@ -177,7 +185,7 @@ export async function startCitizenBeacon(config) {
       summary: packet.decodedSummary,
     };
 
-    // Kiểm tra xem có lệnh PING từ cứu hộ gửi tới không
+    // 1. Kiểm tra lệnh PING từ local storage
     const pendingPing = await AsyncStorage.getItem(STORAGE_KEYS.PING_EVENT);
     if (pendingPing) {
       await AsyncStorage.removeItem(STORAGE_KEYS.PING_EVENT);
@@ -187,6 +195,24 @@ export async function startCitizenBeacon(config) {
         playAlarmSiren(6000);
       }
     }
+
+    // 2. Kiểm tra lệnh PING từ virtual mesh relay (nếu test qua mạng LAN giữa Web và Phone)
+    try {
+      const resp = await fetch(
+        `${BASE_URL}/rescue_operations/ble-grid/ping/?target_id=${packet.decodedSummary.sosId}`
+      );
+      if (resp.ok) {
+        const pingJson = await resp.json();
+        if (Array.isArray(pingJson.pings) && pingJson.pings.length > 0) {
+          const lastPing = pingJson.pings[pingJson.pings.length - 1];
+          if (!lastHandledPingTime || lastPing.timestamp > lastHandledPingTime) {
+            lastHandledPingTime = lastPing.timestamp;
+            listeners.onPing.forEach((fn) => fn(lastPing));
+            playAlarmSiren(6000);
+          }
+        }
+      }
+    } catch (e) {}
 
     listeners.onPulse.forEach((fn) => fn(pulseInfo));
   }, 800);
@@ -236,23 +262,21 @@ export async function startRescuerScanner(options = {}, onUpdate) {
   let simulatedDistance = options.initialDist || 32.0;
 
   scanTimer = setInterval(async () => {
-    // 1. Kiểm tra phao cứu sinh lưu trong máy (trường hợp test 1 máy hoặc 2 app cùng chia sẻ máy ảo)
+    const discoveredSignals = [];
+
+    // 1. Kiểm tra phao cứu sinh lưu cục bộ trong máy (test 1 máy)
     const myBeaconRaw = await AsyncStorage.getItem(STORAGE_KEYS.MY_BEACON);
     const isBeaconActive = (await AsyncStorage.getItem(STORAGE_KEYS.BROADCAST_STATE)) === 'ACTIVE';
-
-    const discoveredSignals = [];
 
     if (myBeaconRaw && isBeaconActive) {
       const beaconData = JSON.parse(myBeaconRaw);
       const decoded = decodeSOSPacket(beaconData.packetHex);
 
       if (decoded.isValid) {
-        // Mô phỏng ca-nô đang di chuyển lại gần mục tiêu
         if (simulatedDistance > 3.0) {
           simulatedDistance = Math.max(simulatedDistance - (Math.random() * 2.5 + 0.5), 2.5);
         }
 
-        // Tính ngược lại RSSI từ cự ly: RSSI = TxPower - 10 * n * log10(Dist)
         const calcRssi = Math.round(
           -59 - 10 * 3.0 * Math.log10(Math.max(simulatedDistance, 0.5)) + (Math.random() * 4 - 2)
         );
@@ -272,12 +296,50 @@ export async function startRescuerScanner(options = {}, onUpdate) {
           lat: decoded.lat,
           lng: decoded.lng,
           lastSeen: Date.now(),
-          radarAngle: 45, // Góc hiển thị trên màn hình radar
+          radarAngle: 45,
         });
       }
     }
 
-    // 2. Tự động thêm 1 mục tiêu cứu nạn dã chiến nếu đang trống để Đội cứu hộ luôn có đối tượng để thực hành
+    // 2. Kiểm tra phao cứu sinh từ virtual mesh relay (test giữa Web và Phone)
+    try {
+      const relayResp = await fetch(`${BASE_URL}/rescue_operations/ble-grid/beacon/`);
+      if (relayResp.ok) {
+        const relayData = await relayResp.json();
+        if (Array.isArray(relayData.beacons)) {
+          for (const b of relayData.beacons) {
+            if (!discoveredSignals.some((s) => s.sosId === b.sos_id)) {
+              if (simulatedDistance > 3.0) {
+                simulatedDistance = Math.max(simulatedDistance - (Math.random() * 2.0 + 0.5), 2.5);
+              }
+              const calcRssi = Math.round(
+                -59 - 10 * 3.0 * Math.log10(Math.max(simulatedDistance, 0.5)) + (Math.random() * 3 - 1.5)
+              );
+
+              discoveredSignals.push({
+                id: `sos-${b.sos_id}`,
+                sosId: b.sos_id,
+                hex: b.hex,
+                rawRSSI: calcRssi,
+                smoothedRSSI: calcRssi,
+                distanceM: Math.round(simulatedDistance * 10) / 10,
+                peopleCount: b.people_count,
+                hasElderly: b.has_elderly,
+                hasChildren: b.has_children,
+                hasInjury: b.has_injury,
+                severity: b.severity,
+                lat: b.lat,
+                lng: b.lng,
+                lastSeen: Date.now(),
+                radarAngle: 60,
+              });
+            }
+          }
+        }
+      }
+    } catch (e) {}
+
+    // 3. Fallback: Nếu không có phao nào, tự sinh 1 mục tiêu dã chiến để luôn test được
     if (discoveredSignals.length === 0) {
       const demoPacket = encodeSOSPacket({
         sosId: 77291,
@@ -341,6 +403,16 @@ export async function sendRemotePing(targetSosId = 'ALL') {
     action: 'STROBE_AND_SIREN',
   };
   await AsyncStorage.setItem(STORAGE_KEYS.PING_EVENT, JSON.stringify(pingEvent));
+
+  // Bắn lệnh qua virtual mesh relay
+  try {
+    fetch(`${BASE_URL}/rescue_operations/ble-grid/ping/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target_id: targetSosId }),
+    }).catch(() => {});
+  } catch (e) {}
+
   return { success: true, targetId: targetSosId };
 }
 
@@ -351,7 +423,7 @@ export async function sendQuickChatMessage(senderRole, messageText, targetSosId 
   triggerHaptic('impact');
   const chatItem = {
     id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-    senderRole, // 'CITIZEN' hoặc 'RESCUER'
+    senderRole,
     text: messageText,
     targetSosId,
     sentAt: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
@@ -362,6 +434,20 @@ export async function sendQuickChatMessage(senderRole, messageText, targetSosId 
   list.unshift(chatItem);
   await AsyncStorage.setItem(STORAGE_KEYS.CHAT_MESSAGES, JSON.stringify(list.slice(0, 30)));
 
+  // Bắn qua virtual relay
+  try {
+    fetch(`${BASE_URL}/rescue_operations/ble-grid/chat/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sender_role: senderRole,
+        text: messageText,
+        target_sos_id: targetSosId,
+        sent_at: chatItem.sentAt,
+      }),
+    }).catch(() => {});
+  } catch (e) {}
+
   listeners.onChatMessage.forEach((fn) => fn(chatItem));
   return chatItem;
 }
@@ -370,6 +456,16 @@ export async function sendQuickChatMessage(senderRole, messageText, targetSosId 
  * Lấy lịch sử chat bộ đàm
  */
 export async function getQuickChatHistory() {
+  try {
+    const resp = await fetch(`${BASE_URL}/rescue_operations/ble-grid/chat/`);
+    if (resp.ok) {
+      const data = await resp.json();
+      if (Array.isArray(data.messages) && data.messages.length > 0) {
+        return data.messages;
+      }
+    }
+  } catch (e) {}
+
   const raw = await AsyncStorage.getItem(STORAGE_KEYS.CHAT_MESSAGES);
   return raw ? JSON.parse(raw) : [];
 }
@@ -420,7 +516,6 @@ export async function syncOfflineQueueToBackend(apiClient, deviceId = 'CANO_RESC
 
     const resp = await apiClient.post('/rescue_operations/sos/bulk-offline-sync/', payload);
     if (resp.status === 200 && resp.data?.status === 'SUCCESS') {
-      // Đã đồng bộ thành công -> dọn dẹp hàng đợi
       await AsyncStorage.removeItem(STORAGE_KEYS.OFFLINE_QUEUE);
       return {
         syncedCount: resp.data.synced_count,

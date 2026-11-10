@@ -1573,3 +1573,97 @@ def bulk_offline_sync(request):
         'errors': errors,
     }, status=status.HTTP_200_OK if synced_items else status.HTTP_400_BAD_REQUEST)
 
+
+# ─── VIRTUAL BLE MESH RELAY (CHO TEST 2 THIẾT BỊ / WEB + PHONE) ───────────────
+import time
+
+BLE_VIRTUAL_BEACONS = {} # { sos_id_str: { hex, sos_id, lat, lng, people_count, severity, updated_at } }
+BLE_VIRTUAL_PINGS = []   # [ { target_id, timestamp, action } ]
+BLE_VIRTUAL_CHATS = []   # [ { id, sender_role, text, target_sos_id, sent_at, timestamp } ]
+
+@api_view(['GET', 'POST', 'DELETE'])
+@permission_classes([AllowAny])
+def ble_mesh_beacon(request):
+    """Đăng ký, cập nhật hoặc lấy danh sách phao cứu sinh đang phát sóng ảo."""
+    now = time.time()
+    stale_keys = [k for k, v in BLE_VIRTUAL_BEACONS.items() if now - v.get('updated_at', 0) > 300]
+    for k in stale_keys:
+        BLE_VIRTUAL_BEACONS.pop(k, None)
+
+    if request.method == 'POST':
+        data = request.data
+        sos_id = str(data.get('sos_id', ''))
+        if not sos_id:
+            return Response({'error': 'Thiếu sos_id'}, status=400)
+        BLE_VIRTUAL_BEACONS[sos_id] = {
+            'sos_id': int(sos_id) if sos_id.isdigit() else sos_id,
+            'hex': data.get('hex', ''),
+            'lat': float(data.get('lat', 16.0544)),
+            'lng': float(data.get('lng', 108.2022)),
+            'people_count': int(data.get('people_count', 1)),
+            'has_elderly': bool(data.get('has_elderly', False)),
+            'has_children': bool(data.get('has_children', False)),
+            'has_injury': bool(data.get('has_injury', False)),
+            'severity': int(data.get('severity', 2)),
+            'updated_at': now,
+        }
+        return Response({'status': 'REGISTERED', 'beacon': BLE_VIRTUAL_BEACONS[sos_id]})
+
+    elif request.method == 'DELETE':
+        sos_id = str(request.data.get('sos_id', request.query_params.get('sos_id', '')))
+        if sos_id in BLE_VIRTUAL_BEACONS:
+            del BLE_VIRTUAL_BEACONS[sos_id]
+        return Response({'status': 'DELETED'})
+
+    return Response({'beacons': list(BLE_VIRTUAL_BEACONS.values())})
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([AllowAny])
+def ble_mesh_ping(request):
+    """Gửi hoặc kiểm tra lệnh PING định vị."""
+    global BLE_VIRTUAL_PINGS
+    now = time.time()
+    BLE_VIRTUAL_PINGS = [p for p in BLE_VIRTUAL_PINGS if now - p['timestamp'] < 30]
+
+    if request.method == 'POST':
+        target_id = request.data.get('target_id', 'ALL')
+        ping_entry = {
+            'target_id': target_id,
+            'timestamp': now,
+            'action': 'STROBE_AND_SIREN',
+        }
+        BLE_VIRTUAL_PINGS.append(ping_entry)
+        return Response({'status': 'PING_SENT', 'ping': ping_entry})
+
+    target_id = request.query_params.get('target_id', '')
+    matching_pings = [
+        p for p in BLE_VIRTUAL_PINGS 
+        if p['target_id'] == 'ALL' or str(p['target_id']) == str(target_id)
+    ]
+    return Response({'pings': matching_pings})
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([AllowAny])
+def ble_mesh_chat(request):
+    """Gửi và nhận tin nhắn bộ đàm tầm gần."""
+    global BLE_VIRTUAL_CHATS
+    now = time.time()
+    BLE_VIRTUAL_CHATS = [c for c in BLE_VIRTUAL_CHATS if now - c.get('timestamp', 0) < 86400]
+
+    if request.method == 'POST':
+        msg = {
+            'id': f"chat-{int(now*1000)}",
+            'sender_role': request.data.get('sender_role', 'CITIZEN'),
+            'text': request.data.get('text', ''),
+            'target_sos_id': request.data.get('target_sos_id', 'ALL'),
+            'sent_at': request.data.get('sent_at', time.strftime('%H:%M')),
+            'timestamp': now,
+        }
+        BLE_VIRTUAL_CHATS.insert(0, msg)
+        return Response({'status': 'SENT', 'message': msg})
+
+    return Response({'messages': BLE_VIRTUAL_CHATS[:30]})
+
+
