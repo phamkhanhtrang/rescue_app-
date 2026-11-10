@@ -34,6 +34,7 @@ import {
   markVictimResolvedOffline,
   syncOfflineQueueToBackend,
   playSonarBeep,
+  playAlarmSiren,
   triggerHaptic,
 } from '../../../services/bleGridService';
 
@@ -147,6 +148,8 @@ const RescuerOfflineScreen = ({ navigation }) => {
     if (!selectedSignal) return;
     triggerHaptic('alarm');
     await sendRemotePing(selectedSignal.sosId);
+    // Phát âm thanh còi hú trực tiếp để test ngay trên 1 điện thoại
+    await playAlarmSiren(3500);
     setModalConfig({
       visible: true,
       type: 'success',
