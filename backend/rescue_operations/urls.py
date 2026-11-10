@@ -17,6 +17,7 @@ urlpatterns = [
     path('sos/draft/', flow.draft, name='sos-draft'),
     path('sos/create/', flow.create, name='sos-create'),
     path('sos/anonymous/', flow.create, name='sos-anonymous-create'),
+    path('sos/bulk-offline-sync/', views.bulk_offline_sync, name='sos-bulk-offline-sync'),
     path('sos/<uuid:pk>/', flow.detail, name='sos-detail'),
 
     # SOS Images

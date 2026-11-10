@@ -1457,3 +1457,119 @@ def safety_check(request):
         'closest_hazard': closest,
         'hazards': nearby_hazards[:10],
     })
+
+
+# ─── BLE OFFLINE BULK SYNC (STORE-AND-FORWARD) ───────────────
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def bulk_offline_sync(request):
+    """
+    Đồng bộ hàng loạt gói tin cứu nạn ngoại tuyến BLE (Store-and-Forward / Data Muling).
+    Khi Đội cứu hộ hoặc người dân quay trở lại khu vực có sóng 4G/Wi-Fi,
+    app sẽ tự động đẩy danh sách các gói tin BLE thu thập được lên server.
+    """
+    import struct
+    device_id = request.data.get('device_id', 'UNKNOWN_DEVICE')
+    packets = request.data.get('packets', [])
+    if not isinstance(packets, list) or not packets:
+        return Response({'error': 'Danh sách packets rỗng hoặc không đúng định dạng.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    synced_items = []
+    errors = []
+
+    for idx, item in enumerate(packets):
+        hex_str = item.get('hex_packet', '').strip()
+        if not hex_str:
+            errors.append(f"Gói tin #{idx}: Thiếu trường hex_packet.")
+            continue
+        try:
+            raw_bytes = bytes.fromhex(hex_str)
+            if len(raw_bytes) < 16:
+                errors.append(f"Gói tin #{idx}: Độ dài nhị phân < 16 bytes.")
+                continue
+
+            # Kiểm tra Header 0x4750 ('GP')
+            if raw_bytes[0] != 0x47 or raw_bytes[1] != 0x50:
+                errors.append(f"Gói tin #{idx}: Sai header định danh 0xGP.")
+                continue
+
+            sos_id_int = struct.unpack('>I', raw_bytes[2:6])[0]
+            demo = raw_bytes[6]
+            people_count = max((demo >> 3) & 0x1F, 1)
+            has_elderly = bool(demo & 1)
+            has_children = bool(demo & 2)
+            has_injury = bool(demo & 4)
+            sev_code = raw_bytes[7]
+            lat = round(float(struct.unpack('>f', raw_bytes[8:12])[0]), 6)
+            lng = round(float(struct.unpack('>f', raw_bytes[12:16])[0]), 6)
+
+            target_status = item.get('status', 'PENDING').upper()
+            if target_status not in dict(SOSSignal.STATUS_CHOICES):
+                target_status = 'PENDING'
+
+            rssi = item.get('rssi', -70)
+            note_extra = item.get('note', '')
+
+            supplies_payload = {
+                'has_elderly': has_elderly,
+                'has_children': has_children,
+                'has_injury': has_injury,
+                'ble_rssi': rssi,
+                'carrier_device': device_id,
+                'synced_offline': True,
+                'raw_hex': hex_str[:32],
+            }
+
+            # Tìm xem đã có tín hiệu SOS này chưa (theo note chứa sos_id_int hoặc tọa độ)
+            sos_signal = SOSSignal.objects.filter(
+                Q(note__icontains=f"BLE_SOS_ID:{sos_id_int}") |
+                Q(location_lat=lat, location_lng=lng, location_source='BLE_OFFLINE')
+            ).first()
+
+            if not sos_signal:
+                sos_signal = SOSSignal.objects.create(
+                    signal_type='SOS',
+                    status=target_status,
+                    location_lat=lat,
+                    location_lng=lng,
+                    people_count=people_count,
+                    emergency_type='Cứu nạn Ngoại tuyến BLE',
+                    note=f"[BLE Offline Grid] BLE_SOS_ID:{sos_id_int}. {note_extra}".strip(),
+                    location_source='BLE_OFFLINE',
+                    verification_status='VERIFIED' if target_status == 'RESOLVED' else 'UNVERIFIED',
+                    supplies_needed=supplies_payload,
+                )
+                action = 'CREATED'
+            else:
+                if target_status == 'RESOLVED':
+                    sos_signal.status = 'RESOLVED'
+                    sos_signal.verification_status = 'VERIFIED'
+                if note_extra and note_extra not in (sos_signal.note or ''):
+                    sos_signal.note = f"{sos_signal.note}\n[Cập nhật offline]: {note_extra}".strip()
+                sos_signal.supplies_needed = {**(sos_signal.supplies_needed or {}), **supplies_payload}
+                sos_signal.save()
+                action = 'UPDATED'
+
+            synced_items.append({
+                'sos_id': str(sos_signal.id),
+                'ble_sos_id': sos_id_int,
+                'action': action,
+                'status': sos_signal.status,
+                'lat': lat,
+                'lng': lng,
+                'people_count': people_count,
+            })
+        except Exception as e:
+            logger.exception(f"Lỗi khi giải mã gói tin offline #{idx}: {e}")
+            errors.append(f"Gói tin #{idx}: Lỗi xử lý ({str(e)})")
+
+    return Response({
+        'status': 'SUCCESS',
+        'device_id': device_id,
+        'total_received': len(packets),
+        'synced_count': len(synced_items),
+        'synced_items': synced_items,
+        'errors': errors,
+    }, status=status.HTTP_200_OK if synced_items else status.HTTP_400_BAD_REQUEST)
+

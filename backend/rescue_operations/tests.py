@@ -127,3 +127,28 @@ class RoadVoteUpgradeTests(TestCase):
         rep.refresh_from_db()
         # 3 danger votes > 1 cleared vote -> should remain VERIFIED or not abruptly CLEARED
         self.assertNotEqual(rep.status, 'CLEARED')
+
+    def test_bulk_offline_sync_ble_packets(self):
+        # 16-bytes packet: Header 0x4750, SOS_ID: 88412, 4 people (elderly + injury), sev 3, lat 16.0544, lng 108.2022
+        # Hex: 47500001595C250341806F6D42D86788
+        payload = {
+            'device_id': 'cano_rescuer_03',
+            'packets': [
+                {
+                    'hex_packet': '47500001595C250341806F6D42D86788',
+                    'rssi': -64,
+                    'status': 'RESOLVED',
+                    'note': 'Đã cứu hộ an toàn bằng ca-nô số 03',
+                }
+            ]
+        }
+        resp = self.client.post('/rescue_operations/sos/bulk-offline-sync/', data=payload, content_type='application/json')
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data['status'], 'SUCCESS')
+        self.assertEqual(data['synced_count'], 1)
+        item = data['synced_items'][0]
+        self.assertEqual(item['ble_sos_id'], 88412)
+        self.assertEqual(item['status'], 'RESOLVED')
+        self.assertEqual(item['people_count'], 4)
+

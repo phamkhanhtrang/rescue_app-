@@ -274,6 +274,29 @@ const DashboardScreen = ({ navigation }) => {
               </View>
             )}
 
+            {/* ─── TÁC CHIẾN NGOẠI TUYẾN BLE (RADAR SONAR) ─── */}
+            <TouchableOpacity
+              style={styles.bleTacticalCard}
+              onPress={() => navigation.navigate('RescuerOfflineScreen')}
+              activeOpacity={0.88}
+            >
+              <View style={styles.bleTacticalIconWrap}>
+                <MaterialCommunityIcons name="radar" size={28} color="#38BDF8" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={styles.bleTacticalTitle}>RADAR CỨU NẠN NGOẠI TUYẾN</Text>
+                  <View style={styles.bleLiveBadge}>
+                    <Text style={styles.bleLiveText}>BLE GRID</Text>
+                  </View>
+                </View>
+                <Text style={styles.bleTacticalSub}>
+                  Dò tìm phao cứu sinh 0xGP, đo cự ly RSSI, kích hoạt còi hú & đồng bộ khi mất mạng.
+                </Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={22} color="#38BDF8" />
+            </TouchableOpacity>
+
             {/* ─── 2. DANH SÁCH SOS CHƯA CÓ ĐỘI TIẾP NHẬN ─── */}
             {pendingSos.length > 0 && !topActiveMission && (
               <View style={styles.sectionContainer}>
@@ -863,6 +886,55 @@ const styles = StyleSheet.create({
   },
   errorText: { color: RCOLORS.primary, fontSize: 13 },
   retryText: { color: RCOLORS.primary, fontSize: 11, fontWeight: '800', marginTop: 4 },
+
+  bleTacticalCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#0F172A',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: '#0284C7',
+    marginVertical: 4,
+    shadowColor: '#0284C7',
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  bleTacticalIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(2, 132, 199, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.4)',
+  },
+  bleTacticalTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFF',
+    letterSpacing: 0.5,
+  },
+  bleLiveBadge: {
+    backgroundColor: '#0284C7',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  bleLiveText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#FFF',
+  },
+  bleTacticalSub: {
+    fontSize: 11,
+    color: '#94A3B8',
+    marginTop: 3,
+    lineHeight: 15,
+  },
 });
 
 export default DashboardScreen;

@@ -243,14 +243,30 @@ const AlertsScreen = ({ navigation }) => {
           </View>
         </View> */}
 
-        {/* ─── 6. Offline Mode link ───────────────────────────────────────── */}
-        {/* <TouchableOpacity
+        {/* ─── 6. Offline Mode link (Phao Cứu Sinh BLE) ───────────────────── */}
+        <TouchableOpacity
           style={styles.offlineLink}
           onPress={() => navigation.navigate('OfflineModeScreen')}
+          activeOpacity={0.88}
         >
-          <Text style={styles.offlineLinkText}>📡  Chế độ Ngoại tuyến (Offline)</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+            <View style={styles.offlineIconBox}>
+              <Text style={{ fontSize: 20 }}>📡</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={styles.offlineLinkText}>PHAO CỨU SINH BLE (OFFLINE)</Text>
+                <View style={styles.bleOfflineBadge}>
+                  <Text style={styles.bleOfflineBadgeText}>0xGP MESH</Text>
+                </View>
+              </View>
+              <Text style={styles.offlineLinkSub}>
+                Cứu nạn cự ly gần không cần 4G/Wi-Fi: Tự phát gói tin nhị phân 16 bytes & nhận lệnh Ping.
+              </Text>
+            </View>
+          </View>
           <Text style={styles.offlineArrow}>›</Text>
-        </TouchableOpacity> */}
+        </TouchableOpacity>
 
       </ScrollView>
 
@@ -512,21 +528,55 @@ const styles = StyleSheet.create({
 
   // ── Offline link ───────────────────────────────
   offlineLink: {
-    backgroundColor: COLORS.bgNavy,
-    borderRadius: RADIUS.md,
+    backgroundColor: '#0F172A',
+    borderRadius: RADIUS.lg,
     padding: SPACING.base,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    borderWidth: 1.5,
+    borderColor: '#0284C7',
+    marginBottom: SPACING.md,
+    ...SHADOWS.card,
+  },
+  offlineIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(2, 132, 199, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.3)',
   },
   offlineLinkText: {
-    fontSize: FONTS.base,
-    color: COLORS.textWhite,
-    fontWeight: FONTS.medium,
+    fontSize: 12,
+    color: '#FFF',
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  bleOfflineBadge: {
+    backgroundColor: '#0284C7',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  bleOfflineBadgeText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#FFF',
+  },
+  offlineLinkSub: {
+    fontSize: 11,
+    color: '#94A3B8',
+    marginTop: 2,
+    lineHeight: 14,
   },
   offlineArrow: {
     fontSize: FONTS.xl,
-    color: 'rgba(255,255,255,0.5)',
+    color: '#38BDF8',
+    fontWeight: 'bold',
+    marginLeft: 8,
   },
 
   // ── Floating SOS ───────────────────────────────

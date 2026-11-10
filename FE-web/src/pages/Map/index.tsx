@@ -1453,8 +1453,13 @@ export default function AdminMapPage() {
                             </span>
                           </div>
 
-                          <h4 className="font-bold text-slate-900 text-sm">
-                            {sos.emergency_type || "Yêu cầu Cứu nạn SOS"}
+                          <h4 className="font-bold text-slate-900 text-sm flex items-center justify-between gap-1">
+                            <span>{sos.emergency_type || "Yêu cầu Cứu nạn SOS"}</span>
+                            {sos.location_source === 'BLE_OFFLINE' && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-black bg-cyan-100 text-cyan-800 border border-cyan-300">
+                                📡 BLE OFFLINE
+                              </span>
+                            )}
                           </h4>
 
                           <div className="mt-1 space-y-1 text-xs text-slate-600">
@@ -1726,8 +1731,13 @@ export default function AdminMapPage() {
                           </span>
                         </div>
 
-                        <h4 className="font-semibold text-slate-900 text-xs">
-                          {s.emergency_type || "Yêu cầu Cứu nạn SOS"}
+                        <h4 className="font-semibold text-slate-900 text-xs flex items-center justify-between gap-1">
+                          <span>{s.emergency_type || "Yêu cầu Cứu nạn SOS"}</span>
+                          {s.location_source === 'BLE_OFFLINE' && (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-black bg-cyan-50 text-cyan-700 border border-cyan-200">
+                              📡 BLE 0xGP
+                            </span>
+                          )}
                         </h4>
 
                         <p className="text-xs text-slate-600 font-medium mt-0.5">
