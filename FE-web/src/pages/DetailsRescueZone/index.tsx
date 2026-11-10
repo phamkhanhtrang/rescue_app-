@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import SliderBar from "../../components/SliderBar";
-import Header from "../../components/Header";
+import AdminLayout from "../../components/AdminLayout";
 import SOSDetailModal from "../../components/SOSDetailModal";
 import TeamDetailModal from "../../components/TeamDetailModal";
 import { api } from "../../services/api";
@@ -11,7 +10,7 @@ import { apiErrorMessage } from "../../utils/apiError";
 // Icons
 import { MdOutlineHealthAndSafety, MdOutlineCrisisAlert, MdOutlineWarningAmber, MdOutlineLocationOn } from 'react-icons/md';
 import { RiClipboardLine, RiBarChartGroupedLine, RiCheckboxCircleLine } from 'react-icons/ri';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, ArrowLeft } from 'lucide-react';
 
 // Leaflet
 import { MapContainer, TileLayer, Marker, Popup, Circle } from "react-leaflet";
@@ -83,7 +82,6 @@ export default function Page() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [zone, setZone] = useState<any>(null);
   const [sosList, setSosList] = useState<any[]>([]);
   const [missions, setMissions] = useState<any[]>([]);
@@ -152,47 +150,37 @@ export default function Page() {
     : [16.0544, 108.2022];
 
   return (
-    <div className="flex h-screen w-full bg-[#F8F9FA] overflow-hidden">
-      {/* Sidebar */}
-      <div className={`fixed lg:relative z-30 lg:z-auto h-full overflow-y-auto shrink-0 border-r border-slate-200 transition-transform duration-300 ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}>
-        <SliderBar />
-      </div>
-
-      {/* Main */}
-      <div className="flex-1 flex flex-col h-full overflow-y-auto min-w-0">
-        <Header onOpenSidebar={() => setSidebarOpen(true)} />
-        <div className="px-6 pt-4"><DataNotice loading={loading} error={loadError} onRetry={fetchAll} hasData={!!zone} /></div>
+    <AdminLayout>
+      <div className="space-y-6">
+        <DataNotice loading={loading} error={loadError} onRetry={fetchAll} hasData={!!zone} />
 
         {loading ? (
-          <div className="flex-1 flex items-center justify-center p-12">
+          <div className="flex items-center justify-center py-20">
             <div className="text-center space-y-3">
-              <div className="w-10 h-10 border-4 border-[#B7131A] border-t-transparent rounded-full animate-spin mx-auto" />
-              <p className="text-slate-500 text-sm font-bold">Đang tải dữ liệu khu vực...</p>
+              <div className="w-8 h-8 border-3 border-brand border-t-transparent rounded-full animate-spin mx-auto" />
+              <p className="text-slate-500 text-sm font-medium">Đang tải dữ liệu khu vực...</p>
             </div>
           </div>
         ) : !zone ? (
-          <div className="flex-1 flex items-center justify-center p-12">
-            <div className="text-center space-y-2">
-              <p className="text-2xl font-black text-slate-800 flex items-center justify-center gap-2">
-                <MdOutlineWarningAmber className="text-yellow-500 text-3xl" />
-                {loadError ? 'Không tải được khu vực cứu hộ' : 'Không tìm thấy khu vực cứu hộ'}
-              </p>
-              <p className="text-xs text-slate-500">{loadError ? 'Hãy thử tải lại dữ liệu.' : 'Khu vực không tồn tại hoặc đã bị xóa.'}</p>
-              <button onClick={() => navigate("/rescue-zone-management")} className="mt-2 text-[#005FAF] text-sm font-bold underline">
-                ← Quay lại Quản lý Vùng Cứu hộ
-              </button>
-            </div>
+          <div className="card text-center py-16 space-y-3">
+            <MdOutlineWarningAmber className="text-amber-500 text-4xl mx-auto" />
+            <p className="text-lg font-bold text-slate-800">
+              {loadError ? 'Không tải được khu vực cứu hộ' : 'Không tìm thấy khu vực cứu hộ'}
+            </p>
+            <p className="text-xs text-slate-500">{loadError ? 'Hãy thử tải lại dữ liệu.' : 'Khu vực không tồn tại hoặc đã bị xóa.'}</p>
+            <button onClick={() => navigate("/rescue-zone-management")} className="text-brand text-sm font-semibold hover:underline">
+              ← Quay lại Quản lý Vùng Cứu hộ
+            </button>
           </div>
         ) : (
-          <div className="px-6 md:px-10 pb-16 space-y-8">
-
+          <div className="space-y-6">
             {/* ── BREADCRUMB & BACK ── */}
-            <div className="pt-6 flex items-center justify-between">
+            <div className="flex items-center justify-between">
               <button
                 onClick={() => navigate(-1)}
-                className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-[#B7131A] transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-brand transition-colors cursor-pointer"
               >
-                <span>←</span>
+                <ArrowLeft size={14} />
                 <span>Quay lại</span>
               </button>
             </div>
@@ -200,23 +188,23 @@ export default function Page() {
             {/* ── TIÊU ĐỀ VÙNG CỨU HỘ ── */}
             <div>
               <div className="flex flex-wrap items-center gap-2 mb-2">
-                <span className="bg-slate-100 text-slate-500 text-[10px] font-black px-3 py-1 rounded-full font-mono">
+                <span className="badge bg-slate-100 text-slate-600 font-mono">
                   ID: {zone.id?.slice(0, 8)}…
                 </span>
-                <span className="bg-blue-50 text-[#005FAF] text-[10px] font-black px-3 py-1 rounded-full">
+                <span className="badge bg-blue-50 text-blue-700">
                   🗺 {zone.sector_code || 'N/A'}
                 </span>
-                <span className={`${sev.bgCard} ${sev.textColor} text-[10px] font-black px-3 py-1 rounded-full`}>
+                <span className={`badge ${sev.bgCard} ${sev.textColor}`}>
                   {sev.label}
                 </span>
                 {needsHelpCount > 0 && (
-                  <span className="bg-red-50 text-[#B7131A] text-[10px] font-black px-2 py-1 rounded-lg border border-red-200 flex items-center gap-1">
+                  <span className="badge bg-red-50 text-brand border border-red-200 flex items-center gap-1">
                     <MdOutlineCrisisAlert className="text-sm" />
                     {needsHelpCount} đội cần hỗ trợ
                   </span>
                 )}
               </div>
-              <h1 className="text-3xl md:text-4xl lg:text-5xl font-black text-slate-900 leading-tight">
+              <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">
                 {zone.name}
               </h1>
             </div>
@@ -226,7 +214,7 @@ export default function Page() {
               
               {/* Bản đồ hình vuông ở góc phần tư trên trái */}
               <div className="lg:col-span-4">
-                <div className="w-full aspect-square rounded-3xl overflow-hidden border border-slate-200 shadow-sm relative bg-white">
+                <div className="w-full aspect-square rounded-card overflow-hidden border border-slate-200 shadow-sm relative bg-white">
                   {hasCoordinates ? (
                     <MapContainer
                       center={zoneCenter}
@@ -278,7 +266,7 @@ export default function Page() {
                   ) : (
                     <div className="h-full w-full flex flex-col items-center justify-center p-4 text-center bg-slate-50">
                       <MdOutlineLocationOn className="text-3xl text-slate-300 mb-1" />
-                      <p className="text-xs font-bold text-slate-400">Chưa có tọa độ GPS</p>
+                      <p className="text-xs font-semibold text-slate-400">Chưa có tọa độ GPS</p>
                     </div>
                   )}
                 </div>
@@ -287,17 +275,17 @@ export default function Page() {
               {/* Phần bên phải: Thẻ mức độ khẩn cấp + 4 Thẻ thống kê KPI */}
               <div className="lg:col-span-8 flex flex-col justify-between gap-4">
                 {/* Risk severity card */}
-                <div className={`${sev.bgCard} border border-current/10 rounded-3xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4`}>
+                <div className={`${sev.bgCard} border border-current/10 rounded-card p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4`}>
                   <div>
-                    <p className={`${sev.textColor} text-[10px] font-black uppercase tracking-widest mb-1`}>Mức độ khẩn cấp</p>
-                    <p className={`${sev.textColor} text-3xl font-black`}>{LEVEL_MAP[zone.severity || "N/A"]}</p>
-                    <p className="text-slate-500 text-xs mt-1 max-w-xl leading-relaxed">
+                    <p className={`${sev.textColor} text-xs font-semibold uppercase tracking-wider mb-1`}>Mức độ khẩn cấp</p>
+                    <p className={`${sev.textColor} text-2xl font-bold`}>{LEVEL_MAP[zone.severity || "N/A"]}</p>
+                    <p className="text-slate-600 text-xs mt-1.5 max-w-xl leading-relaxed">
                       {zone.description || "Chưa có mô tả chi tiết cho vùng cứu hộ này."}
                     </p>
                   </div>
                   <div className="shrink-0 sm:text-right">
-                    <span className="text-slate-400 text-[10px] font-bold flex items-center sm:justify-end gap-1">
-                      <MdOutlineLocationOn className="text-xs" />
+                    <span className="text-slate-500 text-xs font-medium flex items-center sm:justify-end gap-1">
+                      <MdOutlineLocationOn className="text-sm" />
                       {hasCoordinates
                         ? `${parseFloat(zone.location_lat).toFixed(5)}, ${parseFloat(zone.location_lng).toFixed(5)}`
                         : 'Chưa có tọa độ'}
@@ -307,8 +295,8 @@ export default function Page() {
 
                 {/* 4 Stat Cards */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  <StatCard label="Tổng SOS" total={sosList.length} unit="tín hiệu" color="text-[#B7131A]" />
-                  <StatCard label="Đội Cứu Hộ Có Mặt" total={zone.rescuers_needed || 0} unit="đội" color="text-[#005FAF]" />
+                  <StatCard label="Tổng SOS" total={sosList.length} unit="tín hiệu" color="text-brand" />
+                  <StatCard label="Đội Cứu Hộ Có Mặt" total={zone.rescuers_needed || 0} unit="đội" color="text-blue-700" />
                   <StatCard label="Người Bị Ảnh Hưởng" value={zone.people_affected || 0} total={null} unit="người" color="text-orange-600" />
                   <StatCard
                     label="Ưu Tiên AI"
@@ -326,17 +314,17 @@ export default function Page() {
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
 
               {/* Active Units (from real missions) */}
-              <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="card !p-0 overflow-hidden">
                 <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
                   <div>
-                    <h2 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                      <MdOutlineHealthAndSafety className="text-red-600 text-lg" />
+                    <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                      <MdOutlineHealthAndSafety className="text-brand text-lg" />
                       Đội Cứu Hộ
                     </h2>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">{activeMissions.length} / {zone.rescuers_needed || 0} đội theo yêu cầu</p>
+                    <p className="text-xs text-slate-400 font-medium mt-0.5">{activeMissions.length} / {zone.rescuers_needed || 0} đội theo yêu cầu</p>
                   </div>
                   {needsHelpCount > 0 && (
-                    <span className="bg-red-50 text-[#B7131A] text-[10px] font-black px-2 py-1 rounded-lg border border-red-200 flex items-center gap-1">
+                    <span className="badge bg-red-50 text-brand border border-red-200 flex items-center gap-1">
                       <MdOutlineCrisisAlert className="text-sm" />
                       {needsHelpCount} cần hỗ trợ
                     </span>
@@ -440,10 +428,10 @@ export default function Page() {
               <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
                 <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
                   <div>
-                    <h2 className="text-sm font-black text-slate-900">Tín Hiệu SOS</h2>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">{sosList.length} tín hiệu tổng</p>
+                    <h2 className="text-sm font-bold text-slate-900">Tín Hiệu SOS</h2>
+                    <p className="text-xs text-slate-400 font-medium mt-0.5">{sosList.length} tín hiệu tổng</p>
                   </div>
-                  <span className="bg-red-50 text-[#B7131A] text-[10px] font-black px-2 py-1 rounded-lg border border-red-200">
+                  <span className="badge bg-red-50 text-brand border border-red-200">
                     {sosActive} chưa xử lý
                   </span>
                 </div>
@@ -459,10 +447,10 @@ export default function Page() {
                     <button
                       key={tab.key}
                       onClick={() => setSosFilter(tab.key as any)}
-                      className={`px-3 py-1 rounded-xl font-bold transition-all text-xs cursor-pointer ${
+                      className={`px-3 py-1.5 rounded-btn font-medium transition-colors text-xs cursor-pointer ${
                         sosFilter === tab.key
-                          ? 'bg-slate-900 text-white shadow-xs'
-                          : 'text-slate-500 hover:bg-slate-200/70'
+                          ? 'bg-slate-900 text-white'
+                          : 'text-slate-600 hover:bg-slate-200/60'
                       }`}
                     >
                       {tab.label}
@@ -471,9 +459,9 @@ export default function Page() {
                 </div>
 
                 {/* SOS List (Bấm vào xem chi tiết) */}
-                <div className="divide-y divide-slate-50 max-h-96 overflow-y-auto">
+                <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto">
                   {filteredSosList.length === 0 ? (
-                    <div className="px-6 py-10 text-center text-slate-400 text-sm font-bold">
+                    <div className="px-6 py-10 text-center text-slate-400 text-sm font-medium">
                       Không có tín hiệu SOS nào cho bộ lọc này.
                     </div>
                   ) : (
@@ -488,52 +476,52 @@ export default function Page() {
                             setSelectedSosId(s.id);
                             setIsSosModalOpen(true);
                           }}
-                          className={`flex items-start gap-3 px-6 py-4 transition-colors cursor-pointer group ${
+                          className={`flex items-start gap-3 px-6 py-3.5 transition-colors cursor-pointer group ${
                             isResolved
                               ? 'bg-emerald-50/20 hover:bg-emerald-50/50'
                               : isPending
                               ? 'bg-amber-50/25 hover:bg-amber-50/60'
-                              : 'hover:bg-slate-50/80'
+                              : 'hover:bg-slate-50'
                           }`}
                         >
-                          <div className={`w-2.5 h-2.5 rounded-full ${ss.dot} shrink-0 mt-1.5 ${isPending ? 'ring-4 ring-amber-200 animate-pulse' : ''}`} />
+                          <div className={`w-2 h-2 rounded-full ${ss.dot} shrink-0 mt-2`} />
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between gap-2">
                               <div className="flex items-center gap-2 truncate">
-                                <p className={`text-sm font-black truncate transition-colors ${
-                                  isResolved ? 'text-slate-800' : 'text-slate-900 group-hover:text-[#B7131A]'
+                                <p className={`text-sm font-semibold truncate transition-colors ${
+                                  isResolved ? 'text-slate-700' : 'text-slate-900 group-hover:text-brand'
                                 }`}>
                                   {s.contact_name || s.citizen_name || 'Người dân'} · {s.signal_type || 'SOS'}
                                 </p>
                                 {isResolved ? (
-                                  <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black px-2 py-0.5 rounded shrink-0">
+                                  <span className="badge bg-emerald-100 text-emerald-800">
                                     ✓ ĐÃ XỬ LÝ XONG
                                   </span>
                                 ) : isPending ? (
-                                  <span className="bg-amber-100 text-amber-800 text-[10px] font-black px-2 py-0.5 rounded shrink-0">
+                                  <span className="badge bg-amber-100 text-amber-800">
                                     ⚠️ CHƯA XỬ LÝ
                                   </span>
                                 ) : (
-                                  <span className="bg-blue-100 text-blue-800 text-[10px] font-black px-2 py-0.5 rounded shrink-0">
+                                  <span className="badge bg-blue-100 text-blue-800">
                                     🚨 ĐANG ỨNG CỨU
                                   </span>
                                 )}
                               </div>
                               <div className="flex items-center gap-1 shrink-0">
-                                <span className="text-[10px] text-slate-400 font-bold">
+                                <span className="text-xs text-slate-400">
                                   {new Date(s.sent_at).toLocaleString('vi-VN', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}
                                 </span>
-                                <ChevronRight size={14} className="text-slate-300 group-hover:text-[#B7131A] transition-colors" />
+                                <ChevronRight size={14} className="text-slate-300 group-hover:text-brand transition-colors" />
                               </div>
                             </div>
-                            <p className="text-[10px] text-slate-500 mt-0.5">
+                            <p className="text-xs text-slate-500 mt-0.5">
                               {ss.label}
                               {s.contact_phone ? ` · 📞 ${s.contact_phone}` : ''}
                               {s.emergency_type ? ` · ${s.emergency_type}` : ''}
                               {s.people_count ? ` · ${s.people_count} người` : ''}
-                              {isResolved && s.assigned_rescuer_name ? ` · 🧑‍🚒 Đã được cứu bởi: ${s.assigned_rescuer_name}` : ''}
+                              {isResolved && s.assigned_rescuer_name ? ` · 🧑‍🚒 Đã cứu: ${s.assigned_rescuer_name}` : ''}
                             </p>
-                            {s.note && <p className="text-[11px] text-slate-600 mt-1 line-clamp-2">{s.note}</p>}
+                            {s.note && <p className="text-xs text-slate-600 mt-1 line-clamp-2">{s.note}</p>}
                           </div>
                         </div>
                       );
@@ -544,12 +532,12 @@ export default function Page() {
             </div>
 
             {/* ── ZONE META INFO ── */}
-            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-              <h2 className="text-sm font-black text-slate-900 mb-5 flex items-center gap-2">
-                <RiClipboardLine className="text-red-600 text-base" />
+            <div className="card space-y-4">
+              <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <RiClipboardLine className="text-brand text-base" />
                 Thông Tin Vùng Cứu Hộ
               </h2>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                 <MetaItem label="Mã Sector" value={zone.sector_code || 'N/A'} />
                 <MetaItem label="Trạng thái" value={STATUS[zone.status] || 'N/A'} />
                 <MetaItem label="Loại sự cố" value={zone.incident_type || 'N/A'} />
@@ -571,17 +559,17 @@ export default function Page() {
                 count: sosList.filter(s => s.status === key).length
               })).filter(x => x.count > 0);
               return (
-                <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-                  <h2 className="text-sm font-black text-slate-900 mb-5 flex items-center gap-2">
-                    <RiBarChartGroupedLine className="text-red-600 text-base" />
+                <div className="card space-y-4">
+                  <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <RiBarChartGroupedLine className="text-brand text-base" />
                     Phân Loại Tín Hiệu SOS
                   </h2>
-                  <div className="flex flex-wrap gap-3">
+                  <div className="flex flex-wrap gap-2.5">
                     {byStatus.map(b => (
-                      <div key={b.key} className="flex items-center gap-2 bg-slate-50 px-4 py-2 rounded-xl border border-slate-100">
+                      <div key={b.key} className="flex items-center gap-2 bg-slate-50 px-3.5 py-1.5 rounded-btn border border-slate-200">
                         <div className={`w-2 h-2 rounded-full ${b.dot}`} />
-                        <span className="text-xs font-black text-slate-700">{b.label}</span>
-                        <span className="text-xs font-black text-slate-400">{b.count}</span>
+                        <span className="text-xs font-medium text-slate-700">{b.label}</span>
+                        <span className="text-xs font-semibold text-slate-500">{b.count}</span>
                       </div>
                     ))}
                   </div>
@@ -612,26 +600,26 @@ export default function Page() {
         isOpen={Boolean(selectedRescuerId)}
         onClose={() => setSelectedRescuerId(null)}
       />
-    </div>
+    </AdminLayout>
   );
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 const StatCard = ({ label, value, total, unit, color }: any) => (
-  <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5">
-    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{label}</p>
+  <div className="stat-card">
+    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">{label}</p>
     <div className="flex items-baseline gap-1">
-      <span className={`text-3xl font-black ${color}`}>{total}</span>
-      <span className={`text-3xl font-black ${color}`}>{value}</span>
+      {total !== null && total !== undefined && <span className={`text-2xl font-bold ${color}`}>{total}</span>}
+      {value !== null && value !== undefined && <span className={`text-2xl font-bold ${color}`}>{value}</span>}
     </div>
-    <p className="text-[10px] text-slate-400 font-bold mt-1">{unit}</p>
+    <p className="text-xs text-slate-400 font-medium mt-0.5">{unit}</p>
   </div>
 );
 
 const MetaItem = ({ label, value }: any) => (
-  <div className="bg-slate-50 rounded-2xl p-4">
-    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
-    <p className="text-sm font-black text-slate-800">{value}</p>
+  <div className="bg-slate-50 rounded-btn p-3.5 border border-slate-100">
+    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">{label}</p>
+    <p className="text-sm font-semibold text-slate-800 truncate">{value}</p>
   </div>
 );

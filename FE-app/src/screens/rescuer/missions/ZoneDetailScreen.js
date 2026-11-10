@@ -269,13 +269,6 @@ const styles = StyleSheet.create({
   demandDesc: { fontSize: RFONTS.sm, color: RCOLORS.textSecondary, lineHeight: 18 },
   demandUrgent: { fontWeight: RFONTS.bold, color: RCOLORS.primary },
 
-  blockchainCard: { marginHorizontal: RLAYOUT.screenPadding, backgroundColor: '#E8F5E9', borderRadius: RRADIUS.md, padding: RSPACING.base, gap: RSPACING.sm, borderLeftWidth: 4, borderLeftColor: RCOLORS.statusGreen },
-  blockchainLabel: { fontSize: RFONTS.xs, fontWeight: RFONTS.bold, color: RCOLORS.statusGreen, letterSpacing: 1 },
-  blockchainRow: { flexDirection: 'row', alignItems: 'center', gap: RSPACING.sm },
-  blockchainIcon: { fontSize: 18 },
-  blockchainHash: { fontSize: RFONTS.sm, fontWeight: RFONTS.medium, color: RCOLORS.textPrimary },
-  blockchainVerified: { fontSize: RFONTS.sm, color: RCOLORS.statusGreen, fontWeight: RFONTS.semiBold, marginTop: 2 },
-
   teamsSection: { marginHorizontal: RLAYOUT.screenPadding, gap: RSPACING.sm },
   teamsLabel: { fontSize: RFONTS.xs, fontWeight: RFONTS.bold, color: RCOLORS.textSecondary, letterSpacing: 1 },
   teamsSub: { fontSize: RFONTS.sm, color: RCOLORS.textSecondary },

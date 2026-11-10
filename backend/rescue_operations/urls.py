@@ -22,4 +22,12 @@ urlpatterns = [
     # SOS Images
     path('sos/<uuid:sos_id>/images/', flow.image_upload, name='sos-image-upload'),
     path('get-route/', views.get_rescue_route_api, name='get-route'),
+
+    # Báo cáo hiện trường từ người dân & Vote xác thực (T2 + T3 + T4 + S2 + S4)
+    path('field-reports/', views.field_report_list, name='field-report-list'),
+    path('field-reports/preview-road/', views.preview_road_segment, name='field-report-preview-road'),
+    path('field-reports/create/', views.field_report_create, name='field-report-create'),
+    path('field-reports/<uuid:pk>/', views.field_report_detail, name='field-report-detail'),
+    path('field-reports/<uuid:pk>/vote/', views.field_report_vote, name='field-report-vote'),
+    path('safety-check/', views.safety_check, name='safety-check'),
 ]

@@ -2,14 +2,14 @@ import { useFocusEffect } from '@react-navigation/native';
 /**
  * src/screens/rescuer/profile/RescuerProfileEdit.js
  * ─────────────────────────────────────────────────────────────────────────────
- * Màn hình chỉnh sửa hồ sơ Cứu hộ viên.
+ * Màn hình chỉnh sửa hồ sơ Cứu hộ viên (Light Theme đồng bộ).
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  SafeAreaView, TextInput, Alert, ActivityIndicator,
+  SafeAreaView, TextInput, ActivityIndicator,
 } from 'react-native';
 import { useAuth } from '../../../context/AuthContext';
 import API from '../../../services/api';
@@ -40,38 +40,40 @@ const RescuerProfileEdit = ({ navigation }) => {
   const [address, setAddress] = useState(userInfo?.address || '');
   const [rank, setRank] = useState(userInfo?.profile?.rank || '');
   const [specialty, setSpecialty] = useState(userInfo?.profile?.specialty || '');
-  useFocusEffect(React.useCallback(() => {
-    if (!userInfo?.id) return;
-    let alive = true;
-    setProfileReady(false); setProfileError('');
 
-    const fetchProfile = async () => {
-      try {
-        // 1. Lấy dữ liệu (response chính là profileData)
-        const profileData = await API.rescuers.getProfile(userInfo.id);
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!userInfo?.id) return;
+      let alive = true;
+      setProfileReady(false);
+      setProfileError('');
 
-
-        // 2. Kiểm tra và set trực tiếp từ profileData (không dùng .profile)
-        if (profileData && alive) {
-          setProfileReady(true);
-           
-          setFullName(profileData.full_name || '');
-          setIdNumber(profileData.id_number || '');
-          setUnitName(profileData.unit_name || '');
-          setRank(profileData.rank || '');
-          setTeamCode(profileData.team_code || '');
-          setPhone(profileData.phone || '');
-          setAddress(profileData.address || '');
-          setSpecialty(profileData.specialty || '');
+      const fetchProfile = async () => {
+        try {
+          const profileData = await API.rescuers.getProfile(userInfo.id);
+          if (profileData && alive) {
+            setProfileReady(true);
+            setFullName(profileData.full_name || '');
+            setIdNumber(profileData.id_number || '');
+            setUnitName(profileData.unit_name || '');
+            setRank(profileData.rank || '');
+            setTeamCode(profileData.team_code || '');
+            setPhone(profileData.phone || '');
+            setAddress(profileData.address || '');
+            setSpecialty(profileData.specialty || '');
+          }
+        } catch (error) {
+          if (alive) setProfileError(error?.message || 'Không tải được hồ sơ.');
         }
-      } catch (error) {
-        if (alive) setProfileError(error?.message || 'Không tải được hồ sơ.');
-      }
-    };
+      };
 
-    fetchProfile();
-    return () => { alive = false; };
-  }, [userInfo?.id, retry]));
+      fetchProfile();
+      return () => {
+        alive = false;
+      };
+    }, [userInfo?.id, retry])
+  );
+
   const handleSave = async () => {
     if (!profileReady || loading) return;
 
@@ -87,26 +89,26 @@ const RescuerProfileEdit = ({ navigation }) => {
 
     setLoading(true);
     try {
-      // Cấu trúc dữ liệu phẳng để khớp với RescuerProfileSerializer
       const payload = {
         full_name: fullName,
         id_number: idNumber,
         unit_name: unitName,
         rank: rank,
         team_code: teamCode,
-        phone, address,
+        phone,
+        address,
         specialty: specialty,
       };
 
       const response = await API.rescuers.updateProfile(userInfo.id, payload);
 
       if (response) {
-        // Cập nhật lại context để các màn hình khác (như ProfileScreen) nhận dữ liệu mới ngay lập tức
         if (updateUserInfo) {
           const updatedUser = {
             ...userInfo,
             full_name: response.full_name,
-            phone: response.phone, address: response.address,
+            phone: response.phone,
+            address: response.address,
             profile: { ...(userInfo.profile || {}), ...response },
             rescuer_profile: { ...(userInfo.rescuer_profile || {}), ...response },
           };
@@ -115,7 +117,7 @@ const RescuerProfileEdit = ({ navigation }) => {
         navigation.goBack();
       }
     } catch (error) {
-      console.error("Lỗi cập nhật hồ sơ:", error);
+      console.error('Lỗi cập nhật hồ sơ:', error);
       setModalConfig({
         visible: true,
         type: 'error',
@@ -129,11 +131,20 @@ const RescuerProfileEdit = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <RescuerHeader dark showBack onBack={() => navigation.goBack()} title="CHỈNH SỬA HỒ SƠ" />
+      <RescuerHeader showBack onBack={() => navigation.goBack()} title="CHỈNH SỬA HỒ SƠ" />
 
-      <ScrollView contentContainerStyle={styles.content}>
-          {!profileReady && <Text style={{ color: '#C62828', padding: 12 }}>{profileError || 'Đang tải hồ sơ…'}</Text>}
-          {!!profileError && <TouchableOpacity onPress={() => setRetry(v => v + 1)}><Text style={{ color: '#1976D2', padding: 12 }}>Thử tải lại hồ sơ</Text></TouchableOpacity>}
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {!profileReady && (
+          <Text style={{ color: RCOLORS.primary, padding: 8, fontSize: 13, fontWeight: '600' }}>
+            {profileError || 'Đang tải thông tin hồ sơ...'}
+          </Text>
+        )}
+        {!!profileError && (
+          <TouchableOpacity onPress={() => setRetry(v => v + 1)}>
+            <Text style={{ color: '#1D4ED8', padding: 8, fontWeight: '700' }}>Thử tải lại hồ sơ</Text>
+          </TouchableOpacity>
+        )}
+
         <View style={styles.formCard}>
           <Text style={styles.sectionTitle}>THÔNG TIN CƠ BẢN</Text>
 
@@ -156,7 +167,7 @@ const RescuerProfileEdit = ({ navigation }) => {
             label="TỔ CHỨC / ĐƠN VỊ"
             value={unitName}
             onChangeText={setUnitName}
-            placeholder="Ví dụ: Đội cứu hộ Hà Nội"
+            placeholder="Ví dụ: Đội cứu hộ Đà Nẵng"
           />
 
           <InputGroup
@@ -166,21 +177,59 @@ const RescuerProfileEdit = ({ navigation }) => {
             placeholder="Ví dụ: Đội trưởng, Thành viên..."
           />
 
-          <InputGroup label="SỐ ĐIỆN THOẠI" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
-          <InputGroup label="ĐỊA CHỈ" value={address} onChangeText={setAddress} />
-          <InputGroup label="SỐ HIỆU ĐỘI (TỰ KHAI)" value={teamCode} onChangeText={setTeamCode} />
+          <InputGroup
+            label="SỐ ĐIỆN THOẠI"
+            value={phone}
+            onChangeText={setPhone}
+            placeholder="Nhập số điện thoại"
+            keyboardType="phone-pad"
+          />
+
+          <InputGroup
+            label="ĐỊA CHỈ"
+            value={address}
+            onChangeText={setAddress}
+            placeholder="Địa chỉ thường trú / địa bàn hoạt động"
+          />
+
+          <InputGroup
+            label="SỐ HIỆU ĐỘI (TỰ KHAI)"
+            value={teamCode}
+            onChangeText={setTeamCode}
+            placeholder="Mã đội hoặc số hiệu cano/xuồng"
+          />
+
           <Text style={styles.fieldLabel}>CHUYÊN MÔN CHÍNH</Text>
-          {Object.entries({ SEARCH_RESCUE: 'Tìm kiếm & cứu nạn', MEDICAL: 'Y tế', LOGISTICS: 'Hậu cần', COMMAND: 'Chỉ huy' }).map(([key, label]) => (
-            <TouchableOpacity key={key} onPress={() => setSpecialty(key)} style={[styles.input, { justifyContent: 'center', borderColor: specialty === key ? '#42A5F5' : '#455A64' }]}>
-              <Text style={{ color: '#FFF' }}>{specialty === key ? '● ' : '○ '}{label}</Text>
-            </TouchableOpacity>
-          ))}
+          <View style={styles.specialtyContainer}>
+            {Object.entries({
+              SEARCH_RESCUE: 'Tìm kiếm & cứu nạn',
+              MEDICAL: 'Y tế & Sơ cứu',
+              LOGISTICS: 'Hậu cần & Tiếp tế',
+              COMMAND: 'Chỉ huy & Điều phối',
+            }).map(([key, label]) => {
+              const active = specialty === key;
+              return (
+                <TouchableOpacity
+                  key={key}
+                  onPress={() => setSpecialty(key)}
+                  style={[styles.specialtyItem, active && styles.specialtyItemActive]}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.specialtyText, active && styles.specialtyTextActive]}>
+                    {active ? '● ' : '○ '}
+                    {label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </View>
 
         <TouchableOpacity
-          style={[styles.saveButton, loading && styles.disabledButton]}
+          style={[styles.saveButton, (loading || !profileReady) && styles.disabledButton]}
           onPress={handleSave}
           disabled={loading || !profileReady}
+          activeOpacity={0.85}
         >
           {loading ? (
             <ActivityIndicator color="#FFF" />
@@ -210,7 +259,7 @@ const InputGroup = ({ label, value, onChangeText, placeholder, keyboardType, mul
       value={value}
       onChangeText={onChangeText}
       placeholder={placeholder}
-      placeholderTextColor={RCOLORS.textHint}
+      placeholderTextColor="#94A3B8"
       keyboardType={keyboardType}
       multiline={multiline}
     />
@@ -218,39 +267,46 @@ const InputGroup = ({ label, value, onChangeText, placeholder, keyboardType, mul
 );
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: RCOLORS.bgDark },
-  content: { padding: RSPACING.base, gap: RSPACING.lg },
+  safe: { flex: 1, backgroundColor: '#F8FAFC' },
+  content: { padding: RSPACING.base, paddingBottom: 40, gap: RSPACING.lg },
 
   formCard: {
-    backgroundColor: RCOLORS.bgNavyLight,
+    backgroundColor: '#FFFFFF',
     borderRadius: RRADIUS.md,
     padding: RSPACING.base,
-    gap: 16
+    gap: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
   },
   sectionTitle: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '900',
     color: RCOLORS.primary,
-    letterSpacing: 1.5,
-    marginBottom: 4
+    letterSpacing: 1,
+    marginBottom: 4,
   },
 
   fieldGroup: { gap: 6 },
   fieldLabel: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '800',
-    color: RCOLORS.textHint,
-    letterSpacing: 1
+    color: '#475569',
+    letterSpacing: 0.5,
   },
   input: {
-    backgroundColor: RCOLORS.bgDark,
+    backgroundColor: '#F8FAFC',
     borderRadius: RRADIUS.sm,
     height: 48,
-    paddingHorizontal: 12,
-    color: RCOLORS.textWhite,
+    paddingHorizontal: 14,
+    color: '#0F172A',
     fontSize: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    borderColor: '#CBD5E1',
   },
   inputMultiline: {
     height: 80,
@@ -258,25 +314,49 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
 
+  specialtyContainer: { gap: 8 },
+  specialtyItem: {
+    height: 44,
+    paddingHorizontal: 14,
+    borderRadius: RRADIUS.sm,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    justifyContent: 'center',
+  },
+  specialtyItemActive: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#1D4ED8',
+  },
+  specialtyText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  specialtyTextActive: {
+    color: '#1D4ED8',
+    fontWeight: '800',
+  },
+
   saveButton: {
     backgroundColor: RCOLORS.primary,
-    height: 56,
+    height: 52,
     borderRadius: RRADIUS.md,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 10,
+    marginTop: 8,
+    elevation: 3,
     shadowColor: RCOLORS.primary,
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowRadius: 6,
   },
-  disabledButton: { opacity: 0.7 },
+  disabledButton: { opacity: 0.6 },
   saveButtonText: {
     color: '#FFF',
-    fontSize: 15,
-    fontWeight: '900',
-    letterSpacing: 1
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
 });
 

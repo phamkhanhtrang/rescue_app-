@@ -8,47 +8,47 @@
 
 export const RCOLORS = {
   // ── Thương hiệu ────────────────────────────────
-  primary:       '#E53935',   // Đỏ khẩn cấp (SOS, DEPLOY, NGUY CẤP)
-  primaryDark:   '#B71C1C',
-  primaryLight:  '#FFEBEE',
+  primary:       '#B7131A',   // Đỏ khẩn cấp (SOS, Ban Chỉ Huy, NGUY CẤP)
+  primaryDark:   '#8B0E13',
+  primaryLight:  '#FDEAEA',
 
   // ── Nền ────────────────────────────────────────
-  bgApp:         '#F4F5F7',   // Nền toàn ứng dụng (xám nhẹ)
+  bgApp:         '#F8F9FA',   // Nền toàn ứng dụng
   bgWhite:       '#FFFFFF',
-  bgDark:        '#0D1A2D',   // Header tối, bản đồ đêm
-  bgNavy:        '#112240',   // Card tối command center
-  bgNavyLight:   '#1A3050',   // Card navy nhạt hơn
-  bgTeal:        '#00695C',   // AI insight (teal xanh đậm)
-  bgBlue:        '#1565C0',   // Team blue accent
+  bgDark:        '#0F172A',   // Header tối, bản đồ đêm
+  bgNavy:        '#1E293B',   // Card tối command center
+  bgNavyLight:   '#334155',   // Card navy nhạt hơn
+  bgTeal:        '#0F766E',   // Hỗ trợ tác chiến
+  bgBlue:        '#1D4ED8',   // Blue accent
 
   // ── Văn bản ────────────────────────────────────
-  textPrimary:   '#0D1A2D',
-  textSecondary: '#546E7A',
-  textHint:      '#B0BEC5',
+  textPrimary:   '#0F172A',
+  textSecondary: '#64748B',
+  textHint:      '#94A3B8',
   textWhite:     '#FFFFFF',
-  textBlue:      '#1565C0',
-  textTeal:      '#00BCD4',
-  textRed:       '#E53935',
+  textBlue:      '#1D4ED8',
+  textTeal:      '#0F766E',
+  textRed:       '#B7131A',
 
   // ── Trạng thái ─────────────────────────────────
-  statusGreen:   '#43A047',
-  statusOrange:  '#FB8C00',
-  statusRed:     '#E53935',
-  statusBlue:    '#1565C0',
-  statusPurple:  '#7B1FA2',
+  statusGreen:   '#16A34A',
+  statusOrange:  '#EA580C',
+  statusRed:     '#B7131A',
+  statusBlue:    '#1D4ED8',
+  statusPurple:  '#7C3AED',
 
   // ── Độ thiếu hụt nhân lực ─────────────────────
-  urgentRed:     '#E53935',   // THIẾU X - CẦN GẤP
-  urgentOrange:  '#FB8C00',   // Cảnh báo
-  sufficientGreen:'#43A047',  // ĐỦ QUÂN SỐ
+  urgentRed:     '#B7131A',   // THIẾU X - CẦN GẤP
+  urgentOrange:  '#EA580C',   // Cảnh báo
+  sufficientGreen:'#16A34A',  // ĐỦ QUÂN SỐ
 
   // ── UI ─────────────────────────────────────────
-  border:        '#DDE3ED',
-  borderDark:    '#263248',
-  shadow:        'rgba(13,26,45,0.12)',
-  shadowRed:     'rgba(229,57,53,0.35)',
-  overlay:       'rgba(13,26,45,0.65)',
-  blockchain:    '#00BCD4',
+  border:        '#E2E8F0',
+  borderDark:    '#334155',
+  shadow:        'rgba(15,23,42,0.08)',
+  shadowRed:     'rgba(183,19,26,0.35)',
+  overlay:       'rgba(15,23,42,0.65)',
+  blockchain:    '#1D4ED8',
 };
 
 export const RFONTS = {
@@ -102,7 +102,7 @@ export const RSHADOWS = {
     elevation: 6,
   },
   redGlow: {
-    shadowColor: '#E53935',
+    shadowColor: '#B7131A',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 12,

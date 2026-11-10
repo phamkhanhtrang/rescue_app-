@@ -78,8 +78,8 @@ const OfflineModeScreen = ({ navigation }) => {
         {/* ─── 2. Blockchain stored card ───────────────────────────────────── */}
         <View style={styles.storedCard}>
           <View style={styles.storedHeader}>
-            <Text style={styles.storedIcon}>⛓</Text>
-            <Text style={styles.storedLabel}>BLOCKCHAIN VERIFIED</Text>
+            <Text style={styles.storedIcon}>💾</Text>
+            <Text style={styles.storedLabel}>LƯU TRỮ CỤC BỘ AN TOÀN</Text>
           </View>
           <Text style={styles.storedTitle}>SOS đã được lưu cục bộ</Text>
           <Text style={styles.storedDesc}>
@@ -95,9 +95,9 @@ const OfflineModeScreen = ({ navigation }) => {
             desc="Đồng quét tín hiệu lên mạng lưới..."
           />
           <FeatureItem
-            icon="🤖"
-            title="AI Guardian"
-            desc="Hỗ trợ offline vẫn khai thác dữ liệu lịch sử."
+            icon="🛡️"
+            title="Hỗ trợ ngoại tuyến"
+            desc="Hệ thống tự động duy trì dữ liệu bản đồ và hướng dẫn sinh tồn."
           />
         </View>
 
@@ -107,7 +107,7 @@ const OfflineModeScreen = ({ navigation }) => {
 
           <StatusRow icon="📍" label="Vị trí GPS" sub="ĐÃ CHÍNH XÁC / ĐANG THEO DÕI" ok />
           <View style={styles.divider} />
-          <StatusRow icon="🔐" label="Mã hóa Blockchain" sub="BẢO MẬT ĐA TẦNG" ok />
+          <StatusRow icon="🔐" label="Mã hóa dữ liệu thiết bị" sub="LƯU TRỮ BẢO MẬT" ok />
         </View>
 
         {/* ─── 5. Offline SOS button ───────────────────────────────────────── */}
@@ -208,11 +208,11 @@ const styles = StyleSheet.create({
 
   // ── Stored card ────────────────────────────────
   storedCard: {
-    backgroundColor: 'rgba(11,94,117,0.5)',
+    backgroundColor: 'rgba(30, 41, 59, 0.7)',
     borderRadius: RADIUS.lg,
     padding: SPACING.base,
     borderWidth: 1,
-    borderColor: COLORS.bgTeal,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
     gap: SPACING.sm,
   },
   storedHeader: {

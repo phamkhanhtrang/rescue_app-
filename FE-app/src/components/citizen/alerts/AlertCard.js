@@ -75,6 +75,15 @@ const SEVERITY_CONFIG = {
 };
 
 
+const cleanAlertText = (str) => {
+  if (!str) return '';
+  return String(str)
+    .replace(/\bOAN TOÀN\b/gi, 'AN TOÀN')
+    .replace(/Zone\s*AI\s*/gi, 'Khu vực ')
+    .replace(/\(\d+\s*SOS\)/gi, '')
+    .trim();
+};
+
 const AlertCard = ({
   alert,
   onPress,
@@ -123,11 +132,11 @@ const AlertCard = ({
       </View>
 
       {/* Content */}
-      <Text style={styles.title}>{title}</Text>
+      <Text style={styles.title}>{cleanAlertText(title)}</Text>
       <Text style={{ color: alert.is_read ? '#64748b' : '#1d4ed8', fontSize: 12 }}>{alert.is_read ? 'Đã đọc' : 'Chưa đọc'}</Text>
       {zone_name ? (
         <View style={styles.zoneTag}>
-          <Text style={styles.zoneText}>📍 Khu vực: {zone_name}</Text>
+          <Text style={styles.zoneText}>📍 Khu vực: {cleanAlertText(zone_name)}</Text>
         </View>
       ) : null}
       {description ? (
@@ -145,12 +154,12 @@ const AlertCard = ({
                 style={[styles.routeButton, { backgroundColor: cfg.accent }]}
                 onPress={onRoute}
               >
-                <Text style={styles.routeText}>GET ROUTE</Text>
+                <Text style={styles.routeText}>CHỈ ĐƯỜNG</Text>
               </TouchableOpacity>
             )}
             {verified && (
               <View style={styles.verifiedBadge}>
-                <Text style={styles.verifiedText}>⛓ BLOCKCHAIN VERIFIED</Text>
+                <Text style={styles.verifiedText}>✓ ĐÃ XÁC THỰC</Text>
               </View>
             )}
           </>
@@ -250,14 +259,14 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   verifiedBadge: {
-    backgroundColor: '#E3F2FD',
+    backgroundColor: '#DCFCE7',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: RADIUS.sm,
   },
   verifiedText: {
     fontSize: FONTS.xs,
-    color: COLORS.statusBlue,
+    color: COLORS.statusGreen,
     fontWeight: FONTS.semiBold,
   },
   voteButton: {

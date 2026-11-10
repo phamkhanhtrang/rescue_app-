@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 /**
  * src/components/rescuer/common/RescuerHeader.js
  * ─────────────────────────────────────────────────────────────────────────────
@@ -48,12 +49,12 @@ const RescuerHeader = ({
             <View style={styles.logoRow}>
               <View style={styles.shieldWrap}>
                 <View style={[styles.shield, { backgroundColor: RCOLORS.primary }]}>
-                  <Text style={styles.shieldTxt}>🛡</Text>
+                  <Ionicons name="shield-checkmark" size={18} color="#FFF" />
                 </View>
               </View>
               <View>
-                <Text style={[styles.brand, { color: dark ? RCOLORS.textWhite : RCOLORS.primary }]}>
-                  THE SENTINEL
+                <Text style={[styles.brand, { color: dark ? RCOLORS.textWhite : RCOLORS.primary, letterSpacing: 0.8 }]}>
+                  ĐỘI CỨU HỘ KHẨN CẤP
                 </Text>
               </View>
             </View>

@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Có thể đổi máy chủ bằng EXPO_PUBLIC_API_URL mà không sửa mã nguồn.
 // Điện thoại thật phải truy cập được địa chỉ LAN của máy chạy Django.
-export const BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://192.168.88.86:8000').replace(/\/$/, '');
+export const BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.243:8000').replace(/\/$/, '');
 
 let authToken = null;
 let refreshToken = null;

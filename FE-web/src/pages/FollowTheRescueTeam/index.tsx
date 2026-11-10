@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import SliderBar from "../../components/SliderBar";
-import Header from "../../components/Header";
+import AdminLayout from "../../components/AdminLayout";
 import TeamDetailModal from "../../components/TeamDetailModal";
 import { api } from "../../services/api";
 import DataNotice from "../../components/DataNotice";
@@ -176,7 +175,6 @@ const SPECIALTY_LABELS: Record<string, string> = {
 
 export default function FollowTheRescueTeamPage() {
   const navigate = useNavigate();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [rescuers, setRescuers] = useState<any[]>([]);
   const [zones, setZones] = useState<any[]>([]);
   const [, setMissions] = useState<any[]>([]);
@@ -598,132 +596,119 @@ export default function FollowTheRescueTeamPage() {
   }, [anomalies, dismissedAnomalyIds]);
 
   return (
-    <div className="flex h-screen w-full bg-[#F8FAFC] overflow-hidden">
-      {/* Sidebar Navigation */}
-      <div
-        className={`fixed lg:relative z-40 lg:z-auto h-full overflow-y-auto shrink-0 border-r border-slate-200 transition-transform duration-300 ${
-          sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-        }`}
-      >
-        <SliderBar />
-      </div>
-
-      {/* Main Content Area */}
-      <div className="flex-1 bg-[#F8FAFC] flex flex-col h-full overflow-y-auto min-w-0">
-        <Header onOpenSidebar={() => setSidebarOpen(true)} />
-
-        <div className="p-6 lg:p-8 max-w-[1600px] w-full mx-auto space-y-8">
-          <DataNotice loading={loading} error={loadError} onRetry={() => fetchRescuers(true)} hasData={rescuers.length > 0 || zones.length > 0} />
-          {/* Header Action Bar */}
-          <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 pb-2 border-b border-slate-200">
-            <div>
-              <div className="flex items-center gap-3">
-                <h1 className="text-3xl font-black text-slate-900 tracking-tight">
-                  Theo dõi Đội cứu trợ
-                </h1>
-                <span className="bg-blue-100 text-blue-700 text-xs font-black px-2.5 py-1 rounded-full uppercase tracking-wider">
-                  Live GPS
-                </span>
-              </div>
-              <p className="text-slate-500 text-sm mt-1">
-                Giám sát thực địa, phát hiện bất thường tác chiến và điều phối lực lượng cứu hộ thời gian thực.
-              </p>
+    <AdminLayout>
+      <div className="space-y-6">
+        <DataNotice loading={loading} error={loadError} onRetry={() => fetchRescuers(true)} hasData={rescuers.length > 0 || zones.length > 0} />
+        {/* Header Action Bar */}
+        <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 pb-2 border-b border-slate-200">
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">
+                Theo dõi Đội cứu trợ
+              </h1>
+              <span className="badge bg-blue-100 text-blue-700">
+                Live GPS
+              </span>
             </div>
-
-            <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
-              <div className="flex items-center gap-2 text-xs text-slate-500 bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-sm mr-auto xl:mr-0">
-                <Clock size={14} className="text-slate-400" />
-                <span>Cập nhật: {lastUpdated.toLocaleTimeString("vi-VN")}</span>
-                <button
-                  onClick={() => fetchRescuers(true)}
-                  disabled={isRefreshing}
-                  title="Làm mới ngay"
-                  className="ml-1 text-blue-600 hover:text-blue-800 disabled:opacity-50"
-                >
-                  <RefreshCw size={14} className={isRefreshing ? "animate-spin" : ""} />
-                </button>
-              </div>
-
-              <button
-                onClick={() => setShowFilterBar(!showFilterBar)}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs shadow-sm transition border ${
-                  showFilterBar
-                    ? "bg-slate-900 text-white border-slate-900"
-                    : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-                }`}
-              >
-                <Filter size={15} />
-                LỌC ĐỘI {statusFilter !== "ALL" || specialtyFilter !== "ALL" ? "(1+)" : ""}
-              </button>
-
-              <button
-                onClick={() => navigate("/notification-broadcast")}
-                className="flex items-center gap-2 bg-[#DC2626] hover:bg-red-700 text-white px-5 py-2.5 rounded-xl font-bold text-xs shadow-lg shadow-red-600/20 transition"
-              >
-                <Radio size={16} />
-                THÔNG BÁO KHẨN
-              </button>
-
-              <button
-                onClick={() => setShowAIAssignment(true)}
-                className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-5 py-2.5 rounded-xl font-bold text-xs shadow-lg shadow-blue-500/20 transition"
-              >
-                <Zap size={16} />
-                ĐIỀU PHỐI AI
-              </button>
-            </div>
+            <p className="text-slate-500 text-xs mt-1">
+              Giám sát thực địa, phát hiện bất thường tác chiến và điều phối lực lượng cứu hộ thời gian thực.
+            </p>
           </div>
 
-          {/* ── KPI Thống kê Quân số (Đưa lên đầu trang) ── */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-1">
-                TỔNG QUÂN SỐ
-              </span>
-              <p className="text-2xl font-black text-slate-900">{counts.total} <span className="text-xs text-slate-400 font-medium">Đội</span></p>
+          <div className="flex flex-wrap items-center gap-2.5 w-full xl:w-auto">
+            <div className="flex items-center gap-2 text-xs text-slate-500 bg-white px-3 py-2 rounded-btn border border-slate-200 shadow-xs mr-auto xl:mr-0">
+              <Clock size={14} className="text-slate-400" />
+              <span>Cập nhật: {lastUpdated.toLocaleTimeString("vi-VN")}</span>
+              <button
+                onClick={() => fetchRescuers(true)}
+                disabled={isRefreshing}
+                title="Làm mới ngay"
+                className="ml-1 text-blue-600 hover:text-blue-800 disabled:opacity-50 cursor-pointer"
+              >
+                <RefreshCw size={14} className={isRefreshing ? "animate-spin" : ""} />
+              </button>
             </div>
 
-            <div className="bg-white p-4 rounded-2xl border border-green-200 shadow-sm bg-green-50/30">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] font-black text-green-700 uppercase tracking-wider">
-                  SẴN SÀNG / RẢNH
-                </span>
-                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-              </div>
-              <p className="text-2xl font-black text-green-700">{counts.ready} <span className="text-xs text-green-600/70 font-medium">Đội</span></p>
-            </div>
+            <button
+              onClick={() => setShowFilterBar(!showFilterBar)}
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-btn font-medium text-xs transition border cursor-pointer ${
+                showFilterBar
+                  ? "bg-slate-900 text-white border-slate-900"
+                  : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+              }`}
+            >
+              <Filter size={14} />
+              Lọc đội {statusFilter !== "ALL" || specialtyFilter !== "ALL" ? "(1+)" : ""}
+            </button>
 
-            <div className="bg-white p-4 rounded-2xl border border-blue-200 shadow-sm bg-blue-50/30">
-              <span className="text-[10px] font-black text-blue-700 uppercase tracking-wider block mb-1">
-                ĐANG DI CHUYỂN
-              </span>
-              <p className="text-2xl font-black text-blue-700">{counts.moving} <span className="text-xs text-blue-600/70 font-medium">Đội</span></p>
-            </div>
+            <button
+              onClick={() => navigate("/notification-broadcast")}
+              className="btn-danger flex items-center gap-1.5 text-xs !py-2 cursor-pointer"
+            >
+              <Radio size={14} />
+              Thông báo khẩn
+            </button>
 
-            <div className="bg-white p-4 rounded-2xl border border-amber-200 shadow-sm bg-amber-50/30">
-              <span className="text-[10px] font-black text-amber-700 uppercase tracking-wider block mb-1">
-                ĐANG CỨU HỘ
-              </span>
-              <p className="text-2xl font-black text-amber-700">{counts.rescuing} <span className="text-xs text-amber-600/70 font-medium">Đội</span></p>
-            </div>
-
-            <div className="bg-white p-4 rounded-2xl border border-red-200 shadow-sm bg-red-50/30">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] font-black text-red-700 uppercase tracking-wider">
-                  CẦN HỖ TRỢ GẤP
-                </span>
-                {counts.needsHelp > 0 && <span className="w-2.5 h-2.5 rounded-full bg-red-600 animate-ping"></span>}
-              </div>
-              <p className="text-2xl font-black text-red-700">{counts.needsHelp} <span className="text-xs text-red-600/70 font-medium">Đội</span></p>
-            </div>
-
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-              <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">
-                TẠM DỪNG / NGHỈ
-              </span>
-              <p className="text-2xl font-black text-slate-600">{counts.offDuty} <span className="text-xs text-slate-400 font-medium">Đội</span></p>
-            </div>
+            <button
+              onClick={() => setShowAIAssignment(true)}
+              className="btn-primary flex items-center gap-1.5 text-xs !py-2 cursor-pointer"
+            >
+              <Zap size={14} />
+              Điều phối AI
+            </button>
           </div>
+        </div>
+
+        {/* ── KPI Thống kê Quân số (Đưa lên đầu trang) ── */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
+          <div className="stat-card">
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+              Tổng quân số
+            </span>
+            <p className="text-2xl font-bold text-slate-900">{counts.total} <span className="text-xs text-slate-400 font-medium">Đội</span></p>
+          </div>
+
+          <div className="stat-card !border-emerald-200 bg-emerald-50/20">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-semibold text-emerald-700 uppercase tracking-wider">
+                Sẵn sàng / Rảnh
+              </span>
+              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+            </div>
+            <p className="text-2xl font-bold text-emerald-700">{counts.ready} <span className="text-xs text-emerald-600/70 font-medium">Đội</span></p>
+          </div>
+
+          <div className="stat-card !border-blue-200 bg-blue-50/20">
+            <span className="text-xs font-semibold text-blue-700 uppercase tracking-wider block mb-1">
+              Đang di chuyển
+            </span>
+            <p className="text-2xl font-bold text-blue-700">{counts.moving} <span className="text-xs text-blue-600/70 font-medium">Đội</span></p>
+          </div>
+
+          <div className="stat-card !border-amber-200 bg-amber-50/20">
+            <span className="text-xs font-semibold text-amber-700 uppercase tracking-wider block mb-1">
+              Đang cứu hộ
+            </span>
+            <p className="text-2xl font-bold text-amber-700">{counts.rescuing} <span className="text-xs text-amber-600/70 font-medium">Đội</span></p>
+          </div>
+
+          <div className="stat-card !border-red-200 bg-red-50/20">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-semibold text-brand uppercase tracking-wider">
+                Cần hỗ trợ gấp
+              </span>
+              {counts.needsHelp > 0 && <span className="w-2 h-2 rounded-full bg-brand"></span>}
+            </div>
+            <p className="text-2xl font-bold text-brand">{counts.needsHelp} <span className="text-xs text-red-500 font-medium">Đội</span></p>
+          </div>
+
+          <div className="stat-card">
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+              Tạm dừng / Nghỉ
+            </span>
+            <p className="text-2xl font-bold text-slate-600">{counts.offDuty} <span className="text-xs text-slate-400 font-medium">Đội</span></p>
+          </div>
+        </div>
 
           {/* ── Thanh bộ lọc mở rộng (Khi ấn nút LỌC ĐỘI) ── */}
           {showFilterBar && (
@@ -806,15 +791,15 @@ export default function FollowTheRescueTeamPage() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
             {/* Bản đồ định vị GPS */}
             <div
-              className={`bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col transition-all duration-300 ${
+              className={`bg-white rounded-card shadow-sm border border-slate-200 overflow-hidden flex flex-col transition-all duration-300 ${
                 mapExpanded ? "lg:col-span-3 h-[700px]" : "lg:col-span-2 h-[560px]"
               }`}
             >
               {/* Header điều khiển bản đồ */}
               <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-white flex-wrap gap-3">
                 <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-red-600 animate-pulse"></div>
-                  <h2 className="font-black text-slate-800 text-sm uppercase tracking-wide">
+                  <div className="w-2.5 h-2.5 rounded-full bg-brand"></div>
+                  <h2 className="font-bold text-slate-900 text-sm">
                     Bản đồ Vị trí trực tiếp
                   </h2>
                   <span className="text-xs text-slate-400">
@@ -1202,12 +1187,11 @@ export default function FollowTheRescueTeamPage() {
             )}
           </div>
         </div>
-      </div>
 
       {/* ── MODAL GIAO NHIỆM VỤ TRỰC TIẾP ── */}
       {assigningTeam && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
-          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl p-6 border border-slate-100">
+          <div className="bg-white rounded-modal w-full max-w-lg shadow-xl p-6 border border-slate-100">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-5">
               <div>
                 <h3 className="text-lg font-black text-slate-900">
@@ -1284,7 +1268,7 @@ export default function FollowTheRescueTeamPage() {
       {/* ── MODAL AI TỰ ĐỘNG ĐIỀU PHỐI ── */}
       {showAIAssignment && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
-          <div className="bg-white rounded-3xl w-full max-w-6xl h-[90vh] overflow-hidden flex flex-col relative shadow-2xl">
+          <div className="bg-white rounded-modal w-full max-w-6xl h-[90vh] overflow-hidden flex flex-col relative shadow-2xl">
             <div className="absolute top-0 left-0 w-full flex justify-end p-4 z-10 pointer-events-none">
               <button
                 onClick={() => setShowAIAssignment(false)}
@@ -1319,7 +1303,7 @@ export default function FollowTheRescueTeamPage() {
           setSelectedDetailTeam(null);
         }}
       />
-    </div>
+    </AdminLayout>
   );
 }
 

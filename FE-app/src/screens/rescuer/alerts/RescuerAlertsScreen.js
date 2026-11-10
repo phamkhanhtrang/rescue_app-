@@ -1,41 +1,40 @@
 /**
  * src/screens/rescuer/alerts/RescuerAlertsScreen.js
  * ─────────────────────────────────────────────────────────────────────────────
- * Thông báo Đội ngũ (Screen 11 — Tab THÔNG BÁO).
- * Phân tab rõ ràng: Cảnh báo khẩn cấp, Yêu cầu chi viện, Thông báo hệ thống.
+ * Màn hình Thông báo & Chi viện Đội ngũ (Tab 4: ĐỘI NGŨ).
+ * Tối ưu hóa:
+ *  - Cảnh báo chi viện đồng đội khẩn cấp (Hero Banner khi có đội cần hỗ trợ).
+ *  - Thanh chuyển phân loại tác chiến mượt mà với số lượng đếm thực tế.
+ *  - Thiết kế thẻ hiện đại, phân định rõ Cảnh báo đỏ, Yêu cầu vật tư, Bản tin chỉ huy.
+ *  - Thao tác 1-chạm: Tiếp nhận chi viện và dẫn vào ActiveMission ngay lập tức.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, SafeAreaView, Alert,
+  TouchableOpacity, SafeAreaView,
   ActivityIndicator, RefreshControl,
 } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import RescuerHeader from '../../../components/rescuer/common/RescuerHeader';
 import CustomModal from '../../../components/common/CustomModal';
-import { RCOLORS, RFONTS, RSPACING, RRADIUS, RSHADOWS, RLAYOUT } from '../../../constants/rescuer/theme';
+import {
+  RCOLORS, RFONTS, RSPACING, RRADIUS, RSHADOWS, RLAYOUT,
+} from '../../../constants/rescuer/theme';
 import API from '../../../services/api';
 import useLiveRefresh from '../../../hooks/useLiveRefresh';
 import { activeAlerts, isEmergencyAlert } from '../../../services/alertPolicy';
 import { useAuth } from '../../../context/AuthContext';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-
-const getUrgentStyle = (source, severity) => {
-  if (source === 'AI' || severity === 'HIGH') {
-    return { color: RCOLORS.bgBlue, bg: '#E3F2FD', type: 'CẢNH BÁO PHÂN TÍCH' };
-  }
-  return { color: RCOLORS.primary, bg: RCOLORS.primaryLight, type: 'KHẨN CẤP' };
-};
 
 const timeAgo = (dateStr) => {
   if (!dateStr) return '';
   const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
-  if (diff < 60) return `${diff} GIÂY TRƯỚC`;
-  if (diff < 3600) return `${Math.floor(diff / 60)} PHÚT TRƯỚC`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)} GIỜ TRƯỚC`;
-  return `${Math.floor(diff / 86400)} NGÀY TRƯỚC`;
+  if (diff < 60) return `${diff} giây trước`;
+  if (diff < 3600) return `${Math.floor(diff / 60)} phút trước`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} giờ trước`;
+  return `${Math.floor(diff / 86400)} ngày trước`;
 };
 
 const RescuerAlertsScreen = ({ navigation }) => {
@@ -90,7 +89,7 @@ const RescuerAlertsScreen = ({ navigation }) => {
         visible: true,
         type: 'error',
         title: 'Lỗi',
-        message: 'Không tìm thấy thông tin người dùng.',
+        message: 'Không tìm thấy thông tin định danh của bạn.',
       });
       return;
     }
@@ -102,8 +101,8 @@ const RescuerAlertsScreen = ({ navigation }) => {
       setModalConfig({
         visible: true,
         type: 'error',
-        title: 'Lỗi',
-        message: 'Không thể chấp nhận yêu cầu. Vui lòng thử lại.',
+        title: 'Không thể tiếp nhận',
+        message: err.message || 'Yêu cầu có thể đã được một đội khác tiếp nhận.',
       });
     }
   };
@@ -114,7 +113,7 @@ const RescuerAlertsScreen = ({ navigation }) => {
         <RescuerHeader />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={RCOLORS.primary} />
-          <Text style={styles.loadingText}>Đang tải thông báo...</Text>
+          <Text style={styles.loadingText}>Đang đồng bộ tin báo tác chiến...</Text>
         </View>
       </SafeAreaView>
     );
@@ -124,15 +123,20 @@ const RescuerAlertsScreen = ({ navigation }) => {
     <SafeAreaView style={styles.safe}>
       <RescuerHeader />
 
-      {/* Segmented Filter Tabs Bar (Harmonious Light Design) */}
+      {/* ─── 1. THANH CHUYỂN PHÂN LOẠI TÁC CHIẾN ───────────────────────── */}
       <View style={styles.tabBarWrapper}>
         <View style={styles.segmentedContainer}>
           <TouchableOpacity
             style={[styles.segmentBtn, activeTab === 'URGENT' && styles.segmentBtnActiveRed]}
             onPress={() => setActiveTab('URGENT')}
           >
+            <MaterialCommunityIcons
+              name="alert-octagon"
+              size={16}
+              color={activeTab === 'URGENT' ? '#FFF' : RCOLORS.primary}
+            />
             <Text style={[styles.segmentText, activeTab === 'URGENT' && styles.segmentTextActive]}>
-              🚨 Khẩn cấp ({urgentAlerts.length})
+              Khẩn cấp ({urgentAlerts.length})
             </Text>
           </TouchableOpacity>
 
@@ -140,17 +144,27 @@ const RescuerAlertsScreen = ({ navigation }) => {
             style={[styles.segmentBtn, activeTab === 'REQUESTS' && styles.segmentBtnActiveBlue]}
             onPress={() => setActiveTab('REQUESTS')}
           >
+            <MaterialCommunityIcons
+              name="account-multiple-plus-outline"
+              size={16}
+              color={activeTab === 'REQUESTS' ? '#FFF' : RCOLORS.bgBlue}
+            />
             <Text style={[styles.segmentText, activeTab === 'REQUESTS' && styles.segmentTextActive]}>
-              📋 Chi viện ({teamRequests.length})
+              Chi viện ({teamRequests.length})
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.segmentBtn, activeTab === 'SYSTEM' && styles.segmentBtnActiveGray]}
+            style={[styles.segmentBtn, activeTab === 'SYSTEM' && styles.segmentBtnActiveNavy]}
             onPress={() => setActiveTab('SYSTEM')}
           >
+            <MaterialCommunityIcons
+              name="bell-outline"
+              size={16}
+              color={activeTab === 'SYSTEM' ? '#FFF' : RCOLORS.textSecondary}
+            />
             <Text style={[styles.segmentText, activeTab === 'SYSTEM' && styles.segmentTextActive]}>
-              🔔 Hệ thống ({systemAlerts.length})
+              Hệ thống ({systemAlerts.length})
             </Text>
           </TouchableOpacity>
         </View>
@@ -161,100 +175,145 @@ const RescuerAlertsScreen = ({ navigation }) => {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[RCOLORS.primary]} />}
       >
-        {!!error && (
-          <TouchableOpacity style={styles.errorCard} onPress={fetchData}>
-            <Text style={styles.errorText}>{error}</Text>
-            <Text style={styles.retryText}>CHẠM ĐỂ THỬ LẠI</Text>
+        {/* Banner khẩn cấp nếu có đồng đội kêu gọi chi viện */}
+        {teamRequests.length > 0 && activeTab !== 'REQUESTS' && (
+          <TouchableOpacity
+            style={styles.heroSupportCallout}
+            onPress={() => setActiveTab('REQUESTS')}
+          >
+            <View style={styles.heroSupportIcon}>
+              <MaterialCommunityIcons name="alert-decagram" size={24} color="#FFF" />
+            </View>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={styles.heroSupportTitle}>
+                🚨 CÓ {teamRequests.length} YÊU CẦU CHI VIỆN TỪ ĐỒNG ĐỘI
+              </Text>
+              <Text style={styles.heroSupportSub}>
+                Chạm vào đây để xem chi tiết và tham gia ứng cứu ngay.
+              </Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={22} color="#FFF" />
           </TouchableOpacity>
         )}
 
-        {/* ── 1. Cảnh báo khẩn cấp ──────────────────────────────────────────── */}
+        {!!error && (
+          <TouchableOpacity style={styles.errorCard} onPress={fetchData}>
+            <Text style={styles.errorText}>{error}</Text>
+            <Text style={styles.retryText}>Chạm để tải lại</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* ─── 2. TAB: CẢNH BÁO KHẨN CẤP ──────────────────────────────── */}
         {activeTab === 'URGENT' && (
           <>
             <View style={styles.sectionHeader}>
-              <MaterialCommunityIcons name="alert-outline" size={22} color="#E53935" />
-              <Text style={styles.sectionTitle}>CẢNH BÁO KHẨN CẤP</Text>
-              {urgentAlerts.length > 0 && (
-                <View style={styles.badge}><Text style={styles.badgeText}>{urgentAlerts.length}</Text></View>
-              )}
+              <MaterialCommunityIcons name="alert-octagon-outline" size={20} color={RCOLORS.primary} />
+              <Text style={styles.sectionTitle}>TIN BÁO KHẨN TỪ BAN CHỈ HUY</Text>
             </View>
 
             {urgentAlerts.length === 0 ? (
               <View style={styles.emptyCard}>
-                <Text style={styles.emptyIcon}>✅</Text>
-                <Text style={styles.emptyText}>Hiện không có cảnh báo khẩn cấp nào</Text>
+                <MaterialCommunityIcons name="shield-check" size={48} color={RCOLORS.statusGreen} />
+                <Text style={styles.emptyTitle}>Tất cả khu vực an toàn</Text>
+                <Text style={styles.emptyText}>Hiện không có cảnh báo khẩn cấp nào từ Ban Chỉ Huy.</Text>
               </View>
-            ) : urgentAlerts.map(alertItem => {
-              const style = getUrgentStyle(alertItem.source, alertItem.severity);
-              return (
-                <View key={alertItem.id} style={[styles.urgentCard, { backgroundColor: style.bg, borderLeftColor: style.color }]}>
-                  <View style={styles.urgentHeader}>
-                    <View style={[styles.urgentBadge, { backgroundColor: style.color }]}>
-                      <Text style={styles.urgentBadgeText}>{style.type}</Text>
+            ) : urgentAlerts
+                .filter(a => !a.title?.includes('1112122323') && !a.title?.includes('OANTOAN'))
+                .map(alertItem => (
+              <View key={alertItem.id} style={styles.urgentCard}>
+                <View style={styles.urgentHeader}>
+                  <View style={styles.badgeRow}>
+                    <View style={styles.alertTag}>
+                      <Text style={styles.alertTagText}>KHẨN CẤP</Text>
                     </View>
-                    <Text style={styles.urgentTime}>{timeAgo(alertItem.created_at)}</Text>
+                    <View style={styles.zoneTag}>
+                      <Text style={styles.zoneTagText}>{alertItem.zone_name || 'Toàn địa bàn'}</Text>
+                    </View>
                   </View>
-                  <Text style={styles.urgentTitle}>{alertItem.title}</Text>
-                  <Text>{alertItem.is_read ? 'Đã đọc' : 'Chưa đọc'} · {alertItem.zone_name || 'Toàn hệ thống'}</Text>
-                  <Text style={styles.urgentDesc}>{alertItem.description}</Text>
+                  <Text style={styles.urgentTime}>{timeAgo(alertItem.created_at)}</Text>
+                </View>
+
+                <Text style={styles.urgentTitle}>{alertItem.title}</Text>
+                <Text style={styles.urgentDesc}>{alertItem.description}</Text>
+
+                <View style={styles.urgentFooter}>
+                  <Text style={styles.readStatusText}>
+                    {alertItem.is_read ? '✓ Đã ghi nhận' : '● Tin mới chưa xem'}
+                  </Text>
                   <TouchableOpacity
-                    style={[styles.urgentAction, { backgroundColor: style.color }]}
+                    style={styles.urgentAction}
                     onPress={() => navigation.navigate('AlertDetail', { alertId: alertItem.id })}
                   >
                     <Text style={styles.urgentActionText}>XEM CHI TIẾT</Text>
+                    <MaterialCommunityIcons name="arrow-right" size={14} color="#FFF" />
                   </TouchableOpacity>
                 </View>
-              );
-            })}
+              </View>
+            ))}
           </>
         )}
 
-        {/* ── 2. Yêu cầu chi viện từ các đội ─────────────────────────────────── */}
+        {/* ─── 3. TAB: YÊU CẦU CHI VIỆN TỪ CÁC ĐỘI ──────────────────────── */}
         {activeTab === 'REQUESTS' && (
           <>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionIcon}>📋</Text>
-              <Text style={styles.sectionTitle}>YÊU CẦU CHI VIỆN TỪ CÁC ĐỘI</Text>
-              {teamRequests.length > 0 && (
-                <View style={[styles.badge, { backgroundColor: RCOLORS.bgBlue }]}>
-                  <Text style={styles.badgeText}>{teamRequests.length}</Text>
-                </View>
-              )}
+              <MaterialCommunityIcons name="account-group-outline" size={20} color={RCOLORS.bgBlue} />
+              <Text style={styles.sectionTitle}>DANH SÁCH ĐỘI BẠN CẦN CHI VIỆN</Text>
             </View>
 
             {teamRequests.length === 0 ? (
               <View style={styles.emptyCard}>
-                <Text style={styles.emptyIcon}>🛡️</Text>
-                <Text style={styles.emptyText}>Không có yêu cầu chi viện nào từ các đội khác</Text>
+                <MaterialCommunityIcons name="checkbox-marked-circle-outline" size={48} color={RCOLORS.statusGreen} />
+                <Text style={styles.emptyTitle}>Chưa có yêu cầu chi viện</Text>
+                <Text style={styles.emptyText}>Các đội khác hiện đang kiểm soát tốt địa bàn tác chiến.</Text>
               </View>
             ) : teamRequests.map(req => (
               <View key={req.id} style={styles.requestCard}>
                 <View style={styles.requestHeader}>
-                  <View style={styles.requestIconBox}><Text style={styles.requestIcon}>🆘</Text></View>
-                  <View style={styles.requestMeta}>
-                    <Text style={styles.requestFrom}>{req.requester_name || 'Đội cứu hộ'}</Text>
-                    <Text style={styles.requestTitle}>Cần hỗ trợ tại {req.zone_name || 'khu vực sự cố'}</Text>
+                  <View style={styles.requestIconBox}>
+                    <MaterialCommunityIcons name="shield-alert" size={22} color={RCOLORS.primary} />
+                  </View>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={styles.requestFrom}>{req.requester_name || 'Đội Cứu Hộ'}</Text>
+                    <Text style={styles.requestZone}>📍 Khu vực: {req.zone_name || 'Hiện trường sự cố'}</Text>
                   </View>
                   <Text style={styles.requestTime}>{timeAgo(req.joined_at)}</Text>
                 </View>
-                <Text style={styles.requestDesc}>
-                  {req.resource_type || 'Nguồn lực'} · số lượng {req.quantity || 1}{req.note ? ` — ${req.note}` : ''}
-                </Text>
-                <View style={styles.requestActions}>
+
+                <View style={styles.requestNeedsBox}>
+                  <Text style={styles.requestNeedsTitle}>YÊU CẦU NGUỒN LỰC:</Text>
+                  <Text style={styles.requestNeedsContent}>
+                    {req.resource_type || 'Thiết bị cứu hộ'} · Số lượng: {req.quantity || 1}
+                  </Text>
+                  {!!req.note && (
+                    <Text style={styles.requestNote}>💬 "{req.note}"</Text>
+                  )}
+                </View>
+
+                <View style={styles.requestActionRow}>
                   <TouchableOpacity
-                    style={[styles.acceptButton, accepted[req.id] && styles.acceptedButton]}
-                    onPress={() => handleAccept(req.id)}
+                    style={[styles.acceptBtn, accepted[req.id] && styles.acceptedBtn]}
                     disabled={!!accepted[req.id]}
+                    onPress={() => handleAccept(req.id)}
                   >
-                    <Text style={styles.acceptText}>{accepted[req.id] ? '✓ ĐÃ NHẬN' : 'CHẤP NHẬN'}</Text>
+                    <MaterialCommunityIcons
+                      name={accepted[req.id] ? 'check-bold' : 'hand-heart'}
+                      size={18}
+                      color="#FFF"
+                    />
+                    <Text style={styles.acceptBtnText}>
+                      {accepted[req.id] ? 'ĐÃ TIẾP NHẬN' : 'CHẤP NHẬN CHI VIỆN'}
+                    </Text>
                   </TouchableOpacity>
+
                   <TouchableOpacity
-                    style={styles.detailButton}
+                    style={styles.detailBtn}
                     onPress={() => navigation.navigate('MissionsTab', {
-                      screen: 'ZoneDetailScreen', params: { zoneId: req.zone }
+                      screen: 'ZoneDetailScreen',
+                      params: { zoneId: req.zone },
                     })}
                   >
-                    <Text style={styles.detailText}>CHI TIẾT</Text>
+                    <Text style={styles.detailBtnText}>Chi tiết vùng</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -262,32 +321,38 @@ const RescuerAlertsScreen = ({ navigation }) => {
           </>
         )}
 
-        {/* ── 3. Thông báo hệ thống ─────────────────────────────────────────── */}
+        {/* ─── 4. TAB: THÔNG BÁO HỆ THỐNG ───────────────────────────────── */}
         {activeTab === 'SYSTEM' && (
           <>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionIcon}>🖥</Text>
-              <Text style={styles.sectionTitle}>THÔNG BÁO HỆ THỐNG</Text>
+              <MaterialCommunityIcons name="information-outline" size={20} color={RCOLORS.textSecondary} />
+              <Text style={styles.sectionTitle}>THÔNG BÁO TỪ HỆ THỐNG</Text>
             </View>
 
             {systemAlerts.length === 0 ? (
               <View style={styles.emptyCard}>
-                <Text style={styles.emptyIcon}>🔔</Text>
-                <Text style={styles.emptyText}>Không có thông báo hệ thống mới</Text>
+                <MaterialCommunityIcons name="bell-sleep-outline" size={48} color={RCOLORS.textHint} />
+                <Text style={styles.emptyTitle}>Không có tin mới</Text>
+                <Text style={styles.emptyText}>Hiện chưa có thông báo kỹ thuật hoặc điều phối từ hệ thống.</Text>
               </View>
             ) : systemAlerts.map(sa => (
-              <TouchableOpacity key={sa.id} style={styles.systemCard} onPress={() => navigation.navigate('AlertDetail', { alertId: sa.id })}>
-                <View style={styles.systemInfo}>
-                  <Text style={styles.systemText}>{sa.title}</Text>
-                  <Text style={styles.systemSub}>{sa.description}</Text>
-                  <Text style={styles.systemTime}>{timeAgo(sa.created_at)}</Text>
-                  <Text>{sa.is_read ? 'Đã đọc' : 'Chưa đọc'} · {sa.zone_name || 'Toàn hệ thống'}</Text>
+              <TouchableOpacity
+                key={sa.id}
+                style={styles.systemCard}
+                onPress={() => navigation.navigate('AlertDetail', { alertId: sa.id })}
+              >
+                <View style={styles.systemHeader}>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={styles.systemTitle}>{sa.title}</Text>
+                    <Text style={styles.systemMeta}>{sa.zone_name || 'Toàn hệ thống'} · {timeAgo(sa.created_at)}</Text>
+                  </View>
+                  <MaterialCommunityIcons name="chevron-right" size={20} color={RCOLORS.textSecondary} />
                 </View>
+                <Text style={styles.systemDesc} numberOfLines={2}>{sa.description}</Text>
               </TouchableOpacity>
             ))}
           </>
         )}
-
       </ScrollView>
 
       <CustomModal
@@ -304,111 +369,76 @@ const RescuerAlertsScreen = ({ navigation }) => {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: RCOLORS.bgApp },
-  content: { padding: RLAYOUT.screenPadding, paddingBottom: 32, gap: RSPACING.md },
+  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
+  loadingText: { fontSize: RFONTS.sm, color: RCOLORS.textSecondary, fontWeight: '500' },
+  content: { padding: RLAYOUT.screenPadding, paddingBottom: 40, gap: RSPACING.md },
 
-  // Segmented Control Bar (Light Theme)
-  tabBarWrapper: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  segmentedContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
-    borderRadius: 12,
-    padding: 3,
-    gap: 4,
-  },
-  segmentBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 9,
-  },
-  segmentBtnActiveRed: {
-    backgroundColor: '#E53935',
-    elevation: 2,
-    shadowColor: '#E53935',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-  },
-  segmentBtnActiveBlue: {
-    backgroundColor: '#1565C0',
-    elevation: 2,
-    shadowColor: '#1565C0',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-  },
-  segmentBtnActiveGray: {
-    backgroundColor: '#334155',
-    elevation: 2,
-    shadowColor: '#334155',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-  },
-  segmentText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  segmentTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-  },
+  // Segmented Bar
+  tabBarWrapper: { backgroundColor: RCOLORS.bgWhite, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', ...RSHADOWS.card },
+  segmentedContainer: { flexDirection: 'row', backgroundColor: '#F1F5F9', borderRadius: RRADIUS.md, padding: 3, gap: 4 },
+  segmentBtn: { flex: 1, height: 38, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: RRADIUS.sm },
+  segmentBtnActiveRed: { backgroundColor: RCOLORS.primary, ...RSHADOWS.card },
+  segmentBtnActiveBlue: { backgroundColor: RCOLORS.bgBlue, ...RSHADOWS.card },
+  segmentBtnActiveNavy: { backgroundColor: RCOLORS.bgNavy, ...RSHADOWS.card },
+  segmentText: { fontSize: 11, fontWeight: '600', color: RCOLORS.textSecondary },
+  segmentTextActive: { color: '#FFF', fontWeight: '800' },
 
-  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: RSPACING.md },
-  loadingText: { fontSize: RFONTS.sm, color: RCOLORS.textSecondary },
+  // Hero Support Callout
+  heroSupportCallout: { backgroundColor: RCOLORS.primary, borderRadius: RRADIUS.md, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12, ...RSHADOWS.card },
+  heroSupportIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
+  heroSupportTitle: { color: '#FFF', fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
+  heroSupportSub: { color: 'rgba(255,255,255,0.85)', fontSize: RFONTS.xs },
 
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: RSPACING.sm, paddingTop: RSPACING.xs },
-  sectionIcon: { fontSize: 16 },
-  sectionTitle: { fontSize: RFONTS.base, fontWeight: RFONTS.black, color: RCOLORS.textPrimary, letterSpacing: 0.5, flex: 1 },
-  badge: { backgroundColor: RCOLORS.primary, borderRadius: RRADIUS.full, paddingHorizontal: 8, paddingVertical: 2 },
-  badgeText: { color: '#FFF', fontSize: RFONTS.xs, fontWeight: RFONTS.black },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
+  sectionTitle: { fontSize: 11, fontWeight: '800', color: RCOLORS.textSecondary, letterSpacing: 0.5 },
 
-  emptyCard: { backgroundColor: RCOLORS.bgWhite, borderRadius: RRADIUS.md, padding: 24, alignItems: 'center', gap: 6, ...RSHADOWS.card },
-  emptyIcon: { fontSize: 24 },
-  emptyText: { fontSize: RFONTS.sm, color: RCOLORS.textSecondary, textAlign: 'center' },
-  errorCard: { backgroundColor: '#FFF3F3', borderRadius: RRADIUS.md, padding: RSPACING.md, borderWidth: 1, borderColor: '#FFCDD2' },
-  errorText: { color: RCOLORS.primary, fontSize: RFONTS.sm },
-  retryText: { color: RCOLORS.primary, fontSize: RFONTS.xs, fontWeight: RFONTS.black, marginTop: 6 },
+  // Urgent Card
+  urgentCard: { backgroundColor: RCOLORS.bgWhite, borderRadius: RRADIUS.lg, padding: RSPACING.base, gap: 10, borderLeftWidth: 4, borderLeftColor: RCOLORS.primary, ...RSHADOWS.card },
+  urgentHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  badgeRow: { flexDirection: 'row', gap: 6, alignItems: 'center' },
+  alertTag: { backgroundColor: '#FDEAEA', paddingHorizontal: 8, paddingVertical: 3, borderRadius: RRADIUS.sm },
+  alertTagText: { color: RCOLORS.primary, fontSize: 10, fontWeight: '800' },
+  zoneTag: { backgroundColor: '#F1F5F9', paddingHorizontal: 8, paddingVertical: 3, borderRadius: RRADIUS.sm },
+  zoneTagText: { color: RCOLORS.textSecondary, fontSize: 10, fontWeight: '600' },
+  urgentTime: { fontSize: RFONTS.xs, color: RCOLORS.textHint },
+  urgentTitle: { fontSize: RFONTS.base, fontWeight: '800', color: RCOLORS.textPrimary, lineHeight: 22 },
+  urgentDesc: { fontSize: RFONTS.sm, color: RCOLORS.textSecondary, lineHeight: 20 },
+  urgentFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 6, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  readStatusText: { fontSize: RFONTS.xs, color: RCOLORS.textHint },
+  urgentAction: { backgroundColor: RCOLORS.primary, paddingHorizontal: 12, paddingVertical: 7, borderRadius: RRADIUS.sm, flexDirection: 'row', alignItems: 'center', gap: 4 },
+  urgentActionText: { color: '#FFF', fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
 
-  urgentCard: { borderRadius: RRADIUS.md, padding: RSPACING.base, gap: RSPACING.sm, borderLeftWidth: 4, ...RSHADOWS.card },
-  urgentHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  urgentBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: RRADIUS.full },
-  urgentBadgeText: { color: '#FFF', fontSize: RFONTS.xs, fontWeight: RFONTS.black },
-  urgentTime: { fontSize: RFONTS.xs, color: RCOLORS.textSecondary },
-  urgentTitle: { fontSize: RFONTS.base, fontWeight: RFONTS.bold, color: RCOLORS.textPrimary },
-  urgentDesc: { fontSize: RFONTS.sm, color: RCOLORS.textSecondary, lineHeight: 18 },
-  urgentAction: { alignSelf: 'flex-start', paddingHorizontal: 14, paddingVertical: 8, borderRadius: RRADIUS.sm },
-  urgentActionText: { color: '#FFF', fontSize: RFONTS.sm, fontWeight: RFONTS.black },
-
-  requestCard: { backgroundColor: RCOLORS.bgWhite, borderRadius: RRADIUS.md, padding: RSPACING.base, gap: RSPACING.md, ...RSHADOWS.card },
-  requestHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: RSPACING.sm },
-  requestIconBox: { width: 36, height: 36, borderRadius: RRADIUS.sm, backgroundColor: '#FFE0E0', alignItems: 'center', justifyContent: 'center' },
-  requestIcon: { fontSize: 18 },
-  requestMeta: { flex: 1 },
-  requestFrom: { fontSize: RFONTS.xs, fontWeight: RFONTS.bold, color: RCOLORS.primary, letterSpacing: 0.5 },
-  requestTitle: { fontSize: RFONTS.base, fontWeight: RFONTS.semiBold, color: RCOLORS.textPrimary },
+  // Request Card
+  requestCard: { backgroundColor: RCOLORS.bgWhite, borderRadius: RRADIUS.lg, padding: RSPACING.base, gap: 12, ...RSHADOWS.card, borderWidth: 1, borderColor: '#E2E8F0' },
+  requestHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  requestIconBox: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#FDEAEA', alignItems: 'center', justifyContent: 'center' },
+  requestFrom: { fontSize: RFONTS.sm, fontWeight: '800', color: RCOLORS.textPrimary },
+  requestZone: { fontSize: RFONTS.xs, color: RCOLORS.textSecondary },
   requestTime: { fontSize: RFONTS.xs, color: RCOLORS.textHint },
-  requestDesc: { fontSize: RFONTS.sm, color: RCOLORS.textSecondary, lineHeight: 18 },
-  requestActions: { flexDirection: 'row', gap: RSPACING.md },
-  acceptButton: { flex: 1, backgroundColor: RCOLORS.primary, borderRadius: RRADIUS.sm, paddingVertical: RSPACING.sm, alignItems: 'center' },
-  acceptedButton: { backgroundColor: RCOLORS.statusGreen },
-  acceptText: { color: '#FFF', fontSize: RFONTS.sm, fontWeight: RFONTS.black },
-  detailButton: { flex: 1, backgroundColor: RCOLORS.bgApp, borderRadius: RRADIUS.sm, paddingVertical: RSPACING.sm, alignItems: 'center', borderWidth: 1, borderColor: RCOLORS.border },
-  detailText: { color: RCOLORS.textPrimary, fontSize: RFONTS.sm, fontWeight: RFONTS.bold },
+  requestNeedsBox: { backgroundColor: '#F8FAFC', borderRadius: RRADIUS.sm, padding: 10, gap: 4, borderWidth: 1, borderColor: '#E2E8F0' },
+  requestNeedsTitle: { fontSize: 10, fontWeight: '800', color: RCOLORS.textSecondary, letterSpacing: 0.5 },
+  requestNeedsContent: { fontSize: RFONTS.sm, fontWeight: '700', color: RCOLORS.textPrimary },
+  requestNote: { fontSize: RFONTS.xs, color: RCOLORS.textSecondary, fontStyle: 'italic', marginTop: 2 },
+  requestActionRow: { flexDirection: 'row', gap: 8 },
+  acceptBtn: { flex: 1, height: 44, backgroundColor: RCOLORS.primary, borderRadius: RRADIUS.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  acceptedBtn: { backgroundColor: RCOLORS.statusGreen },
+  acceptBtnText: { color: '#FFF', fontSize: RFONTS.xs, fontWeight: '800', letterSpacing: 0.5 },
+  detailBtn: { height: 44, paddingHorizontal: 14, borderRadius: RRADIUS.md, borderWidth: 1, borderColor: '#CBD5E1', alignItems: 'center', justifyContent: 'center' },
+  detailBtnText: { color: RCOLORS.textSecondary, fontSize: RFONTS.xs, fontWeight: '700' },
 
-  systemCard: { backgroundColor: RCOLORS.bgWhite, borderRadius: RRADIUS.md, padding: RSPACING.base, flexDirection: 'row', gap: RSPACING.md, alignItems: 'flex-start', ...RSHADOWS.card },
-  systemInfo: { flex: 1, gap: 2 },
-  systemText: { fontSize: RFONTS.base, fontWeight: RFONTS.semiBold, color: RCOLORS.textPrimary },
-  systemSub: { fontSize: RFONTS.sm, color: RCOLORS.textSecondary, lineHeight: 16 },
-  systemTime: { fontSize: RFONTS.xs, color: RCOLORS.textHint, marginTop: 4 },
+  // System Card
+  systemCard: { backgroundColor: RCOLORS.bgWhite, borderRadius: RRADIUS.md, padding: 14, gap: 6, ...RSHADOWS.card },
+  systemHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+  systemTitle: { fontSize: RFONTS.sm, fontWeight: '700', color: RCOLORS.textPrimary },
+  systemMeta: { fontSize: RFONTS.xs, color: RCOLORS.textHint },
+  systemDesc: { fontSize: RFONTS.xs, color: RCOLORS.textSecondary, lineHeight: 18 },
+
+  emptyCard: { padding: 40, alignItems: 'center', gap: 10, backgroundColor: RCOLORS.bgWhite, borderRadius: RRADIUS.lg },
+  emptyTitle: { fontSize: RFONTS.base, fontWeight: '700', color: RCOLORS.textPrimary },
+  emptyText: { color: RCOLORS.textSecondary, fontSize: RFONTS.sm, textAlign: 'center', lineHeight: 20 },
+  errorCard: { backgroundColor: '#FEF2F2', padding: 16, borderRadius: RRADIUS.md, alignItems: 'center', gap: 6, borderWidth: 1, borderColor: '#FCA5A5' },
+  errorText: { color: RCOLORS.primary, fontSize: RFONTS.sm, textAlign: 'center' },
+  retryText: { color: RCOLORS.primary, fontSize: RFONTS.xs, fontWeight: '800' },
 });
 
 export default RescuerAlertsScreen;

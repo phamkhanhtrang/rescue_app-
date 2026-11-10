@@ -563,7 +563,7 @@ const SOSScreen = ({ navigation }) => {
             )}
           </TouchableOpacity>
 
-          <Text style={styles.blockchainText}>Tín hiệu SOS sẽ lập tức truyền đến Trung tâm Điều phối Cứu hộ.</Text>
+          <Text style={styles.noticeText}>Tín hiệu SOS sẽ lập tức truyền đến Trung tâm Điều phối Cứu hộ.</Text>
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -977,7 +977,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
 
-  blockchainText: {
+  noticeText: {
     fontSize: FONTS.xs,
     color: COLORS.textHint,
     textAlign: 'center',

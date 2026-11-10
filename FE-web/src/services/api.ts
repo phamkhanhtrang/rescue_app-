@@ -161,6 +161,25 @@ export const api = {
     analyzeSOS: (text: string, mode: 'a' | 'b' | 'both') => apiClient.post('/ai/analyze-sos/', { text, mode }, { timeout: 180000 }),
     analyzeCrawledArticle: (id: string) => apiClient.post(`/ai/crawled/${id}/analyze/`, {}, { timeout: 180000 }),
   },
+  fieldReports: {
+    getAll: (params?: any) => apiClient.get('/rescue_operations/field-reports/', { params: { limit: 300, ...(params || {}) } }),
+    getDetail: (id: string) => apiClient.get(`/rescue_operations/field-reports/${id}/`),
+    previewRoad: (params?: { road_query?: string; lat?: number; lng?: number }) =>
+      apiClient.get('/rescue_operations/field-reports/preview-road/', { params }),
+    create: (data: any) => apiClient.post('/rescue_operations/field-reports/create/', data),
+    update: (id: string, data: { is_hidden?: boolean; status?: string; extend_hours?: number }) =>
+      apiClient.patch(`/rescue_operations/field-reports/${id}/`, data),
+    delete: (id: string) => apiClient.delete(`/rescue_operations/field-reports/${id}/`),
+    vote: (id: string, data: {
+      verdict: 'CONFIRM_DANGER' | 'WORSENED' | 'RECEDING' | 'CLEARED' | 'FALSE_REPORT' | 'HIDE' | 'UNHIDE';
+      note?: string;
+      water_level_cm?: number | null;
+      voter_name?: string;
+      voter_role?: 'CITIZEN' | 'RESCUER' | 'ADMIN';
+      voter_id?: string;
+      mark_rejected?: boolean;
+    }) => apiClient.post(`/rescue_operations/field-reports/${id}/vote/`, data),
+  },
 };
 
 export default api;

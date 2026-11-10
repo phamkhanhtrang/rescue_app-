@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useMemo, useRef } from "react";
-import SliderBar from "../../components/SliderBar";
-import Header from "../../components/Header";
+import AdminLayout from "../../components/AdminLayout";
 import { api } from "../../services/api";
 import DataNotice from "../../components/DataNotice";
 import { apiErrorMessage } from "../../utils/apiError";
@@ -130,7 +129,6 @@ function MapFlyController({
 }
 
 export default function RescueZoneManagementPage() {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [zones, setZones] = useState<any[]>([]);
   const [sosList, setSosList] = useState<any[]>([]);
   const [missionsList, setMissionsList] = useState<any[]>([]);
@@ -773,39 +771,26 @@ export default function RescueZoneManagementPage() {
   };
 
   return (
-    <div className="flex h-screen w-full bg-[#F8F9FA] overflow-hidden">
-      {/* Sidebar */}
-      <div
-        className={`fixed lg:relative z-30 lg:z-auto h-full overflow-y-auto shrink-0 border-r border-slate-200 transition-transform duration-300 ${
-          sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-        }`}
-      >
-        <SliderBar />
-      </div>
-
-      {/* Main Content Area */}
-      <div className="flex-1 bg-[#F8F9FA] flex flex-col h-full overflow-y-auto min-w-0">
-        <Header onOpenSidebar={() => setSidebarOpen(true)} />
-
-        <div className="p-4 sm:p-6 lg:p-8 space-y-8 max-w-7xl mx-auto w-full">
-          <DataNotice loading={loading} error={loadError} onRetry={() => fetchZones(false)} hasData={Object.keys(lastResponses.current).length > 0} />
-          {/* Header Title */}
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div>
-              <div className="inline-flex items-center bg-blue-50 py-1 px-3 gap-2 rounded-full mb-2 border border-blue-100">
-                <div className="bg-blue-600 w-2 h-2 rounded-full animate-pulse" />
-                <span className="text-blue-700 text-[10px] font-bold uppercase tracking-wider">
-                  AI Clustering Active
-                </span>
-              </div>
-              <h1 className="text-3xl font-black text-slate-900 tracking-tight">
-                Quản lý Vùng Cứu hộ
-              </h1>
-              <p className="text-slate-500 text-sm mt-0.5">
-                Quan sát trực quan bản đồ, điều phối và thực hiện các thao tác gộp vùng, gộp SOS đơn lẻ, tách, sửa, xóa vùng cứu hộ.
-              </p>
+    <AdminLayout>
+      <div className="space-y-6">
+        <DataNotice loading={loading} error={loadError} onRetry={() => fetchZones(false)} hasData={Object.keys(lastResponses.current).length > 0} />
+        {/* Header Title */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <div className="inline-flex items-center bg-blue-50 py-0.5 px-2.5 gap-2 rounded-full mb-1.5 border border-blue-100">
+              <div className="bg-blue-600 w-1.5 h-1.5 rounded-full" />
+              <span className="text-blue-700 text-xs font-semibold uppercase tracking-wider">
+                Phân cụm tự động
+              </span>
             </div>
+            <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">
+              Quản lý Vùng Cứu hộ
+            </h1>
+            <p className="text-slate-500 text-xs mt-0.5">
+              Quan sát trực quan bản đồ, điều phối và thực hiện các thao tác gộp vùng, gộp SOS đơn lẻ, tách, sửa, xóa vùng cứu hộ.
+            </p>
           </div>
+        </div>
 
           {/* Metric Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -1634,7 +1619,6 @@ export default function RescueZoneManagementPage() {
             )}
           </div>
         </div>
-      </div>
 
       {/* ══════════════════════════════════════════════════════════════════════
           MODALS QUẢN TRỊ VÙNG
@@ -1651,7 +1635,7 @@ export default function RescueZoneManagementPage() {
       {/* Modal 1: GỘP SOS ĐƠN LẺ VÀO VÙNG (DEDICATED MODAL) */}
       {showMoveSosModal && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-[2.5rem] w-full max-w-xl overflow-hidden shadow-2xl">
+          <div className="bg-white rounded-modal w-full max-w-xl overflow-hidden shadow-2xl">
             <div className="p-6 bg-slate-900 text-white flex justify-between items-center">
               <div>
                 <div className="flex items-center gap-2">
@@ -1824,7 +1808,7 @@ export default function RescueZoneManagementPage() {
       {/* Modal 2: Tạo Vùng Mới */}
       {showCreateModal && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-[2.5rem] w-full max-w-md overflow-hidden shadow-2xl">
+          <div className="bg-white rounded-modal w-full max-w-md overflow-hidden shadow-2xl">
             <div className="p-6 bg-[#B7131A] text-white">
               <h2 className="text-2xl font-black">Tạo Vùng Mới</h2>
               <p className="opacity-75 text-sm mt-1">
@@ -1910,7 +1894,7 @@ export default function RescueZoneManagementPage() {
       {/* Modal 3: Sửa / Điều chỉnh Vùng */}
       {showEditModal && editingZone && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-[2.5rem] w-full max-w-lg overflow-hidden shadow-2xl">
+          <div className="bg-white rounded-modal w-full max-w-lg overflow-hidden shadow-2xl">
             <div className="p-6 bg-slate-900 text-white flex justify-between items-center">
               <div>
                 <h2 className="text-xl font-black">Điều chỉnh Vùng Cứu hộ</h2>
@@ -2062,7 +2046,7 @@ export default function RescueZoneManagementPage() {
       {/* Modal 4: Gộp Vùng Cứu Hộ (Merge Zones) */}
       {showMergeModal && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-[2.5rem] w-full max-w-lg overflow-hidden shadow-2xl">
+          <div className="bg-white rounded-modal w-full max-w-lg overflow-hidden shadow-2xl">
             <div className="p-6 bg-slate-900 text-white flex justify-between items-center">
               <div>
                 <div className="flex items-center gap-2">
@@ -2221,7 +2205,7 @@ export default function RescueZoneManagementPage() {
       {/* Modal 5: Tách SOS / Tách Vùng (Detach / Move SOS) */}
       {showDetachModal && detachZone && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-[2.5rem] w-full max-w-xl overflow-hidden shadow-2xl">
+          <div className="bg-white rounded-modal w-full max-w-xl overflow-hidden shadow-2xl">
             <div className="p-6 bg-slate-900 text-white flex justify-between items-center">
               <div>
                 <div className="flex items-center gap-2">
@@ -2420,7 +2404,7 @@ export default function RescueZoneManagementPage() {
       {/* Modal 6: Điều phối SOS đơn lẻ (Phân công đội) */}
       {selectedSingleSos && (
         <div className="fixed inset-0 z-[10010] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl">
+          <div className="bg-white rounded-modal w-full max-w-lg overflow-hidden shadow-2xl">
             <div className="p-6 bg-slate-900 text-white flex justify-between items-center">
               <div>
                 <h2 className="text-xl font-black">Phân công Đội cho SOS đơn lẻ</h2>
@@ -2516,7 +2500,7 @@ export default function RescueZoneManagementPage() {
       {/* Modal 7: Yêu cầu Chi viện */}
       {selectedHelpZone && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-[2.5rem] w-full max-w-md overflow-hidden shadow-2xl">
+          <div className="bg-white rounded-modal w-full max-w-md overflow-hidden shadow-2xl">
             <div className="p-6 bg-[#B7131A] text-white">
               <h2 className="text-2xl font-black">🚨 Chi Viện Cấp Bách</h2>
               <p className="opacity-75 text-sm mt-1">
@@ -2568,16 +2552,16 @@ export default function RescueZoneManagementPage() {
           </div>
         </div>
       )}
-    </div>
+    </AdminLayout>
   );
 }
 
 const MetricCard = ({ label, val, sub, color }: any) => (
-  <div className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-200 shadow-sm">
-    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</span>
-    <h2 className="text-3xl font-black mt-1" style={{ color }}>
+  <div className="stat-card">
+    <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{label}</span>
+    <h2 className="text-2xl font-bold mt-1" style={{ color }}>
       {val}
     </h2>
-    <p className="text-[10px] font-bold text-slate-400 mt-1">{sub}</p>
+    <p className="text-xs text-slate-400 font-medium mt-0.5">{sub}</p>
   </div>
 );

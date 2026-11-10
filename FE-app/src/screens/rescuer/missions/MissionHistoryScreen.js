@@ -65,7 +65,7 @@ const MissionHistoryScreen = ({ navigation }) => {
         </View>
 
         <Text style={styles.pageTitle}>Lịch sử nhiệm vụ</Text>
-        <Text style={styles.pageDesc}>Dữ liệu lưu trữ các hoạt động cứu hộ và tuần tra được mã hóa trên hệ thống Sentinel.</Text>
+        <Text style={styles.pageDesc}>Dữ liệu lưu trữ các hoạt động cứu hộ và tuần tra được lưu trữ trên hệ thống cứu nạn.</Text>
 
         {/* Stats */}
         <View style={styles.statsRow}>

@@ -32,28 +32,28 @@ const { width } = Dimensions.get('window');
 const TYPE_CONFIG = {
   info: {
     icon: 'ℹ️',
-    color: '#00BCD4',
-    bg: '#E0F7FA',
+    color: '#1D4ED8',
+    bg: '#EFF6FF',
   },
   success: {
     icon: '✅',
-    color: '#43A047',
-    bg: '#E8F5E9',
+    color: '#16A34A',
+    bg: '#DCFCE7',
   },
   warning: {
     icon: '⚠️',
-    color: '#FB8C00',
-    bg: '#FFF3E0',
+    color: '#EA580C',
+    bg: '#FFEDD5',
   },
   error: {
     icon: '🚨',
-    color: '#E53935',
-    bg: '#FFEBEE',
+    color: '#B7131A',
+    bg: '#FDEAEA',
   },
   confirm: {
     icon: '❓',
-    color: '#1565C0',
-    bg: '#E3F2FD',
+    color: '#1D4ED8',
+    bg: '#EFF6FF',
   },
 };
 
@@ -108,7 +108,7 @@ const CustomModal = ({
                   style={[
                     styles.btn,
                     styles.btnConfirm,
-                    { backgroundColor: type === 'error' ? '#E53935' : '#1A2236' },
+                    { backgroundColor: type === 'error' ? '#B7131A' : '#0F172A' },
                     isConfirmMode ? { flex: 1 } : styles.btnFull,
                   ]}
                   onPress={onConfirm}

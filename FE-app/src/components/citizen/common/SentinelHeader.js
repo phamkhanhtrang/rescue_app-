@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 /**
  * src/components/citizen/common/SentinelHeader.js
  * ─────────────────────────────────────────────────────────────────────────────
@@ -56,14 +57,19 @@ const SentinelHeader = ({
           {/* Shield icon */}
           <View style={styles.shieldContainer}>
             <View style={[styles.shield, { backgroundColor: logoRed }]}>
-              <Text style={styles.shieldIcon}>🛡</Text>
+              <Ionicons name="shield-checkmark" size={18} color="#FFF" />
             </View>
           </View>
 
           {/* Brand name */}
-          <Text style={[styles.brandName, { color: dark ? COLORS.textWhite : COLORS.primary }]}>
-            SENTINEL
-          </Text>
+          <View style={{ alignItems: 'flex-start' }}>
+            <Text style={[styles.brandName, { color: dark ? COLORS.textWhite : COLORS.primary, letterSpacing: 1 }]}>
+              CỨU NẠN KHẨN CẤP
+            </Text>
+            <Text style={{ fontSize: 9, fontWeight: '700', color: dark ? '#94A3B8' : '#64748B', letterSpacing: 0.5 }}>
+              HỖ TRỢ THIÊN TAI 24/7
+            </Text>
+          </View>
         </View>
 
         {/* Signal indicator */}

@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput,
@@ -282,7 +283,7 @@ const ProfileScreen = ({ navigation }) => {
 
             <View style={styles.verifiedBadge}>
               <View style={styles.verifiedDot} />
-              <Text style={styles.verifiedText}>CÔNG DÂN ĐÃ ĐỊNH DANH · SẴN SÀNG SOS</Text>
+              <Text style={styles.verifiedText}>TÀI KHOẢN ĐÃ XÁC MINH SĐT</Text>
             </View>
           </View>
         </View>
@@ -298,8 +299,8 @@ const ProfileScreen = ({ navigation }) => {
               onPress={() => setPersonalInfoModalVisible(true)}
               activeOpacity={0.7}
             >
-              <View style={[styles.menuIconWrap, { backgroundColor: '#E3F2FD' }]}>
-                <Text style={styles.menuEmoji}>👤</Text>
+              <View style={[styles.menuIconWrap, { backgroundColor: '#EFF6FF' }]}>
+                <Ionicons name="person-outline" size={19} color="#1D4ED8" />
               </View>
               <View style={styles.menuTextWrap}>
                 <Text style={styles.menuItemTitle}>Thông tin cá nhân & CCCD</Text>
@@ -318,8 +319,8 @@ const ProfileScreen = ({ navigation }) => {
               onPress={() => setMedicalModalVisible(true)}
               activeOpacity={0.7}
             >
-              <View style={[styles.menuIconWrap, { backgroundColor: '#FFEBEE' }]}>
-                <Text style={styles.menuEmoji}>🏥</Text>
+              <View style={[styles.menuIconWrap, { backgroundColor: '#FFF1F2' }]}>
+                <Ionicons name="medical-outline" size={19} color="#E11D48" />
               </View>
               <View style={styles.menuTextWrap}>
                 <Text style={styles.menuItemTitle}>Hồ sơ sức khỏe & Dị ứng</Text>
@@ -363,11 +364,11 @@ const ProfileScreen = ({ navigation }) => {
               onPress={() => navigation.navigate('SOSRequestsScreen')}
               activeOpacity={0.7}
             >
-              <View style={[styles.menuIconWrap, { backgroundColor: '#E8F5E9' }]}>
-                <Text style={styles.menuEmoji}>📋</Text>
+              <View style={[styles.menuIconWrap, { backgroundColor: '#F0FDF4' }]}>
+                <Ionicons name="time-outline" size={19} color="#16A34A" />
               </View>
               <View style={styles.menuTextWrap}>
-                <Text style={styles.menuItemTitle}>Lịch sử tín hiệu SOS</Text>
+                <Text style={styles.menuItemTitle}>Yêu cầu cứu trợ đã gửi</Text>
                 <Text style={styles.menuItemSubtitle}>Xem các yêu cầu cứu trợ đã gửi & tiến độ</Text>
               </View>
               <Text style={styles.menuArrow}>›</Text>
@@ -381,8 +382,8 @@ const ProfileScreen = ({ navigation }) => {
               onPress={() => navigation.navigate('Password', { mode: 'change' })}
               activeOpacity={0.7}
             >
-              <View style={[styles.menuIconWrap, { backgroundColor: '#F3E5F5' }]}>
-                <Text style={styles.menuEmoji}>🔒</Text>
+              <View style={[styles.menuIconWrap, { backgroundColor: '#FAF5FF' }]}>
+                <Ionicons name="lock-closed-outline" size={19} color="#7C3AED" />
               </View>
               <View style={styles.menuTextWrap}>
                 <Text style={styles.menuItemTitle}>Tài khoản & Mật khẩu</Text>
@@ -400,7 +401,7 @@ const ProfileScreen = ({ navigation }) => {
             onPress={handleSignOut}
             activeOpacity={0.8}
           >
-            <Text style={styles.signOutEmoji}>🚪</Text>
+            <Ionicons name="log-out-outline" size={18} color="#DC2626" />
             <Text style={styles.signOutText}>Đăng xuất tài khoản</Text>
           </TouchableOpacity>
           <Text style={styles.versionText}>Sentinel Rescue Platform v2.4 · Bảo mật mã hóa</Text>
@@ -424,7 +425,7 @@ const ProfileScreen = ({ navigation }) => {
             <View style={styles.sheetHeader}>
               <View>
                 <Text style={styles.sheetTitle}>Thông tin cá nhân & CCCD</Text>
-                <Text style={styles.sheetSubtitle}>Đội cứu hộ đối chiếu khi tiếp cận hiện trường</Text>
+                <Text style={styles.sheetSubtitle}>Hỗ trợ đội cứu trợ xác minh thông tin nhanh</Text>
               </View>
               <TouchableOpacity onPress={() => setPersonalInfoModalVisible(false)}>
                 <Text style={styles.closeBtnText}>✕</Text>
@@ -1003,13 +1004,17 @@ const styles = StyleSheet.create({
   },
 
   saveActionBtn: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: '#1D4ED8',
     borderRadius: RADIUS.md,
     height: 48,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 8,
-    ...SHADOWS.card,
+    elevation: 3,
+    shadowColor: '#1D4ED8',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
   },
   saveActionText: {
     color: '#FFFFFF',

@@ -10,42 +10,44 @@
 
 export const COLORS = {
   // Thương hiệu
-  primary:      '#E53935',   // Đỏ SOS — dùng cho nút SOS, badge active, đường viền khẩn
-  primaryDark:  '#B71C1C',   // Đỏ đậm — pressed state, bóng đổ
-  primaryLight: '#FFEBEE',   // Đỏ nhạt — background badge nhẹ
+  primary:      '#B7131A',   // Đỏ SOS — dùng cho nút SOS, badge active, đường viền khẩn
+  primaryDark:  '#8B0E13',   // Đỏ đậm — pressed state, bóng đổ
+  primaryLight: '#FDEAEA',   // Đỏ nhạt — background badge nhẹ
 
   // Nền tảng
-  bgLight:      '#F5F5F5',   // Nền ứng dụng chính
+  bgLight:      '#F8F9FA',   // Nền ứng dụng chính
   bgWhite:      '#FFFFFF',   // Card, input, header
-  bgDark:       '#0D1421',   // Header tối, bản đồ tối, màn hình offline
-  bgNavy:       '#1A2236',   // Card tối thứ cấp
-  bgTeal:       '#0B5E75',   // Card AI Insight (màu đặc trưng Guardian)
-  bgTealDark:   '#083E4D',   // Pressed state cho teal card
+  bgDark:       '#0F172A',   // Header tối, bản đồ tối, màn hình offline
+  bgNavy:       '#1E293B',   // Card tối thứ cấp
+  bgTeal:       '#1E293B',   // Card tối phụ trợ
+  bgTealDark:   '#0F172A',   // Pressed state cho card tối
 
   // Văn bản
-  textPrimary:  '#1A1A2E',   // Text chính (rất tối, gần đen)
-  textSecondary:'#757575',   // Text phụ (xám trung)
-  textHint:     '#BDBDBD',   // Placeholder, text nhạt
+  textPrimary:  '#0F172A',   // Text chính (Slate-900)
+  textSecondary:'#64748B',   // Text phụ (Slate-500)
+  textHint:     '#94A3B8',   // Placeholder, text nhạt (Slate-400)
   textWhite:    '#FFFFFF',   // Text trên nền tối/đỏ
-  textTeal:     '#00BCD4',   // Text accent xanh lam (blockchain hash, tags)
+  textTeal:     '#1D4ED8',   // Text accent xanh lam
 
   // Trạng thái
-  statusGreen:  '#43A047',   // An toàn, verified, resolved
-  statusOrange: '#FB8C00',   // Cảnh báo, warning
-  statusRed:    '#E53935',   // Nguy hiểm, active threat
-  statusBlue:   '#1565C0',   // Thông tin, rescue info
+  statusGreen:  '#16A34A',   // An toàn, verified, resolved
+  statusOrange: '#EA580C',   // Cảnh báo, warning
+  statusRed:    '#B7131A',   // Nguy hiểm, active threat
+  statusBlue:   '#1D4ED8',   // Thông tin, rescue info
 
   // UI
-  border:       '#E8E8E8',   // Đường viền card, input
-  borderFocus:  '#E53935',   // Đường viền khi focus input
-  shadow:       'rgba(0,0,0,0.10)',
-  shadowRed:    'rgba(229,57,53,0.35)', // Bóng đổ nút SOS
-  overlay:      'rgba(13,20,33,0.6)',   // Overlay tối trên bản đồ
+  border:       '#E2E8F0',   // Đường viền card, input
+  borderFocus:  '#B7131A',   // Đường viền khi focus input
+  shadow:       'rgba(0,0,0,0.08)',
+  shadowRed:    'rgba(183,19,26,0.35)', // Bóng đổ nút SOS
+  overlay:      'rgba(15,23,42,0.6)',   // Overlay tối trên bản đồ
 
   // Đặc biệt
-  blockchain:   '#00BCD4',   // Màu blockchain hash
-  mapDark:      '#2C3E50',   // Nền map placeholder tối
-  liveBadge:    '#FF1744',   // Badge "LIVE ALERT"
+  accent:       '#1D4ED8',   // Màu accent
+  verified:     '#16A34A',   // Màu đã xác thực
+  blockchain:   '#1D4ED8',   // Backward-compatibility token
+  mapDark:      '#1E293B',   // Nền map placeholder tối
+  liveBadge:    '#B7131A',   // Badge "LIVE ALERT"
 };
 
 // ─── Typography ──────────────────────────────────────────────────────────────

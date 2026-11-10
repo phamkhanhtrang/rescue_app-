@@ -7,109 +7,98 @@ import {
   UserCog,
   Bell,
   FileText,
-  Zap
+  AlertTriangle,
+  LogOut,
 } from "lucide-react";
 
 import { apiClient, clearSession } from "../services/api";
 
-export default function SliderBar() {
-  const navigate = useNavigate();
-  const location = useLocation();
-
-  const menuItems = [
+const menuItems = [
   { name: "Trang chủ", path: "/dashboard", icon: LayoutDashboard },
-  { name: "Sơ đồ", path: "/map", icon: Map },
+  { name: "Bản đồ", path: "/map", icon: Map },
+  { name: "Tất cả SOS", path: "/sos", icon: AlertTriangle },
   { name: "Khu vực", path: "/rescue-zone-management", icon: MapPinned },
   { name: "Đội cứu hộ", path: "/follow-the-rescue-team", icon: Users },
-  { name: "AI Tìm tin",   path: "/ai-crawler",    icon: FileText },
+  { name: "AI Tìm tin", path: "/ai-crawler", icon: FileText },
   { name: "Tài khoản", path: "/account", icon: UserCog },
   { name: "Phát tin", path: "/notification-broadcast", icon: Bell },
   { name: "Báo cáo", path: "/report", icon: FileText },
 ];
 
+export default function SliderBar() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
   const handleLogout = async () => {
     const refresh = localStorage.getItem("refresh_token");
-    try { if (refresh) await apiClient.post("/accounts/logout/", { refresh }); } catch { /* Clear local session even offline. */ }
-    // Xóa hết dữ liệu trong localStorage
+    try {
+      if (refresh) await apiClient.post("/accounts/logout/", { refresh });
+    } catch {
+      /* Clear local session even offline. */
+    }
     clearSession();
-    // Chuyển về trang login
     navigate("/");
   };
 
   return (
-    <div className="flex flex-col h-screen w-[260px] bg-slate-100 py-4 shrink-0 border-r border-slate-200">
-      
-      <div className="flex items-center pb-8 px-6">
-        <button
-          className="flex flex-col shrink-0 items-start bg-[#DB322F] text-left py-2.5 px-3 mr-3 rounded border-0 cursor-pointer"
-          onClick={() => navigate("/")}
-        >
-          <img
-            src="https://figma-alpha-api.s3.us-west-2.amazonaws.com/images/d4d0c0a9-b995-48f6-907b-293d54dfaa33"
-            className="w-4 h-5 rounded object-fill"
-          />
-        </button>
+    <div className="flex flex-col h-screen w-[240px] bg-slate-900 py-5 shrink-0">
+      {/* Logo */}
+      <div className="flex items-center gap-3 px-5 pb-6">
+        <div className="w-9 h-9 bg-brand rounded-btn flex items-center justify-center">
+          <span className="text-white text-lg">🆘</span>
+        </div>
         <div className="flex flex-col">
-          <span className="text-slate-900 text-lg font-bold">Guardian Pulse</span>
-          <span className="text-slate-500 text-[10px]">Emergency Command</span>
+          <span className="text-white text-sm font-bold leading-tight">
+            CỨU NẠN KHẨN CẤP
+          </span>
+          <span className="text-slate-400 text-xs">Ban Chỉ Huy & Điều Phối</span>
         </div>
       </div>
 
-      
-      <div className="flex flex-col items-start px-4 flex-1 overflow-y-auto">
-  {menuItems.map((item) => {
-    const isActive = location.pathname === item.path;
-    const Icon = item.icon;
+      {/* Divider */}
+      <div className="mx-5 h-px bg-slate-700/50 mb-3" />
 
-    return (
-      <div
-        key={item.path}
-        onClick={() => navigate(item.path)}
-        className={`flex items-center w-full py-2.5 mb-2 cursor-pointer rounded-md transition-all ${
-          isActive
-            ? "bg-white shadow-sm"
-            : "hover:bg-slate-200"
-        }`}
-      >
-        <Icon
-          size={18}
-          className={`mx-3 ${
-            isActive
-              ? "text-blue-700"
-              : "text-slate-500 opacity-70"
-          }`}
-        />
+      {/* Navigation */}
+      <nav className="flex flex-col gap-0.5 px-3 flex-1 overflow-y-auto">
+        {menuItems.map((item) => {
+          const isActive =
+            location.pathname === item.path ||
+            (item.path !== "/" && location.pathname.startsWith(item.path + "/"));
+          const Icon = item.icon;
 
-        <span
-          className={`text-[11px] font-bold ${
-            isActive
-              ? "text-blue-700"
-              : "text-slate-500"
-          }`}
+          return (
+            <button
+              key={item.path}
+              onClick={() => navigate(item.path)}
+              className={`flex items-center w-full gap-3 px-3 py-2.5 rounded-btn text-left transition-colors ${
+                isActive
+                  ? "bg-white/10 text-white"
+                  : "text-slate-400 hover:bg-white/5 hover:text-slate-200"
+              }`}
+            >
+              <Icon size={18} className="shrink-0" />
+              <span className="text-sm font-medium truncate">{item.name}</span>
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Footer */}
+      <div className="px-5 pt-4 space-y-3 shrink-0">
+        <div className="flex items-center gap-2 px-2 py-1.5 rounded-btn bg-emerald-500/10">
+          <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+          <span className="text-emerald-400 text-xs font-medium">
+            Hệ thống hoạt động
+          </span>
+        </div>
+
+        <button
+          onClick={handleLogout}
+          className="flex items-center gap-2 w-full px-2 py-2 text-slate-400 hover:text-red-400 hover:bg-white/5 rounded-btn transition-colors"
         >
-          {item.name}
-        </span>
-      </div>
-    );
-  })}
-</div>
-
-      {/* Footer Status & Links */}
-      <div className="flex flex-col items-start py-4 px-6 gap-6 shrink-0">
-        <div className="flex items-center bg-[#22C55E1A] py-[7px] px-3 gap-1.5 rounded-xl">
-          <div className="bg-green-500 w-1.5 h-1.5 rounded-full shadow-[0_0_5px_#22c55e]"></div>
-          <span className="text-green-700 text-[10px] font-bold">System Status: OK</span>
-        </div>
-        
-        <div className="flex flex-col gap-2">
-          <div 
-            onClick={handleLogout}
-            className="flex items-center cursor-pointer hover:text-slate-900 text-slate-500"
-          >
-             <span className="text-[11px]">Log Out</span>
-          </div>
-          
-        </div>
+          <LogOut size={16} />
+          <span className="text-sm">Đăng xuất</span>
+        </button>
       </div>
     </div>
   );

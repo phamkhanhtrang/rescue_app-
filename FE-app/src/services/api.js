@@ -168,12 +168,40 @@ const API = {
       body: JSON.stringify(data),
     }),
   },
-   rescueOperations: {
+  rescueOperations: {
     // API lấy lộ trình dẫn đường thông minh
     getRoute: (start, target) => apiClient('/rescue_operations/get-route/', {
       method: 'POST',
       body: JSON.stringify({ start, target }),
     }),
+  },
+
+  // --------------------------------------------------
+  // 4B. BÁO CÁO HIỆN TRƯỜNG & VOTE CỘNG ĐỒNG (T2 + T3 + T4 + S2 + S4)
+  // --------------------------------------------------
+  fieldReports: {
+    getAll: (params = {}) => {
+      const query = new URLSearchParams(params).toString();
+      return apiClient(`/rescue_operations/field-reports/${query ? `?${query}` : ''}`);
+    },
+    getDetails: (id) => apiClient(`/rescue_operations/field-reports/${id}/`),
+    previewRoad: (params = {}) => {
+      const query = new URLSearchParams(params).toString();
+      return apiClient(`/rescue_operations/field-reports/preview-road/${query ? `?${query}` : ''}`);
+    },
+    create: (data) => apiClient('/rescue_operations/field-reports/create/', {
+      method: 'POST',
+      body: (typeof FormData !== 'undefined' && data instanceof FormData) ? data : JSON.stringify(data),
+    }),
+    vote: (id, voteData) => apiClient(`/rescue_operations/field-reports/${id}/vote/`, {
+      method: 'POST',
+      body: (typeof FormData !== 'undefined' && voteData instanceof FormData) ? voteData : JSON.stringify(voteData),
+    }),
+    update: (id, data) => apiClient(`/rescue_operations/field-reports/${id}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+    safetyCheck: (lat, lng) => apiClient(`/rescue_operations/safety-check/?lat=${lat}&lng=${lng}`),
   },
 
   // --------------------------------------------------

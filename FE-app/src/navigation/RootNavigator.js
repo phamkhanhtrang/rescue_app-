@@ -30,7 +30,7 @@ import RescuerStack from './RescuerStack';
  */
 const LoadingScreen = () => (
   <View style={styles.loadingContainer}>
-    <ActivityIndicator size="large" color="#E53935" />
+    <ActivityIndicator size="large" color="#B7131A" />
   </View>
 );
 

@@ -7,16 +7,23 @@
 
 import React, { useCallback, useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Image,
   ActivityIndicator, RefreshControl, SafeAreaView,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import SentinelHeader from '../../../components/citizen/common/SentinelHeader';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS, LAYOUT } from '../../../constants/citizen/theme';
 import { records, getDraft, remember, clearDraft } from '../../../services/sosStorage';
-import { apiClient } from '../../../services/apiClient';
+import { apiClient, BASE_URL } from '../../../services/apiClient';
 import API from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
+
+const cleanAddress = (addr) => {
+  if (!addr) return '';
+  let res = String(addr).replace(/Zone\s*AI\s*/gi, 'Khu vực Cứu hộ ');
+  res = res.replace(/\(\d+\s*SOS\)/gi, '').trim();
+  return res;
+};
 
 const STATUS = {
   PENDING: 'CHỜ PHÂN CÔNG',
@@ -198,13 +205,49 @@ export default function SOSRequestsScreen({ navigation }) {
 
                 {!!item.address && (
                   <Text numberOfLines={2} style={styles.addressText}>
-                    📍 {item.address}
+                    📍 {cleanAddress(item.address)}
                   </Text>
                 )}
 
                 {item.people_count > 0 && (
                   <Text style={styles.peopleText}>👥 Số người cần giúp: {item.people_count} người</Text>
                 )}
+
+                {/* Ảnh hiện trường đính kèm */}
+                {Array.isArray(item.images) && item.images.length > 0 && (
+                  <View style={styles.imageWrap}>
+                    <Text style={styles.imageLabel}>📷 Ảnh hiện trường gửi kèm:</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imageRow}>
+                      {item.images.map((img, idx) => {
+                        const raw = typeof img === 'string' ? img : (img.image || img.url || '');
+                        if (!raw) return null;
+                        const imgUrl = raw.startsWith('http') ? raw : `${BASE_URL}${raw}`;
+                        return (
+                          <Image
+                            key={idx}
+                            source={{ uri: imgUrl }}
+                            style={styles.evidenceImage}
+                            resizeMode="cover"
+                          />
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                )}
+
+                {/* Ghi chú */}
+                {!!(item.note || item.description) && (
+                  <View style={styles.noteBox}>
+                    <Text style={styles.noteLabel}>💬 Ghi chú:</Text>
+                    <Text style={styles.noteText} numberOfLines={2}>{item.note || item.description}</Text>
+                  </View>
+                )}
+
+                {/* Thanh điều hướng theo dõi */}
+                <View style={styles.trackingHintRow}>
+                  <Text style={styles.trackingHintText}>Chạm để xem vị trí đội cứu hộ & lộ trình</Text>
+                  <Text style={styles.trackingHintArrow}>➔</Text>
+                </View>
               </View>
             </TouchableOpacity>
           );
@@ -319,6 +362,32 @@ const styles = StyleSheet.create({
   metaText: { fontSize: 11, color: COLORS.textHint },
   addressText: { fontSize: 13, color: COLORS.textSecondary, lineHeight: 18 },
   peopleText: { fontSize: 12, fontWeight: '700', color: COLORS.textPrimary },
+  imageWrap: { marginTop: 4, gap: 4 },
+  imageLabel: { fontSize: 11, fontWeight: '700', color: COLORS.textSecondary },
+  imageRow: { gap: 8, paddingVertical: 2 },
+  evidenceImage: { width: 72, height: 72, borderRadius: 8, backgroundColor: '#E2E8F0' },
+  noteBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    padding: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.primary,
+    marginTop: 4,
+    gap: 2,
+  },
+  noteLabel: { fontSize: 11, fontWeight: '700', color: COLORS.textSecondary },
+  noteText: { fontSize: 12, color: COLORS.textPrimary, lineHeight: 16 },
+  trackingHintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 8,
+    marginTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  trackingHintText: { fontSize: 11, fontWeight: '700', color: '#1D4ED8' },
+  trackingHintArrow: { fontSize: 13, fontWeight: '800', color: '#1D4ED8' },
 
   newSosBtn: {
     height: 52,

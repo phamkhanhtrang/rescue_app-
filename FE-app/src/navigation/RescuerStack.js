@@ -32,6 +32,7 @@ import React from 'react';
 import AlertDetailScreen from '../screens/AlertDetailScreen';
 import NewsDetailScreen from '../screens/NewsDetailScreen';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
@@ -119,16 +120,21 @@ const MapNavigator = () => (
 
 // ─── Tab Bar Icon ─────────────────────────────────────────────────────────────
 
-// ─── Tab Bar Icon ─────────────────────────────────────────────────────────────
-
-const TabIcon = ({ emoji, label, focused, hasBadge }) => (
+const TabIcon = ({ iconName, label, focused, hasBadge }) => (
   <View style={tabIconStyles.wrapper}>
-    <View style={tabIconStyles.emojiWrap}>
-      <Text style={[tabIconStyles.emoji, focused && tabIconStyles.emojiActive]}>{emoji}</Text>
+    <View style={tabIconStyles.iconWrap}>
+      <MaterialCommunityIcons
+        name={iconName}
+        size={24}
+        color={focused ? RCOLORS.primary : RCOLORS.textHint}
+      />
       {hasBadge && <View style={tabIconStyles.badge} />}
     </View>
     <Text
-      style={[tabIconStyles.label, { color: focused ? RCOLORS.primary : RCOLORS.textHint }]}
+      style={[
+        tabIconStyles.label,
+        { color: focused ? RCOLORS.primary : RCOLORS.textSecondary, fontWeight: focused ? '700' : '500' }
+      ]}
       numberOfLines={1}
       ellipsizeMode="tail"
       adjustsFontSizeToFit
@@ -146,19 +152,26 @@ const tabIconStyles = StyleSheet.create({
     width: 76,
     maxWidth: 84,
     paddingTop: 2,
-    gap: 2,
+    gap: 3,
   },
-  emojiWrap: { position: 'relative' },
-  emoji: { fontSize: 22, opacity: 0.5 },
-  emojiActive: { opacity: 1 },
+  iconWrap: { position: 'relative' },
   label: {
     fontSize: 10,
-    fontWeight: RFONTS.semiBold,
     letterSpacing: 0.2,
     textAlign: 'center',
     includeFontPadding: false,
   },
-  badge: { position: 'absolute', top: -2, right: -3, width: 8, height: 8, borderRadius: 4, backgroundColor: RCOLORS.primary, borderWidth: 1.5, borderColor: '#FFF' },
+  badge: {
+    position: 'absolute',
+    top: -2,
+    right: -3,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: RCOLORS.primary,
+    borderWidth: 1.5,
+    borderColor: '#FFF',
+  },
 });
 
 // ─── RescuerTabs ─────────────────────────────────────────────────────────────
@@ -171,51 +184,56 @@ const RescuerTabs = () => (
       tabBarStyle: tabBarStyles.bar,
     }}
   >
-    {/* ── ĐIỀU HÀNH ──────────────────────────────────────────────────────── */}
+    {/* ── 1. TÁC CHIẾN ─────────────────────────────────────────────────── */}
     <Tab.Screen
       name="DashboardTab"
       component={DashboardScreen}
       options={{
         tabBarIcon: ({ focused }) => (
-          <TabIcon emoji="⊞" label="Điều hành" focused={focused} />
+          <TabIcon iconName="shield-alert-outline" label="Tác chiến" focused={focused} />
         ),
-        tabBarAccessibilityLabel: 'Điều hành',
+        tabBarAccessibilityLabel: 'Tác chiến',
       }}
     />
 
-    {/* ── NHIỆM VỤ ───────────────────────────────────────────────────────── */}
-    <Tab.Screen
-      name="MissionsTab"
-      component={MissionsNavigator}
-      options={{
-        tabBarIcon: ({ focused }) => (
-          <TabIcon emoji="📋" label="Nhiệm vụ" focused={focused} hasBadge />
-        ),
-        tabBarAccessibilityLabel: 'Nhiệm vụ',
-      }}
-    />
-
-    {/* ── BẢN ĐỒ ─────────────────────────────────────────────────────────── */}
+    {/* ── 2. BẢN ĐỒ ─────────────────────────────────────────────────────── */}
     <Tab.Screen
       name="MapTab"
       component={MapNavigator}
       options={{
         tabBarIcon: ({ focused }) => (
-          <TabIcon emoji="🗺" label="Bản đồ" focused={focused} />
+          <TabIcon iconName="map-marker-radius-outline" label="Bản đồ" focused={focused} />
         ),
         tabBarAccessibilityLabel: 'Bản đồ',
       }}
     />
 
-    {/* ── THÔNG BÁO ──────────────────────────────────────────────────────── */}
+    {/* ── 3. KHU VỰC ────────────────────────────────────────────────────── */}
+    <Tab.Screen
+      name="MissionsTab"
+      component={MissionsNavigator}
+      options={{
+        tabBarIcon: ({ focused }) => (
+          <TabIcon iconName="format-list-bulleted-square" label="Khu vực" focused={focused} />
+        ),
+        tabBarAccessibilityLabel: 'Khu vực',
+      }}
+      listeners={({ navigation }) => ({
+        tabPress: (e) => {
+          navigation.navigate('MissionsTab', { screen: 'ZoneListScreen' });
+        },
+      })}
+    />
+
+    {/* ── 4. ĐỘI NGŨ ────────────────────────────────────────────────────── */}
     <Tab.Screen
       name="AlertsTab"
       component={RescuerAlertsScreen}
       options={{
         tabBarIcon: ({ focused }) => (
-          <TabIcon emoji="🔔" label="Thông báo" focused={focused} hasBadge />
+          <TabIcon iconName="account-group-outline" label="Đội ngũ" focused={focused} hasBadge />
         ),
-        tabBarAccessibilityLabel: 'Thông báo',
+        tabBarAccessibilityLabel: 'Đội ngũ',
       }}
     />
   </Tab.Navigator>

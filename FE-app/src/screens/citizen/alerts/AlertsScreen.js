@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
@@ -114,12 +115,12 @@ const AlertsScreen = ({ navigation }) => {
 
         {/* ─── 1. Header section ──────────────────────────────────────────── */}
         <View style={styles.headerSection}>
-          <Text style={styles.opLabel}>TRẠNG THÁI HOẠT ĐỘNG</Text>
+          <Text style={styles.opLabel}>THÔNG TIN CHÍNH THỨC</Text>
 
           <View style={styles.titleRow}>
             <Text style={styles.pulseTitle}>Cảnh báo & Chỉ đạo</Text>
             <View style={styles.aiVerified}>
-              <Text style={styles.aiVerifiedText}>XÁC THỰC HỆ THỐNG</Text>
+              <Text style={styles.aiVerifiedText}>BAN CHỈ HUY PCTT</Text>
             </View>
           </View>
         </View>
@@ -130,7 +131,7 @@ const AlertsScreen = ({ navigation }) => {
             <View style={styles.threatBanner}>
               <Text style={styles.threatBannerIcon}>⚠</Text>
               <View style={{ flex: 1 }}>
-                <Text style={styles.threatBannerLabel}>TÌNH TRẠNG NGUY HIỂM TỨC THỜI</Text>
+                <Text style={styles.threatBannerLabel}>CẢNH BÁO BÃO LŨ KHẨN CẤP</Text>
                 <Text style={styles.threatBannerCount}>
                   {emergencyAlerts.length} CẢNH BÁO NGUY CẤP ĐANG HOẠT ĐỘNG
                 </Text>
@@ -219,11 +220,11 @@ const AlertsScreen = ({ navigation }) => {
         {/* ─── 4. Quick nav to History ────────────────────────────────────── */}
         <TouchableOpacity
           style={styles.historyLink}
-          onPress={() => navigation.navigate('HistoryScreen')}
+          onPress={() => navigation.navigate('SOSRequestsScreen')}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <Text style={{ fontSize: 18 }}>🕒</Text>
-            <Text style={styles.historyLinkText}>Lịch sử truyền tín hiệu SOS</Text>
+            <Ionicons name="time-outline" size={20} color="#1D4ED8" />
+            <Text style={styles.historyLinkText}>Yêu cầu cứu trợ của bạn</Text>
           </View>
           <Text style={styles.historyArrow}>›</Text>
         </TouchableOpacity>
@@ -282,7 +283,7 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   content: {
     padding: LAYOUT.screenPadding,
-    paddingBottom: 90,
+    paddingBottom: 160,
   },
 
   // ── Header section ─────────────────────────────

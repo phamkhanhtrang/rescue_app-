@@ -164,3 +164,147 @@ class SOSImage(models.Model):
 
     def __str__(self):
         return f"Ảnh SOS #{self.sos_id} - {self.caption or 'Không có chú thích'}"
+
+
+
+# ============================================================
+# NHÓM 4: BÁO CÁO HIỆN TRƯỜNG TỪ NGƯỜI DÂN & VOTE XÁC THỰC
+# ============================================================
+from django.utils import timezone
+
+class CrowdReport(models.Model):
+    """
+    Báo cáo tình hình thực tế trên đường từ người dân (T2 + T3 + T4).
+    Tách riêng khỏi bảng Alert của hệ thống để không spam Push Notification.
+    """
+    HAZARD_CHOICES = (
+        ('FLOOD', 'Ngập lụt'),
+        ('FALLEN_TREE', 'Cây đổ chắn đường'),
+        ('LANDSLIDE', 'Sạt lở đất đá'),
+        ('POWER_LINE', 'Dây điện đứt / Cột điện đổ'),
+        ('ROAD_BLOCKED', 'Đường chia cắt / Cầu hỏng'),
+    )
+    SEVERITY_CHOICES = (
+        ('LOW', 'Nhẹ (Mắt cá ~15cm)'),
+        ('MEDIUM', 'Cảnh báo (Ngang gối ~45cm)'),
+        ('HIGH', 'Nguy hiểm (Ngang yên xe ~80cm)'),
+        ('CRITICAL', 'Nghiêm trọng (>100cm / Chia cắt)'),
+    )
+    STATUS_CHOICES = (
+        ('PENDING', 'Chờ xác thực'),
+        ('VERIFIED', 'Đã xác thực nguy hiểm'),
+        ('RECEDING', 'Nước đang rút (Còn ngập nhẹ)'),
+        ('CLEARED', 'Đường đã thông'),
+        ('REJECTED', 'Báo cáo sai'),
+        ('EXPIRED', 'Đã hết hạn tự động'),
+    )
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    reporter = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='crowd_reports',
+        verbose_name='Người báo cáo đầu tiên'
+    )
+    reporter_name = models.CharField(max_length=150, blank=True, default='Người dân', verbose_name='Tên người báo')
+    hazard_type = models.CharField(max_length=30, choices=HAZARD_CHOICES, default='FLOOD', verbose_name='Loại sự cố')
+    water_level_cm = models.IntegerField(default=0, verbose_name='Mức nước ước tính (cm)')
+    severity = models.CharField(max_length=15, choices=SEVERITY_CHOICES, default='MEDIUM', verbose_name='Mức độ')
+
+    location_lat = models.DecimalField(max_digits=10, decimal_places=7, verbose_name='Vĩ độ (Điểm đầu / Tâm)')
+    location_lng = models.DecimalField(max_digits=10, decimal_places=7, verbose_name='Kinh độ (Điểm đầu / Tâm)')
+    end_lat = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True, verbose_name='Vĩ độ (Điểm cuối đoạn đường)')
+    end_lng = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True, verbose_name='Kinh độ (Điểm cuối đoạn đường)')
+    road_geometry = models.JSONField(default=list, blank=True, verbose_name='Chuỗi tọa độ bám theo đoạn đường [[lat, lng], ...]')
+    segment_length_m = models.IntegerField(default=150, verbose_name='Chiều dài đoạn đường sự cố (m)')
+    address = models.CharField(max_length=500, blank=True, default='', verbose_name='Địa chỉ / Tên đoạn đường')
+    description = models.TextField(blank=True, default='', verbose_name='Mô tả hiện trường')
+    image = models.ImageField(
+        upload_to='field_reports/%Y/%m/%d/',
+        null=True, blank=True,
+        verbose_name='Ảnh hiện trường'
+    )
+
+    status = models.CharField(max_length=15, choices=STATUS_CHOICES, default='PENDING', verbose_name='Trạng thái')
+    is_verified = models.BooleanField(default=False, verbose_name='Đã xác thực cộng đồng')
+    is_hidden = models.BooleanField(default=False, verbose_name='Đã ẩn khỏi bản đồ (Admin / Hết hạn)')
+    report_count = models.PositiveIntegerField(default=1, verbose_name='Số người xác nhận hiện hành (150m)')
+    incident_wave = models.PositiveIntegerField(default=1, verbose_name='Đợt sự cố (Wave)')
+    wave_started_at = models.DateTimeField(default=timezone.now, verbose_name='Thời điểm bắt đầu đợt sự cố')
+    expires_at = models.DateTimeField(null=True, blank=True, verbose_name='Thời điểm tự động hết hạn/ẩn')
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Thời điểm báo')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Cập nhật cuối')
+    cleared_at = models.DateTimeField(null=True, blank=True, verbose_name='Thời điểm thông đường')
+
+    class Meta:
+        verbose_name = 'Báo cáo hiện trường'
+        verbose_name_plural = 'Báo cáo hiện trường'
+        db_table = 'field_reports'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['status', '-created_at'], name='idx_freport_status_created'),
+            models.Index(fields=['hazard_type', 'status'], name='idx_freport_hazard_status'),
+        ]
+
+    def __str__(self):
+        return f"[{self.hazard_type}] Wave #{self.incident_wave} - {self.water_level_cm}cm - {self.status} ({self.location_lat}, {self.location_lng})"
+
+
+class CrowdReportVote(models.Model):
+    """
+    Lưu thông tin người vote xác nhận tình hình thực tế + ghi chú kèm theo.
+    Tuân thủ Quy tắc 1 (1 phiếu hiện hành/tài khoản, lưu lịch sử) & Quy tắc 2 (theo đợt sự cố + TTL).
+    """
+    VERDICT_CHOICES = (
+        ('CONFIRM_DANGER', 'Đúng, đang ngập / nguy hiểm'),
+        ('WORSENED', 'Mức độ đang nặng thêm'),
+        ('RECEDING', 'Nước đang rút (Vẫn còn ngập)'),
+        ('CLEARED', 'Đường đã thông (Hết nguy hiểm)'),
+        ('FALSE_REPORT', 'Báo cáo sai / Không có sự cố'),
+    )
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    report = models.ForeignKey(
+        CrowdReport,
+        on_delete=models.CASCADE,
+        related_name='votes',
+        verbose_name='Báo cáo hiện trường'
+    )
+    user = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='crowd_report_votes',
+        verbose_name='Tài khoản người vote'
+    )
+    voter_identifier = models.CharField(
+        max_length=180,
+        blank=True,
+        default='',
+        verbose_name='Định danh tài khoản chống vote trùng'
+    )
+    voter_name = models.CharField(max_length=150, blank=True, default='Người dân', verbose_name='Họ tên người vote')
+    voter_role = models.CharField(max_length=20, blank=True, default='CITIZEN', verbose_name='Vai trò người vote')
+    verdict = models.CharField(max_length=20, choices=VERDICT_CHOICES, verbose_name='Đánh giá hiện trường')
+    note = models.TextField(blank=True, default='', verbose_name='Ghi chú kèm theo')
+    water_level_cm = models.IntegerField(null=True, blank=True, verbose_name='Mức nước cập nhật (cm)')
+    image = models.ImageField(
+        upload_to='field_report_votes/%Y/%m/%d/',
+        null=True, blank=True,
+        verbose_name='Ảnh minh chứng khi vote'
+    )
+    incident_wave = models.PositiveIntegerField(default=1, verbose_name='Thuộc đợt sự cố')
+    is_active_vote = models.BooleanField(default=True, verbose_name='Phiếu hiện hành (chống trùng)')
+    voted_at = models.DateTimeField(auto_now_add=True, verbose_name='Thời gian phản hồi')
+
+    class Meta:
+        verbose_name = 'Phản hồi hiện trường'
+        verbose_name_plural = 'Phản hồi hiện trường'
+        db_table = 'field_report_votes'
+        ordering = ['-voted_at']
+
+    def __str__(self):
+        active_tag = "ACTIVE" if self.is_active_vote else "HISTORY"
+        return f"[{active_tag}|W{self.incident_wave}] {self.voter_name} ({self.voter_role}) -> {self.verdict}: {self.note[:40]}"

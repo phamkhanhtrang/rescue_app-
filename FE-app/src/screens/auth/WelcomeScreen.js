@@ -26,9 +26,9 @@ const C = {
   bg: '#0B1220',
   bgCard: '#111E30',
   bgCardLight: '#FFFFFF',
-  primary: '#E53935',
-  blue: '#1565C0',
-  teal: '#00838F',
+  primary: '#B7131A',
+  blue: '#1D4ED8',
+  teal: '#0F766E',
   white: '#FFFFFF',
   textDim: 'rgba(255,255,255,0.55)',
   textDimDark: 'rgba(0,0,0,0.5)',
@@ -70,16 +70,16 @@ const WelcomeScreen = ({ navigation }) => {
       <Animated.View style={[styles.logoSection, { opacity: logoOpacity, transform: [{ scale: logoScale }] }]}>
         <View style={styles.shieldOuter}>
           <View style={styles.shieldInner}>
-            <Text style={styles.shieldText}>🛡</Text>
+            <MaterialCommunityIcons name="shield-check" size={38} color="#FFF" />
           </View>
         </View>
-        <Text style={styles.brandName}>SENTINEL</Text>
-        <Text style={styles.tagline}>Hệ thống Cứu hộ Khẩn cấp</Text>
+        <Text style={styles.brandName}>CỨU TRỢ 24/7</Text>
+        <Text style={styles.tagline}>Nền tảng Hỗ trợ Ứng cứu Bão lũ & Thiên tai</Text>
 
         {/* Live indicator */}
         <View style={styles.liveRow}>
           <View style={styles.liveDot} />
-          <Text style={styles.liveText}>HỆ THỐNG ĐANG HOẠT ĐỘNG</Text>
+          <Text style={styles.liveText}>TỔNG ĐÀI CỨU HỘ SẴN SÀNG</Text>
         </View>
       </Animated.View>
 
@@ -153,11 +153,11 @@ const WelcomeScreen = ({ navigation }) => {
           activeOpacity={0.88}
           accessibilityLabel="Đăng nhập với vai trò Đội cứu hộ"
         >
-          <View style={[styles.cardIconBox, { backgroundColor: 'rgba(229,57,53,0.15)' }]}>
+          <View style={[styles.cardIconBox, { backgroundColor: 'rgba(183,19,26,0.15)' }]}>
             <MaterialCommunityIcons
               name="shield-account"
               size={26}
-              color="#E53935"
+              color="#B7131A"
             />
           </View>
           <View style={styles.cardBody}>
@@ -174,10 +174,7 @@ const WelcomeScreen = ({ navigation }) => {
 
       {/* ── Footer ───────────────────────────────────────────────────────── */}
       <View style={styles.footer}>
-        <View style={styles.footerBadge}>
-
-        </View>
-        <Text style={styles.footerVersion}>SENTINEL v2.1 · © 2025</Text>
+        <Text style={styles.footerVersion}>Hệ thống Hỗ trợ Cứu nạn & Phòng chống Thiên tai</Text>
       </View>
     </SafeAreaView>
   );
@@ -315,19 +312,19 @@ const styles = StyleSheet.create({
 
   // Anonymous SOS button
   anonymousSosBtn: {
-    backgroundColor: '#E53935',
+    backgroundColor: '#B7131A',
     borderRadius: 16,
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
     gap: 14,
-    shadowColor: '#E53935',
+    shadowColor: '#B7131A',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.4,
     shadowRadius: 14,
     elevation: 8,
     borderWidth: 1,
-    borderColor: '#FF1744',
+    borderColor: '#8B0E13',
   },
   anonymousSosIconBox: {
     width: 52, height: 52,
@@ -344,7 +341,7 @@ const styles = StyleSheet.create({
   },
   anonymousSosDesc: {
     fontSize: 12,
-    color: '#FFEBEE',
+    color: '#FDEAEA',
     marginTop: 3,
     lineHeight: 16,
   },
@@ -383,7 +380,7 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 14,
     borderWidth: 1,
-    borderColor: 'rgba(229,57,53,0.25)',
+    borderColor: 'rgba(183,19,26,0.25)',
     borderTopWidth: 3,
     borderTopColor: C.primary,
     shadowColor: C.primary,

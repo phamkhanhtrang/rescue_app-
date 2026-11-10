@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useMemo, useCallback, useEf
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppState } from 'react-native';
 import API from '../services/api';
-import { apiClient } from '../services/apiClient';
+import { apiClient, BASE_URL } from '../services/apiClient';
 import { setAuthSession, setAuthFailureHandler } from '../services/apiClient';
 import { unregisterPushDevice, cancelPushRegistration } from '../services/pushSession';
 import { setAlertLocation } from '../services/alertPolicy';
@@ -45,16 +45,41 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const loadStorageData = async () => {
       try {
-        const storedToken = await AsyncStorage.getItem('userToken');
+        let storedToken = await AsyncStorage.getItem('userToken');
         const storedRole = await AsyncStorage.getItem('userRole');
         const storedUserData = await AsyncStorage.getItem('userData');
-        const storedRefresh = await AsyncStorage.getItem('refreshToken');
+        let storedRefresh = await AsyncStorage.getItem('refreshToken');
 
         if (storedToken && storedRole && storedUserData) {
           const storedInfo = JSON.parse(storedUserData);
           const payload = decodeJwtPayload(storedToken);
           if (payload?.role && payload.role !== storedRole) throw new Error('Vai trò phiên không khớp.');
-          if (payload?.exp && payload.exp * 1000 < Date.now()) throw new Error('Phiên đăng nhập đã hết hạn.');
+          if (payload?.exp && payload.exp * 1000 < Date.now()) {
+            if (storedRefresh) {
+              try {
+                const refreshResp = await fetch(`${BASE_URL}/accounts/token/refresh/`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ refresh: storedRefresh }),
+                });
+                const refreshData = await refreshResp.json();
+                if (refreshResp.ok && refreshData.access) {
+                  storedToken = refreshData.access;
+                  if (refreshData.refresh) storedRefresh = refreshData.refresh;
+                  await AsyncStorage.multiSet([
+                    ['userToken', storedToken],
+                    ['refreshToken', storedRefresh],
+                  ]);
+                } else {
+                  throw new Error('Phiên đăng nhập đã hết hạn.');
+                }
+              } catch {
+                throw new Error('Phiên đăng nhập đã hết hạn.');
+              }
+            } else {
+              throw new Error('Phiên đăng nhập đã hết hạn.');
+            }
+          }
           if (!storedInfo?.id || !['CITIZEN', 'RESCUER'].includes(storedRole)) throw new Error('Phiên lưu không hợp lệ.');
           setUserToken(storedToken);
           setUserRole(storedRole);
@@ -64,7 +89,11 @@ export const AuthProvider = ({ children }) => {
           setAuthSession(storedToken, storedRefresh);
         }
       } catch (e) {
-        console.error('Lỗi khi tải dữ liệu từ AsyncStorage:', e);
+        if (e.message?.includes('hết hạn')) {
+          console.log('ℹ️ Phiên đăng nhập cũ đã hết hạn, vui lòng đăng nhập lại.');
+        } else {
+          console.warn('Lỗi khi tải dữ liệu từ AsyncStorage:', e?.message || e);
+        }
         setAuthSession(null, null);
         setUserInfo(null); setUserRole(null); setUserToken(null);
         await AsyncStorage.multiRemove(['userToken', 'refreshToken', 'userData', 'userRole']).catch(() => {});

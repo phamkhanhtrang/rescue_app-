@@ -72,8 +72,35 @@ def recount(zone_id):
     if active_sos:
         from ai.clustering import map_severity
         updates['severity'] = map_severity(active_sos)
+
+    # S3: Auto-close Zone if all valid SOS requests within the zone are resolved or cancelled
+    all_sos = SOSSignal.objects.filter(zone_id=zone_id).exclude(verification_status='INCORRECT')
+    should_resolve = all_sos.exists() and not qs.exists()
+
+    if should_resolve:
+        current_zone = Zone.objects.filter(pk=zone_id).first()
+        if current_zone and current_zone.status in ['ACTIVE', 'STABILIZING']:
+            updates['status'] = 'RESOLVED'
+
     Zone.objects.filter(pk=zone_id).update(**updates)
-    # Completing a request is not sufficient to close its zone.
+
+    # If zone has auto-resolved, close ongoing missions and free rescue teams
+    if updates.get('status') == 'RESOLVED':
+        from django.utils import timezone
+        from reporting.models import Mission, MissionEvent
+        active_missions = Mission.objects.filter(
+            zone_id=zone_id,
+            status__in=['PENDING_ACCEPTANCE', 'ACCEPTED', 'ON_MY_WAY', 'ACTIVE', 'NEEDS_HELP']
+        )
+        for mission in active_missions:
+            mission.status = 'COMPLETED'
+            mission.completed_at = timezone.now()
+            mission.outcome_note = 'Tất cả SOS trong vùng đã được giải quyết. Nhiệm vụ tự động hoàn thành.'
+            mission.save(update_fields=['status', 'completed_at', 'outcome_note'])
+            MissionEvent.objects.create(
+                mission=mission,
+                message='Hệ thống: Vùng đã giải quyết xong toàn bộ SOS, tự động hoàn thành nhiệm vụ.'
+            )
 
 
 @api_view(['POST'])

@@ -1,22 +1,27 @@
-import React, {useState} from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { API_BASE_URL, clearSession } from '../../services/api';
+import { API_BASE_URL, clearSession } from "../../services/api";
+import { ShieldCheck, Eye, EyeOff, Lock, User, AlertCircle } from "lucide-react";
 
 export default function HomeLogin() {
-  const [showPassword, setShowPassword] = React.useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
 
   const [loginInput, setLoginInput] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState(new URLSearchParams(window.location.search).has('expired') ? 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.' : '');
+  const [error, setError] = useState(
+    new URLSearchParams(window.location.search).has("expired")
+      ? "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại."
+      : ""
+  );
   const [loading, setLoading] = useState(false);
 
   // Kiểm tra nếu đã có token thì chuyển hướng luôn
-  React.useEffect(() => {
+  useEffect(() => {
     const token = localStorage.getItem("access_token");
     const role = localStorage.getItem("user_role");
-    if (token && !new URLSearchParams(window.location.search).has('expired')) {
+    if (token && !new URLSearchParams(window.location.search).has("expired")) {
       if (role === "ADMIN") {
         navigate("/dashboard");
       } else {
@@ -24,26 +29,25 @@ export default function HomeLogin() {
       }
     }
   }, [navigate]);
-  // 4. Hàm xử lý gửi dữ liệu cho Django
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (loading) return;
     setLoading(true);
-    setError(""); // Reset lỗi cũ
+    setError("");
+
     try {
       const response = await axios.post(`${API_BASE_URL}/accounts/login/`, {
         login_input: loginInput,
         password: password,
       });
 
-      // Nếu thành công:
-      if (response.data.user.role !== 'ADMIN') {
+      if (response.data.user.role !== "ADMIN") {
         clearSession();
-        setError('Trang quản trị chỉ dành cho tài khoản admin.');
+        setError("Cổng thông tin này chỉ dành cho tài khoản Quản trị viên (ADMIN).");
         return;
       }
-      
-      // Lưu Token vào LocalStorage để dùng cho các trang sau
+
       localStorage.setItem("access_token", response.data.access);
       localStorage.setItem("refresh_token", response.data.refresh);
       localStorage.setItem("user_role", response.data.user.role);
@@ -53,199 +57,121 @@ export default function HomeLogin() {
 
       navigate("/dashboard", { replace: true });
     } catch (err: any) {
-      // Nếu lỗi (Sai pass, thiếu trường...)
-      console.error("Chi tiết lỗi:", err);
-      
+      console.error("Chi tiết lỗi đăng nhập:", err);
       if (err.response) {
-        // Backend trả về response với status error
-        setError(err.response.data?.error || `Lỗi từ server: ${err.response.status}`);
+        setError(err.response.data?.error || `Lỗi máy chủ (${err.response.status}). Vui lòng thử lại.`);
       } else if (err.request) {
-        // Request được gửi nhưng không nhận được response
-        setError("Không thể kết nối tới server. Kiểm tra xem Django server đã chạy chưa?");
+        setError("Không thể kết nối đến máy chủ API. Vui lòng kiểm tra mạng.");
       } else {
-        // Lỗi khác
-        setError(err.message || "Đã có lỗi xảy ra, vui lòng thử lại.");
+        setError(err.message || "Đã xảy ra lỗi không xác định.");
       }
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   };
 
-
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="bg-white rounded-xl shadow-lg p-8 w-full max-w-sm flex flex-col items-center">
-        <div className="flex flex-col items-center mb-6">
-          <div className="bg-red-600 rounded-lg p-3 mb-2">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={2}
-              stroke="white"
-              className="w-8 h-8"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M12 17v.01M12 13a4 4 0 100-8 4 4 0 000 8zm0 0v4m0 0h.01"
-              />
-            </svg>
+    <div className="min-h-screen flex items-center justify-center bg-page p-4">
+      <div className="w-full max-w-sm">
+        {/* Main Card */}
+        <div className="card p-8 space-y-6 shadow-sm">
+          {/* Logo & Header */}
+          <div className="text-center space-y-2">
+            <div className="w-12 h-12 bg-brand rounded-btn flex items-center justify-center mx-auto shadow-xs">
+              <span className="text-white text-2xl font-bold">🆘</span>
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-slate-900 tracking-tight">CỨU NẠN KHẨN CẤP</h1>
+              <p className="text-xs text-slate-500 font-medium">Hệ Thống Chỉ Huy & Điều Phối Cứu Hộ 24/7</p>
+            </div>
           </div>
-          <h1 className="text-2xl font-bold text-gray-800">SENTINEL</h1>
-          <span className="text-xs tracking-widest text-blue-700 font-semibold">
-            TRUNG TÂM CỨU HỘ
-          </span>
-        </div>
-        {error && (
-          <div className="w-full p-2 mb-4 text-xs text-white bg-red-500 rounded-md text-center">
-            {error}
-          </div>
-        )}
-        <button className="text-blue-700 underline mb-4" onClick={() => navigate("/password")}>Quên mật khẩu?</button>
-        <form
-          className="w-full flex flex-col gap-4"
-          onSubmit={handleSubmit}
-        >
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">
-              EMAIL OR PHONE
-            </label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth={2}
-                  stroke="currentColor"
-                  className="w-5 h-5"
+
+          {/* Error notice */}
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-btn flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
+              <span className="leading-relaxed">{error}</span>
+            </div>
+          )}
+
+          {/* Form */}
+          <form className="space-y-4" onSubmit={handleSubmit}>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                Tài khoản hoặc Email
+              </label>
+              <div className="relative">
+                <User className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                <input
+                  type="text"
+                  required
+                  value={loginInput}
+                  onChange={(e) => setLoginInput(e.target.value)}
+                  className="input-field w-full pl-10 text-sm"
+                  placeholder="admin@rescue.vn"
+                  autoComplete="username"
+                />
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-semibold text-slate-700">Mật khẩu</label>
+                <button
+                  type="button"
+                  onClick={() => navigate("/password")}
+                  className="text-xs text-accent hover:underline font-medium"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M16 12a4 4 0 01-8 0m8 0V8a4 4 0 00-8 0v4m8 0v4a4 4 0 01-8 0v-4"
-                  />
-                </svg>
-              </span>
-              <input
-                type="text"
-                required value={loginInput} 
-                onChange={(e) => setLoginInput(e.target.value)}
-                className="w-full pl-10 pr-3 py-2 rounded-md border border-gray-300 bg-gray-100 text-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-                placeholder="administrator@sentinel.hq"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">
-              PASSWORD OR OTP
-            </label>
-            <div className="relative flex items-center">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth={2}
-                  stroke="currentColor"
-                  className="w-5 h-5"
+                  Quên mật khẩu?
+                </button>
+              </div>
+              <div className="relative">
+                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                <input
+                  type={showPassword ? "text" : "password"}
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="input-field w-full pl-10 pr-10 text-sm"
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M12 15v2m0-6v2m-6 4V7a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H6a2 2 0 01-2-2z"
-                  />
-                </svg>
-              </span>
-              <input
-                type={showPassword ? "text" : "password"}
-                required value={password} 
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-10 pr-10 py-2 rounded-md border border-gray-300 bg-gray-100 text-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-              />
-              <span
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 cursor-pointer"
-                onClick={() => setShowPassword((v) => !v)}
-                tabIndex={0}
-                role="button"
-                aria-label={showPassword ? "Hide password" : "Show password"}
-              >
-                {showPassword ? (
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    strokeWidth={2}
-                    stroke="currentColor"
-                    className="w-5 h-5"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0zm-6 0a6 6 0 1112 0 6 6 0 01-12 0z"
-                    />
-                  </svg>
-                ) : (
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    strokeWidth={2}
-                    stroke="currentColor"
-                    className="w-5 h-5"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M3 3l18 18M9.88 9.88A3 3 0 0112 9c1.66 0 3 1.34 3 3 0 .39-.07.76-.18 1.11M6.1 6.1A9.77 9.77 0 003 12c2.28 4 7 7 9 7 1.13 0 2.22-.19 3.24-.54M17.9 17.9A9.77 9.77 0 0021 12c-1.11-1.95-3.07-3.87-5.1-5.1"
-                    />
-                  </svg>
-                )}
-              </span>
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
             </div>
-            <div className="flex justify-end mt-1">
-              <a
-                href="#"
-                className="text-xs text-blue-600 font-semibold hover:underline"
-              >
-                Quên mật khẩu?
-              </a>
+
+            <div className="flex items-center gap-2 pt-1 text-xs text-slate-500">
+              <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>Xác thực an toàn & phân quyền Admin</span>
             </div>
-          </div>
-          <div className="flex items-center gap-2 mt-2 mb-2">
-            <span className="w-2 h-2 rounded-full bg-blue-600 inline-block"></span>
-            <span className="text-xs text-gray-500">
-              QUANTUM-SECURE LOGIN ENABLED
-            </span>
-          </div>
-          <button
-            type="submit"
-            className="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-2 rounded-md shadow transition-all flex items-center justify-center gap-2"
-          >
-            Đăng nhập
-          </button>
-        </form>
-        <div className="mt-6">
-          <button
-            type="button"
-            className="flex items-center gap-2 text-gray-500 text-xs hover:underline"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={2}
-              stroke="currentColor"
-              className="w-4 h-4"
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M12 4v16m8-8H4"
-              />
-            </svg>
-            Đăng nhập với Google
-          </button>
+              {loading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Đang xác thực...</span>
+                </>
+              ) : (
+                <span>Đăng nhập hệ thống</span>
+              )}
+            </button>
+          </form>
         </div>
+
+        {/* Footer info */}
+        <p className="text-center text-xs text-slate-400 mt-6">
+          © 2026 Hệ Thống Cứu Nạn Khẩn Cấp · Trung Tâm Điều Phối Cứu Hộ
+        </p>
       </div>
     </div>
   );

@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 /**
  * src/screens/citizen/home/HomeScreen.js
  * ─────────────────────────────────────────────────────────────────────────────
@@ -35,10 +36,22 @@ const PLATFORM_CONFIG = {
 };
 
 const SEVERITY_CONFIG = {
-  CRITICAL: { label: 'Khẩn cấp', color: '#DC2626', bg: '#FEF2F2', border: '#FECACA', icon: '🚨' },
-  HIGH:     { label: 'Nguy cơ cao', color: '#EA580C', bg: '#FFF7ED', border: '#FFEDD5', icon: '⚠️' },
-  MEDIUM:   { label: 'Theo dõi', color: '#0284C7', bg: '#F0F9FF', border: '#BAE6FD', icon: 'ℹ️' },
-  LOW:      { label: 'Thông tin', color: '#475569', bg: '#F8FAFC', border: '#E2E8F0', icon: '📋' },
+  CRITICAL: { label: 'Khẩn cấp', color: '#DC2626', bg: '#FEF2F2', border: '#FECACA', icon: '🔴' },
+  HIGH:     { label: 'Nguy cơ cao', color: '#EA580C', bg: '#FFF7ED', border: '#FFEDD5', icon: '🟠' },
+  MEDIUM:   { label: 'Theo dõi', color: '#0284C7', bg: '#F0F9FF', border: '#BAE6FD', icon: '🔵' },
+  LOW:      { label: 'Thông tin', color: '#475569', bg: '#F8FAFC', border: '#E2E8F0', icon: '⚪' },
+};
+
+const cleanHtml = (str) => {
+  if (!str) return '';
+  return String(str)
+    .replace(/<[^>]*>?/gm, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .trim();
 };
 
 const formatNewsTime = (dateStr) => {
@@ -68,10 +81,23 @@ const mapDarkStyle = [
 
 const HomeScreen = ({ navigation }) => {
   const [userLocation, setUserLocation] = useState(null);
+  const [safetyStatus, setSafetyStatus] = useState(null);
   const [newsList, setNewsList] = useState([]);
   const [newsLoading, setNewsLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedNews, setSelectedNews] = useState(null);
+
+  const fetchSafetyStatus = async (lat, lng) => {
+    if (!lat || !lng) return;
+    try {
+      const res = await API.fieldReports.safetyCheck(lat, lng);
+      if (res && res.level) {
+        setSafetyStatus(res);
+      }
+    } catch (e) {
+      console.log('Safety check error:', e);
+    }
+  };
 
   useEffect(() => {
     (async () => {
@@ -83,6 +109,7 @@ const HomeScreen = ({ navigation }) => {
             latitude: lastKnown.coords.latitude,
             longitude: lastKnown.coords.longitude,
           });
+          fetchSafetyStatus(lastKnown.coords.latitude, lastKnown.coords.longitude);
         }
         let loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).catch(() => null);
         if (loc) {
@@ -90,6 +117,7 @@ const HomeScreen = ({ navigation }) => {
             latitude: loc.coords.latitude,
             longitude: loc.coords.longitude,
           });
+          fetchSafetyStatus(loc.coords.latitude, loc.coords.longitude);
         }
       }
     })();
@@ -113,8 +141,11 @@ const HomeScreen = ({ navigation }) => {
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
+    if (userLocation) {
+      fetchSafetyStatus(userLocation.latitude, userLocation.longitude);
+    }
     fetchNews();
-  }, []);
+  }, [userLocation]);
 
   const handleSOS = () => {
     navigation.navigate('SOSScreen');
@@ -138,24 +169,53 @@ const HomeScreen = ({ navigation }) => {
           />
         }
       >
-        {/* ─── 1. GPS Safety Status Card ──────────────────────────────────── */}
-        <View style={styles.safetyStatusCard}>
+        {/* ─── 1. GPS Safety Status Card (S2 - Bán kính 1km & Quy tắc 6) ──────────────── */}
+        <View
+          style={[
+            styles.safetyStatusCard,
+            safetyStatus?.level === 'DANGER' && { backgroundColor: '#7F1D1D' },
+            safetyStatus?.level === 'WARNING' && { backgroundColor: '#78350F' },
+            (!safetyStatus || safetyStatus?.level === 'NO_DATA') && { backgroundColor: '#1E293B' },
+          ]}
+        >
           <View style={styles.safetyCardLeft}>
             <View style={styles.statusLiveBadge}>
-              <View style={styles.livePulseDot} />
-              <Text style={styles.statusLiveText}>HỆ THỐNG TRỰC CHIẾN 24/7</Text>
+              <View
+                style={[
+                  styles.livePulseDot,
+                  safetyStatus?.level === 'DANGER' && { backgroundColor: '#FCA5A5' },
+                  safetyStatus?.level === 'WARNING' && { backgroundColor: '#FDE047' },
+                  (!safetyStatus || safetyStatus?.level === 'NO_DATA') && { backgroundColor: '#94A3B8' },
+                ]}
+              />
+              <Text style={styles.statusLiveText}>
+                {safetyStatus?.level === 'DANGER'
+                  ? '🔴 CẢNH BÁO NGUY HIỂM QUANH BẠN (1KM)'
+                  : safetyStatus?.level === 'WARNING'
+                  ? '🟡 CẢNH GIÁC KHU VỰC LÂN CẬN (1KM)'
+                  : '⚪ RADAR BÁN KÍNH 1KM (DỮ LIỆU CỘNG ĐỒNG)'}
+              </Text>
             </View>
             <Text style={styles.safetyLocationText} numberOfLines={1}>
-              {userLocation ? '📍 Vị trí GPS: Đã xác định & sẵn sàng' : '📡 Đang tìm kiếm tín hiệu GPS...'}
+              {safetyStatus?.headline ||
+                (userLocation ? 'Chưa ghi nhận nguy hiểm (Bán kính 1km)' : 'Đang xác định vị trí của bạn...')}
             </Text>
-            <Text style={styles.safetySubtitle}>Kết nối trực tiếp tới Trung tâm Điều phối Cứu nạn</Text>
+            <Text style={styles.safetySubtitle} numberOfLines={2}>
+              {safetyStatus?.subtitle || 'Chưa có báo cáo sự cố quanh bạn — hãy luôn quan sát thực tế'}
+            </Text>
           </View>
           <TouchableOpacity
             style={styles.openMapActionBtn}
-            onPress={() => navigation.navigate('MapTab')}
+            onPress={() =>
+              safetyStatus?.closest_hazard?.type === 'FIELD_REPORT'
+                ? navigation.navigate('CommunityVerifyScreen', { reportId: safetyStatus.closest_hazard.id })
+                : navigation.navigate('MapTab')
+            }
             activeOpacity={0.8}
           >
-            <Text style={styles.openMapActionText}>Bản đồ ↗</Text>
+            <Text style={styles.openMapActionText}>
+              {safetyStatus?.closest_hazard?.type === 'FIELD_REPORT' ? 'Chi tiết ↗' : 'Bản đồ ↗'}
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -164,21 +224,15 @@ const HomeScreen = ({ navigation }) => {
           <View style={styles.sosPromptWrap}>
             <Text style={styles.sosPromptTitle}>BẠN ĐANG CẦN CỨU TRỢ?</Text>
             <Text style={styles.sosPromptDesc}>
-              Nhấn giữ nút tròn 3 giây hoặc chạm liên kết bên dưới để gửi tọa độ khẩn cấp.
+              Nhấn giữ nút tròn 2 giây để gửi tọa độ khẩn cấp tới Đội cứu hộ.
             </Text>
           </View>
 
           <View style={styles.sosCircleContainer}>
-            <SOSButton onPress={handleSOS} countdownSec={3} />
+            <SOSButton onPress={handleSOS} countdownSec={2} />
           </View>
 
-          <TouchableOpacity
-            style={styles.directSosLink}
-            onPress={handleSOS}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.directSosLinkText}>⚡ Chạm gửi SOS ngay lập tức (Không cần đợi 3s)</Text>
-          </TouchableOpacity>
+
         </View>
 
         {/* ─── 3. Quick Actions 4-Grid (2x2) ─────────────────────────────── */}
@@ -193,8 +247,8 @@ const HomeScreen = ({ navigation }) => {
             onPress={() => navigation.navigate('MapTab')}
             activeOpacity={0.8}
           >
-            <View style={[styles.tileIconBox, { backgroundColor: '#E3F2FD' }]}>
-              <Text style={styles.tileEmoji}>🗺️</Text>
+            <View style={[styles.tileIconBox, { backgroundColor: '#EFF6FF' }]}>
+              <Ionicons name="map" size={22} color="#1D4ED8" />
             </View>
             <View style={styles.tileTextWrap}>
               <Text style={styles.tileTitle}>Bản đồ Cứu hộ</Text>
@@ -208,12 +262,12 @@ const HomeScreen = ({ navigation }) => {
             onPress={() => navigation.navigate('SOSRequestsScreen')}
             activeOpacity={0.8}
           >
-            <View style={[styles.tileIconBox, { backgroundColor: '#FFEBEE' }]}>
-              <Text style={styles.tileEmoji}>📋</Text>
+            <View style={[styles.tileIconBox, { backgroundColor: '#FEF2F2' }]}>
+              <Ionicons name="time" size={22} color="#B7131A" />
             </View>
             <View style={styles.tileTextWrap}>
-              <Text style={styles.tileTitle}>Lịch sử SOS</Text>
-              <Text style={styles.tileSub}>Trạng thái yêu cầu</Text>
+              <Text style={styles.tileTitle}>Yêu cầu cứu trợ</Text>
+              <Text style={styles.tileSub}>Theo dõi tiến độ</Text>
             </View>
           </TouchableOpacity>
 
@@ -223,8 +277,8 @@ const HomeScreen = ({ navigation }) => {
             onPress={() => navigation.navigate('ProfileTab')}
             activeOpacity={0.8}
           >
-            <View style={[styles.tileIconBox, { backgroundColor: '#E8F5E9' }]}>
-              <Text style={styles.tileEmoji}>👤</Text>
+            <View style={[styles.tileIconBox, { backgroundColor: '#F0FDF4' }]}>
+              <Ionicons name="medical" size={22} color="#16A34A" />
             </View>
             <View style={styles.tileTextWrap}>
               <Text style={styles.tileTitle}>Hồ sơ Y tế</Text>
@@ -238,22 +292,59 @@ const HomeScreen = ({ navigation }) => {
             onPress={() => navigation.navigate('AlertsTab')}
             activeOpacity={0.8}
           >
-            <View style={[styles.tileIconBox, { backgroundColor: '#FFF3E0' }]}>
-              <Text style={styles.tileEmoji}>📢</Text>
+            <View style={[styles.tileIconBox, { backgroundColor: '#FFF7ED' }]}>
+              <Ionicons name="megaphone" size={22} color="#EA580C" />
             </View>
             <View style={styles.tileTextWrap}>
               <Text style={styles.tileTitle}>Cảnh báo Bão lũ</Text>
-              <Text style={styles.tileSub}>Tin từ Ban chỉ huy</Text>
+              <Text style={styles.tileSub}>Thông báo khẩn cấp</Text>
             </View>
           </TouchableOpacity>
         </View>
 
+        {/* ─── 4. Nút Báo Tình Hình Thực Tế Đường Sá (T2 + T3 + T4) ──────── */}
+        <TouchableOpacity
+          style={{
+            backgroundColor: '#FFF7ED',
+            borderWidth: 1.5,
+            borderColor: '#FB923C',
+            borderRadius: RADIUS.md,
+            padding: 14,
+            marginBottom: SPACING.md,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 12,
+            ...SHADOWS.card,
+          }}
+          onPress={() => navigation.navigate('FieldReportScreen')}
+          activeOpacity={0.85}
+        >
+          <View
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 12,
+              backgroundColor: '#EA580C',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Ionicons name="warning" size={24} color="#FFF" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 15, fontWeight: '800', color: '#9A3412' }}>
+              📢 Báo tình hình đường sá thực tế
+            </Text>
+            <Text style={{ fontSize: 12, color: '#C2410C', marginTop: 2 }}>
+              Báo đường ngập, cây đổ, sạt lở hoặc Vote xác nhận & báo nước đã rút
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#EA580C" />
+        </TouchableOpacity>
+
         {/* ─── 5. Disaster & Relief News Feed ─────────────────────────── */}
         <View style={styles.newsHeaderRow}>
-          <Text style={styles.sectionHeading}>BẢN TIN BÁO CHÍ THIÊN TAI</Text>
-          <View style={styles.newsTag}>
-            <Text style={styles.newsTagText}>CHÍNH THỐNG</Text>
-          </View>
+          <Text style={styles.sectionHeading}>TIN TỨC CỨU TRỢ & BÃO LŨ MỚI NHẤT</Text>
         </View>
 
         {newsLoading && newsList.length === 0 ? (
@@ -337,7 +428,7 @@ const HomeScreen = ({ navigation }) => {
                   {/* Tóm tắt / Đoạn trích bài báo */}
                   {summary ? (
                     <Text style={styles.newsCardSummary} numberOfLines={2}>
-                      {summary}
+                      {cleanHtml(summary)}
                     </Text>
                   ) : null}
 

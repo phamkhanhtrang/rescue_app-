@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from 'react-router-dom';
-import SliderBar from "../../components/SliderBar";
-import Header from "../../components/Header";
+import AdminLayout from "../../components/AdminLayout";
 import SOSModelPlayground from "../../components/SOSModelPlayground";
 import SOSArticleReview, { reviewDefaults } from "../../components/SOSArticleReview";
 import { api } from "../../services/api";
@@ -258,17 +257,9 @@ export default function AICrawler() {
   };
 
   return (
-    <div className="flex h-screen w-full bg-[#F8FAFC] overflow-hidden text-slate-800">
-      {/* Sidebar Navigation */}
-      <div className={`fixed lg:relative z-30 lg:z-auto h-full overflow-y-auto shrink-0 border-r border-slate-200 transition-transform duration-300 ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}>
-        <SliderBar />
-      </div>
-
-      <div className="flex-1 flex flex-col h-full overflow-y-auto min-w-0">
-        <Header onOpenSidebar={() => setSidebarOpen(true)} />
-        <div className="px-6 pt-4"><DataNotice loading={loading} error={loadError} onRetry={fetchArticles} hasData={articles.length > 0} /></div>
-
-        <div className="p-6 md:p-8 max-w-7xl mx-auto w-full space-y-6">
+    <AdminLayout>
+      <div className="space-y-6">
+        <DataNotice loading={loading} error={loadError} onRetry={fetchArticles} hasData={articles.length > 0} />
           {/* Page Title & PhoBERT Test Toggle */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
@@ -778,7 +769,6 @@ export default function AICrawler() {
             )}
           </div>
         </div>
-      </div>
 
       {/* Modal Xem Toàn Văn Chi Tiết Bài Viết (Thiết kế tối giản) */}
       {selectedArticle && (
@@ -981,6 +971,6 @@ export default function AICrawler() {
           </div>
         </div>
       )}
-    </div>
+    </AdminLayout>
   );
 }

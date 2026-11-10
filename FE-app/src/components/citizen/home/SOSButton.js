@@ -18,7 +18,7 @@ import {
 } from 'react-native';
 import { COLORS, FONTS, RADIUS, SHADOWS } from '../../../constants/citizen/theme';
 
-const SOSButton = ({ onPress, countdownSec = 3, disabled = false }) => {
+const SOSButton = ({ onPress, countdownSec = 2, disabled = false }) => {
   const scale  = useRef(new Animated.Value(1)).current;
   const glow   = useRef(new Animated.Value(0)).current;
   const [pressing, setPressing] = useState(false);
@@ -141,18 +141,18 @@ const styles = StyleSheet.create({
   // ── Glow ring ──────────────────────────────────
   glowRing: {
     position: 'absolute',
-    width: 148,
-    height: 148,
-    borderRadius: RADIUS.xl,
+    width: 172,
+    height: 172,
+    borderRadius: 86,
     backgroundColor: COLORS.primary,
-    top: -4,
+    top: -6,
   },
 
   // ── Main button ────────────────────────────────
   button: {
-    width: 140,
-    height: 140,
-    borderRadius: RADIUS.xl,
+    width: 160,
+    height: 160,
+    borderRadius: 80,
     backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',

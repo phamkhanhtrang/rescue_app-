@@ -36,17 +36,17 @@ const C = {
   bg:           '#0B1220',
   bgCard:       '#111E30',
   bgInput:      '#0F1B2D',
-  primary:      '#E53935',
-  primaryDark:  '#B71C1C',
-  primaryGlow:  'rgba(229,57,53,0.2)',
-  blue:         '#1E88E5',
-  teal:         '#00BCD4',
+  primary:      '#B7131A',
+  primaryDark:  '#8B0E13',
+  primaryGlow:  'rgba(183,19,26,0.2)',
+  blue:         '#1D4ED8',
+  teal:         '#0F766E',
   white:        '#FFFFFF',
   textWhite:    'rgba(255,255,255,0.95)',
   textDim:      'rgba(255,255,255,0.55)',
   textHint:     'rgba(255,255,255,0.3)',
   border:       'rgba(255,255,255,0.10)',
-  borderFocus:  '#E53935',
+  borderFocus:  '#B7131A',
   error:        '#FF5252',
   green:        '#43A047',
   greenGlow:    'rgba(67,160,71,0.2)',
@@ -299,7 +299,7 @@ export default function RescuerRegisterScreen({ navigation }) {
                   <Text style={styles.stepHeadingIcon}>🚒</Text>
                   <View>
                     <Text style={styles.stepTitle}>Thông tin đội cứu hộ</Text>
-                    <Text style={styles.stepDesc}>Để AI phân công nhiệm vụ chính xác</Text>
+                    <Text style={styles.stepDesc}>Để Ban Chỉ Huy phân công nhiệm vụ phù hợp</Text>
                   </View>
                 </View>
 
@@ -355,7 +355,7 @@ export default function RescuerRegisterScreen({ navigation }) {
                   <Text style={styles.stepHeadingIcon}>🔐</Text>
                   <View>
                     <Text style={styles.stepTitle}>Xác thực & Bảo mật</Text>
-                    <Text style={styles.stepDesc}>Mọi thông tin được ghi lên blockchain</Text>
+                    <Text style={styles.stepDesc}>Mọi thông tin được lưu trữ bảo mật</Text>
                   </View>
                 </View>
 
@@ -408,22 +408,14 @@ export default function RescuerRegisterScreen({ navigation }) {
                   {...f('conf')}
                 />
 
-                {/* Blockchain badge */}
-                {/* <View style={styles.blockchainBadge}>
-                  <Text style={styles.bbIcon}>⛓</Text>
-                  <Text style={styles.bbText}>
-                    Thông tin đăng ký sẽ được mã hóa và lưu trữ trên blockchain SENTINEL. Không thể chỉnh sửa sau khi xác nhận.
-                  </Text>
-                </View> */}
-
-                {/* Terms */}
+{/* Terms */}
                 <TouchableOpacity style={styles.termsRow} onPress={() => setAgreed(a => !a)}>
                   <View style={[styles.checkbox, agreed && styles.checkboxActive]}>
                     {agreed && <Text style={styles.checkmark}>✓</Text>}
                   </View>
                   <Text style={styles.termsText}>
                     Tôi xác nhận thông tin là chính xác và đồng ý với{' '}
-                    <Text style={styles.termsLink}>Quy chế Đội cứu hộ SENTINEL</Text>
+                    <Text style={styles.termsLink}>Quy chế Hoạt động Đội Cứu Nạn</Text>
                   </Text>
                 </TouchableOpacity>
               </>
@@ -521,11 +513,6 @@ const styles = StyleSheet.create({
   strengthRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   strengthLabel: { fontSize: 11, color: C.textDim },
   sBar: { flex: 1, height: 4, borderRadius: 2 },
-
-  // Blockchain badge
-  blockchainBadge: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: 'rgba(0,188,212,0.07)', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(0,188,212,0.15)' },
-  bbIcon: { fontSize: 13, marginTop: 1 },
-  bbText: { flex: 1, fontSize: 11, color: 'rgba(0,188,212,0.75)', lineHeight: 17 },
 
   // Terms
   termsRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },

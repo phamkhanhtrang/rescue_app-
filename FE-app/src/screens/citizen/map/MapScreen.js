@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 /**
  * src/screens/citizen/map/MapScreen.js
  * ─────────────────────────────────────────────────────────────────────────────
@@ -19,7 +20,7 @@ import {
   Modal, Linking
 } from 'react-native';
 
-import MapView, { Marker, PROVIDER_GOOGLE, Circle, Callout } from '../../../components/common/AppMap';
+import MapView, { Marker, PROVIDER_GOOGLE, Circle, Callout, Polyline } from '../../../components/common/AppMap';
 import * as Location from 'expo-location';
 
 import SentinelHeader from '../../../components/citizen/common/SentinelHeader';
@@ -29,6 +30,14 @@ import API from '../../../services/api';
 const { height: SCREEN_H } = Dimensions.get('window');
 
 // ─── Mission statuses tính là "có đội" ───────────────────────────────────────
+const formatZoneDisplayName = (name) => {
+  if (!name) return 'Khu vực Cứu trợ Trọng điểm';
+  let str = String(name);
+  str = str.replace(/Zone\s*AI\s*/gi, 'Khu vực Cứu hộ ');
+  str = str.replace(/\(\d+\s*SOS\)/gi, '').trim();
+  return str || 'Khu vực Cứu trợ Trọng điểm';
+};
+
 const ACTIVE_MISSION_STATUSES = ['PENDING_ACCEPTANCE', 'ACCEPTED', 'ACTIVE', 'ON_MY_WAY', 'NEEDS_HELP'];
 
 /**
@@ -44,7 +53,7 @@ const getZoneMarkerState = (zone, activeMissionZoneIds) => {
 };
 
 const ZONE_MARKER_COLOR = {
-  no_team:  '#E53935', // đỏ
+  no_team:  '#B7131A', // đỏ
   has_team: '#FDD835', // vàng
   resolved: '#43A047', // xanh
 };
@@ -60,7 +69,7 @@ const getAlertZoneColor = (severity) => {
   switch ((severity || '').toUpperCase()) {
     case 'CRITICAL':
     case 'EMERGENCY':
-      return { fill: 'rgba(229,57,53,0.22)', stroke: '#E53935' };
+      return { fill: 'rgba(183,19,26,0.22)', stroke: '#B7131A' };
     case 'WARNING':
     case 'HIGH':
       return { fill: 'rgba(255,179,0,0.22)', stroke: '#FFB300' };
@@ -106,6 +115,7 @@ const MapScreen = ({ navigation }) => {
   const [addressName, setAddressName]         = useState('Đang xác định vị trí...');
   const [zonesList, setZonesList]             = useState([]);
   const [alertsList, setAlertsList]           = useState([]);
+  const [fieldReportsList, setFieldReportsList] = useState([]);
   const [activeMissionZoneIds, setActiveMissionZoneIds] = useState(new Set());
   const [activeMissionsList, setActiveMissionsList] = useState([]);
   const [rescuersList, setRescuersList]       = useState([]);
@@ -156,11 +166,12 @@ const MapScreen = ({ navigation }) => {
   const fetchMapData = useCallback(async () => {
     try {
       setLoadingData(true);
-      const [zonesRes, missionsRes, alertsRes, rescuersRes] = await Promise.all([
+      const [zonesRes, missionsRes, alertsRes, rescuersRes, fieldReportsRes] = await Promise.all([
         API.zones.getAll(),
         API.missions.getAll(),
         API.alerts.getAll({ is_active: 'true', tab: 'all' }),
         API.rescuers.getAll(),
+        API.fieldReports.getAll({ active_only: 'true' }).catch(() => ({ results: [] })),
       ]);
 
       // Zones list
@@ -199,6 +210,12 @@ const MapScreen = ({ navigation }) => {
         r.rescuer_profile?.current_lat && 
         r.rescuer_profile?.current_lng
       ));
+
+      // Field Reports list (Báo cáo hiện trường của người dân)
+      const rawFieldReports = Array.isArray(fieldReportsRes)
+        ? fieldReportsRes
+        : fieldReportsRes?.results || [];
+      setFieldReportsList(rawFieldReports.filter(fr => fr.location_lat && fr.location_lng));
     } catch (e) {
       console.log('MapScreen fetch error:', e);
     } finally {
@@ -257,7 +274,16 @@ const MapScreen = ({ navigation }) => {
             style={[styles.filterChip, filterType === 'ALERTS' && styles.filterChipActiveBlue]}
             onPress={() => setFilterType('ALERTS')}
           >
-            <Text style={[styles.filterText, filterType === 'ALERTS' && styles.filterTextActiveBlue]}>⚠️ Vùng nguy hiểm ({alertsList.length})</Text>
+            <Text style={[styles.filterText, filterType === 'ALERTS' && styles.filterTextActiveBlue]}>⚠️ Vùng nguy hiểm ({alertsList.length + fieldReportsList.length})</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.filterChip, { backgroundColor: '#EA580C', borderColor: '#EA580C' }]}
+            onPress={() => navigation.navigate('FieldReportScreen')}
+          >
+            <Text style={[styles.filterText, { color: '#FFF', fontWeight: '800' }]}>
+              📢 Báo đường ngập / sự cố
+            </Text>
           </TouchableOpacity>
         </ScrollView>
       </View>
@@ -299,7 +325,77 @@ const MapScreen = ({ navigation }) => {
               );
             })}
 
-            {/* ── Zone Markers & Boundaries (màu theo đội cứu hộ) ────────────── */}
+            {/* ── Đoạn đường sự cố từ người dân (Polyline bám mặt đường + Pin tròn 28px) ── */}
+            {(filterType === 'ALL' || filterType === 'ALERTS') && fieldReportsList.map((rep, idx) => {
+              const rLat = parseFloat(rep.location_lat);
+              const rLng = parseFloat(rep.location_lng);
+              if (!rLat || !rLng || isNaN(rLat) || isNaN(rLng)) return null;
+              const isCleared = rep.status === 'CLEARED';
+              const isVer = rep.status === 'VERIFIED' || rep.is_verified;
+              const isReceding = rep.status === 'RECEDING';
+              const strokeCol = isCleared ? '#16A34A' : isReceding ? '#D97706' : isVer ? '#DC2626' : '#EA580C';
+              const roadCoords =
+                Array.isArray(rep.road_geometry) && rep.road_geometry.length >= 2
+                  ? rep.road_geometry.map((pt) => ({
+                      latitude: parseFloat(pt[0]),
+                      longitude: parseFloat(pt[1]),
+                    }))
+                  : [
+                      { latitude: rLat - 0.00055, longitude: rLng - 0.00055 },
+                      { latitude: rLat, longitude: rLng },
+                      { latitude: rLat + 0.00055, longitude: rLng + 0.00055 },
+                    ];
+              const midPt = roadCoords[Math.floor(roadCoords.length / 2)] || { latitude: rLat, longitude: rLng };
+              const iconMap = {
+                FLOOD: '🌊',
+                FALLEN_TREE: '🌲',
+                LANDSLIDE: '⛰️',
+                POWER_LINE: '⚡',
+                ROAD_BLOCKED: '🚧',
+              };
+
+              return (
+                <React.Fragment key={`field-rep-${rep.id}`}>
+                  <Polyline
+                    coordinates={roadCoords}
+                    strokeColor="#FFFFFF"
+                    strokeWidth={9}
+                  />
+                  <Polyline
+                    coordinates={roadCoords}
+                    strokeColor={strokeCol}
+                    strokeWidth={6}
+                    lineDashPattern={isReceding ? [8, 6] : isVer || isCleared ? undefined : [6, 6]}
+                    tappable
+                    onPress={() => navigation.navigate('CommunityVerifyScreen', { reportId: rep.id })}
+                  />
+                  <Marker
+                    coordinate={{ latitude: midPt.latitude, longitude: midPt.longitude }}
+                    anchor={{ x: 0.5, y: 0.5 }}
+                    zIndex={5}
+                    onPress={() => navigation.navigate('CommunityVerifyScreen', { reportId: rep.id })}
+                  >
+                    <View
+                      style={{
+                        width: 30,
+                        height: 30,
+                        borderRadius: 15,
+                        backgroundColor: strokeCol,
+                        borderWidth: 2,
+                        borderColor: isReceding ? '#FEF08A' : '#FFF',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        elevation: 4,
+                      }}
+                    >
+                      <Text style={{ fontSize: 13 }}>{isCleared ? '✅' : iconMap[rep.hazard_type] || '⚠️'}</Text>
+                    </View>
+                  </Marker>
+                </React.Fragment>
+              );
+            })}
+
+            {/* ── Zone Markers & Boundaries (Pin tròn gọn 28px, nền mờ 0.12 rõ tên đường) ── */}
             {(filterType !== 'ALERTS') && filteredZones.map((zone) => {
               const state   = getZoneMarkerState(zone, activeMissionZoneIds);
               const color   = ZONE_MARKER_COLOR[state];
@@ -307,16 +403,16 @@ const MapScreen = ({ navigation }) => {
               const lat     = parseFloat(zone.location_lat);
               const lng     = parseFloat(zone.location_lng);
               if (!lat || !lng || isNaN(lat) || isNaN(lng)) return null;
+              const zoneIcon = state === 'resolved' ? '✓' : state === 'has_team' ? '🚑' : '🎯';
 
               return (
                 <React.Fragment key={`zone-frag-${zone.id}`}>
-                  {/* Khoanh vùng diện tích sự cố (Zone Circle Boundary) */}
                   <Circle
                     center={{ latitude: lat, longitude: lng }}
                     radius={Number(zone.radius_meters) || 800}
-                    fillColor={state === 'no_team' ? 'rgba(229, 57, 53, 0.35)' : 'rgba(245, 124, 0, 0.35)'}
+                    fillColor={state === 'no_team' ? 'rgba(220, 38, 38, 0.12)' : 'rgba(245, 158, 11, 0.12)'}
                     strokeColor={color}
-                    strokeWidth={2.5}
+                    strokeWidth={2}
                     zIndex={1}
                   />
 
@@ -325,8 +421,22 @@ const MapScreen = ({ navigation }) => {
                     anchor={{ x: 0.5, y: 0.5 }}
                     zIndex={2}
                   >
-                    <View style={[styles.zoneCirclePin, { backgroundColor: color }]} collapsable={false} pointerEvents="none">
-                      <Text style={styles.circlePinText}>📍</Text>
+                    <View
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: 14,
+                        backgroundColor: color,
+                        borderWidth: 2,
+                        borderColor: '#FFF',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        elevation: 3,
+                      }}
+                      collapsable={false}
+                      pointerEvents="none"
+                    >
+                      <Text style={{ fontSize: 12, color: '#FFF', fontWeight: '900' }}>{zoneIcon}</Text>
                     </View>
 
                     <Callout tooltip>
@@ -373,7 +483,7 @@ const MapScreen = ({ navigation }) => {
 
                   <Callout tooltip>
                     <View style={styles.calloutBox}>
-                      <Text style={styles.calloutTitle}>ĐỘI CỨU HỘ TRỰC CHIẾN</Text>
+                      <Text style={styles.calloutTitle}>ĐỘI CỨU HỘ ĐANG SẴN SÀNG</Text>
                       <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#111' }}>
                         {unitName}
                       </Text>
@@ -384,7 +494,7 @@ const MapScreen = ({ navigation }) => {
                         SĐT: {rescuer.phone}
                       </Text>
                       <Text style={{ fontSize: 11, color: '#43A047', marginTop: 4, fontWeight: 'bold' }}>
-                        ● ĐANG TRỰC CHIẾN
+                        ● ĐANG HOẠT ĐỘNG
                       </Text>
                     </View>
                   </Callout>
@@ -429,7 +539,7 @@ const MapScreen = ({ navigation }) => {
             }}
             activeOpacity={0.8}
           >
-            <Text style={styles.controlIconText}>🎯</Text>
+            <Ionicons name="locate" size={18} color="#1E293B" />
           </TouchableOpacity>
 
           {/* Nút Đổi Kiểu Bản Đồ (Standard / Satellite) */}
@@ -438,7 +548,7 @@ const MapScreen = ({ navigation }) => {
             onPress={() => setMapType(prev => prev === 'standard' ? 'satellite' : 'standard')}
             activeOpacity={0.8}
           >
-            <Text style={styles.controlIconText}>{mapType === 'standard' ? '🗺️' : '🛰️'}</Text>
+            <Ionicons name="layers-outline" size={18} color={mapType === 'satellite' ? '#FFF' : '#1E293B'} />
           </TouchableOpacity>
 
           {/* Nút Bật/Tắt Chú Giải (Map Legend) */}
@@ -447,7 +557,7 @@ const MapScreen = ({ navigation }) => {
             onPress={() => setShowLegend(prev => !prev)}
             activeOpacity={0.8}
           >
-            <Text style={styles.controlIconText}>ℹ️</Text>
+            <Ionicons name="information-circle-outline" size={19} color={showLegend ? '#FFF' : '#1E293B'} />
           </TouchableOpacity>
 
           {/* Nút Làm Mới Dữ Liệu */}
@@ -457,40 +567,40 @@ const MapScreen = ({ navigation }) => {
             disabled={loadingData}
             activeOpacity={0.8}
           >
-            <Text style={styles.controlIconText}>{loadingData ? '⏳' : '🔄'}</Text>
+            <Ionicons name="refresh" size={18} color="#1E293B" />
           </TouchableOpacity>
         </View>
 
-        {/* ── Bảng Chú Giải Màu Sắc (Map Legend Floating Panel) ───────────── */}
+        {/* ── Bảng Chú Giải Ký Hiệu (Map Legend Floating Panel) ───────────── */}
         {showLegend && (
           <View style={styles.legendPanel}>
-            <Text style={styles.legendTitle}>CHÚ GIẢI BẢN ĐỒ</Text>
+            <Text style={styles.legendTitle}>CHÚ GIẢI KÝ HIỆU BẢN ĐỒ</Text>
             <View style={styles.legendRow}>
-              <View style={[styles.legendDot, { backgroundColor: '#E53935' }]} />
-              <Text style={styles.legendLabel}>Chưa có đội cứu trợ</Text>
+              <View style={[styles.legendDot, { backgroundColor: '#B7131A' }]} />
+              <Text style={styles.legendLabel}>🎯 Vùng chưa có đội cứu hộ</Text>
             </View>
             <View style={styles.legendRow}>
               <View style={[styles.legendDot, { backgroundColor: '#FDD835' }]} />
-              <Text style={styles.legendLabel}>Đội đang ứng cứu</Text>
+              <Text style={styles.legendLabel}>🚑 Vùng đội đang ứng cứu</Text>
             </View>
             <View style={styles.legendRow}>
-              <View style={[styles.legendDot, { backgroundColor: '#43A047' }]} />
-              <Text style={styles.legendLabel}>Đã an toàn</Text>
+              <View style={[styles.legendDot, { backgroundColor: '#DC2626' }]} />
+              <Text style={styles.legendLabel}>🌊 Điểm ngập/sự cố ĐÃ XÁC THỰC</Text>
             </View>
             <View style={styles.legendRow}>
-              <Text style={{ fontSize: 13, width: 14, textAlign: 'center' }}>🚁</Text>
-              <Text style={styles.legendLabel}>Vị trí Đội cứu trợ</Text>
+              <View style={[styles.legendDot, { backgroundColor: '#D97706' }]} />
+              <Text style={styles.legendLabel}>🌊 Nước đang rút / Chờ xác nhận</Text>
             </View>
             <View style={styles.legendRow}>
-              <View style={[styles.legendZone, { backgroundColor: 'rgba(229,57,53,0.3)', borderColor: '#E53935', borderWidth: 1 }]} />
-              <Text style={styles.legendLabel}>Vùng nguy hiểm khẩn cấp</Text>
+              <Text style={{ fontSize: 13, width: 14, textAlign: 'center' }}>🛟</Text>
+              <Text style={styles.legendLabel}>Vị trí Đội cứu hộ trực chiến</Text>
             </View>
           </View>
         )}
 
         {/* ── Floating SOS Button ─────────────────────────────────────────── */}
         <TouchableOpacity
-          style={[styles.floatingSOS, { bottom: isBottomCollapsed ? 68 : 130 }]}
+          style={[styles.floatingSOS, { bottom: isBottomCollapsed ? 76 : 145 }]}
           onPress={() => navigation.navigate('SOSScreen')}
           activeOpacity={0.85}
         >
@@ -611,7 +721,7 @@ const MapScreen = ({ navigation }) => {
                 const m = selectedMission;
                 const zoneMissions = activeMissionsList.filter(x => x.zone === m.zone);
                 return (
-                  <ScrollView showsVerticalScrollIndicator={false}>
+                  <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
                     {/* Status badge */}
                     <View style={styles.modalStatusRow}>
                       <View style={[styles.modalStatusBadge,
@@ -628,7 +738,7 @@ const MapScreen = ({ navigation }) => {
                       </View>
                       {selectedMission.rescuer_on_duty && (
                         <View style={styles.onDutyBadge}>
-                          <Text style={styles.onDutyText}>● TRỰC CHIẾN</Text>
+                          <Text style={styles.onDutyText}>● SẴN SÀNG</Text>
                         </View>
                       )}
                     </View>
@@ -651,7 +761,7 @@ const MapScreen = ({ navigation }) => {
                       <InfoRow icon="⚕️" label="Chuyên môn"
                         value={m.rescuer_specialty || 'Đa năng'} />
                       <InfoRow icon="📍" label="Vùng nhiệm vụ"
-                        value={m.zone_name || 'Đang cập nhật'} />
+                        value={formatZoneDisplayName(m.zone_name)} />
                       <InfoRow icon="👥" label="Số đội đang trong vùng"
                         value={`${zoneMissions.length} nhiệm vụ đang hoạt động`}
                         isLast
@@ -761,8 +871,8 @@ const styles = StyleSheet.create({
     borderColor: '#1565C0',
   },
   filterChipActiveRed: {
-    backgroundColor: '#E53935',
-    borderColor: '#E53935',
+    backgroundColor: '#B7131A',
+    borderColor: '#B7131A',
   },
   filterChipActiveYellow: {
     backgroundColor: '#F57F17',
@@ -908,7 +1018,7 @@ const styles = StyleSheet.create({
   calloutStatus: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#E53935',
+    color: '#B7131A',
     marginBottom: 4,
   },
   calloutMeta: {
@@ -959,11 +1069,11 @@ const styles = StyleSheet.create({
   // ── Cụm Nút Điều Khiển Phải ──────────────────────────────────
   rightControlGroup: {
     position: 'absolute',
-    bottom: 90,
+    top: 75,
     right: 12,
     gap: 8,
-    zIndex: 999,
-    elevation: 10,
+    zIndex: 900,
+    elevation: 6,
   },
   controlFab: {
     width: 36,
@@ -1070,11 +1180,12 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 8,
-    shadowColor: '#E53935',
+    elevation: 12,
+    shadowColor: '#B7131A',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
+    shadowOpacity: 0.45,
+    shadowRadius: 8,
+    zIndex: 999,
   },
   floatingSOSText: {
     color: '#FFF',
@@ -1205,7 +1316,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
     paddingHorizontal: 20,
-    paddingBottom: 32,
+    paddingBottom: 40,
     maxHeight: '80%',
     elevation: 20,
     shadowColor: '#000',
@@ -1307,11 +1418,17 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   zoomBtn: {
-    marginTop: 6,
-    backgroundColor: '#43A047',
-    borderRadius: 10,
-    paddingVertical: 11,
+    marginTop: 10,
+    marginBottom: 4,
+    backgroundColor: '#2E7D32',
+    borderRadius: 12,
+    paddingVertical: 13,
     alignItems: 'center',
+    elevation: 3,
+    shadowColor: '#2E7D32',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
   },
   zoomBtnText: {
     color: '#FFF',

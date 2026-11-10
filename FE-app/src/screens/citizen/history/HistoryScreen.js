@@ -120,7 +120,7 @@ const HistoryScreen = ({ navigation }) => {
 
         {/* ─── 1. Section header ──────────────────────────────────────────── */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.guardianLabel}>NHẬT KÝ BẢO VỆ</Text>
+          <Text style={styles.guardianLabel}>LỊCH SỬ KHẨN CẤP</Text>
           <Text style={styles.pageTitle}>Lịch sử Tín hiệu</Text>
           <Text style={styles.pageDesc}>
             Theo dõi các yêu cầu SOS, hình ảnh hiện trường và trạng thái xử lý được cập nhật từ trung tâm điều phối.
@@ -234,18 +234,7 @@ const LogCard = ({ entry, onPress }) => (
           <Text style={styles.logSnapshotVal}>{entry.note}</Text>
         </View>
     </View>
-
-    {/* Blockchain receipt */}
-    {/* <View style={styles.logBlockchain}>
-      <Text style={styles.logBlockchainLabel}>⛓ BIÊN LAI BLOCKCHAIN</Text>
-      <Text style={styles.logBlockchainHash}>{entry.blockchainHash}</Text>
-      {entry.nodeVerified && (
-        <View style={styles.nodeVerified}>
-          <Text style={styles.nodeVerifiedText}>✓ ĐÃ XÁC THỰC NÚT</Text>
-        </View>
-      )}
-    </View> */}
-  </TouchableOpacity>
+</TouchableOpacity>
 );
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
@@ -368,35 +357,6 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.md,
     backgroundColor: COLORS.bgCard,
     marginRight: SPACING.sm,
-  },
-
-  // ── Blockchain ─────────────────────────────────
-  logBlockchain: {
-    gap: SPACING.xs,
-  },
-  logBlockchainLabel: {
-    fontSize: FONTS.xs,
-    color: COLORS.textSecondary,
-    fontWeight: FONTS.bold,
-    letterSpacing: 0.8,
-  },
-  logBlockchainHash: {
-    fontSize: FONTS.sm,
-    color: COLORS.blockchain,
-    fontWeight: FONTS.medium,
-    fontVariant: ['tabular-nums'],
-  },
-  nodeVerified: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#E8F5E9',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: RADIUS.full,
-  },
-  nodeVerifiedText: {
-    fontSize: FONTS.xs,
-    color: COLORS.statusGreen,
-    fontWeight: FONTS.bold,
   },
 
   // ── AI Insight card ────────────────────────────

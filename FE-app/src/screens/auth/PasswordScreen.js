@@ -64,7 +64,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 24, fontWeight: '700', color: '#102A43' },
   label: { fontWeight: '600', marginTop: 6 },
   input: { borderWidth: 1, borderColor: '#BCCCDC', borderRadius: 8, padding: 12, backgroundColor: '#FFF', color: '#102A43' },
-  button: { backgroundColor: '#1565C0', padding: 14, borderRadius: 8 },
+  button: { backgroundColor: '#B7131A', padding: 14, borderRadius: 8 },
   buttonText: { color: '#FFF', textAlign: 'center', fontWeight: '700' },
   error: { color: '#B91C1C' }, message: { color: '#166534' },
 });

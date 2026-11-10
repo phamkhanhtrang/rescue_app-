@@ -51,6 +51,7 @@ import MapScreen            from '../screens/citizen/map/MapScreen';
 // ── Screens: Alerts & sub-screens ──────────────────────────────────────────
 import AlertsScreen         from '../screens/citizen/alerts/AlertsScreen';
 import CommunityVerifyScreen from '../screens/citizen/alerts/CommunityVerifyScreen';
+import FieldReportScreen    from '../screens/citizen/alerts/FieldReportScreen';
 import OfflineModeScreen    from '../screens/citizen/alerts/OfflineModeScreen';
 import HistoryScreen        from '../screens/citizen/history/HistoryScreen';
 
@@ -78,12 +79,19 @@ const AlertsNavigator = () => (
     <AlertsStack.Screen name="AlertsScreen" component={AlertsScreen} />
 
     {/* Lịch sử tín hiệu SOS */}
-    <AlertsStack.Screen name="HistoryScreen"         component={HistoryScreen} />
+    <AlertsStack.Screen name="HistoryScreen"         component={SOSRequestsScreen} />
 
-    {/* Xác thực cộng đồng (navigate từ một AlertCard) */}
+    {/* Xác thực cộng đồng (navigate từ một AlertCard hoặc FieldReport) */}
     <AlertsStack.Screen
       name="CommunityVerifyScreen"
       component={CommunityVerifyScreen}
+      options={{ animation: 'slide_from_right' }}
+    />
+
+    {/* Báo tình hình thực tế trên đường */}
+    <AlertsStack.Screen
+      name="FieldReportScreen"
+      component={FieldReportScreen}
       options={{ animation: 'slide_from_right' }}
     />
 
@@ -230,6 +238,8 @@ const CitizenStack = () => (
     <RootStack.Screen name="CitizenTabs" component={CitizenTabs} />
     <RootStack.Screen name="AlertDetail" component={AlertDetailScreen} options={{ headerShown: true, title: 'Chi tiết thông báo' }} />
     <RootStack.Screen name="NewsDetail" component={NewsDetailScreen} options={{ headerShown: true, title: 'Chi tiết tin tức' }} />
+    <RootStack.Screen name="FieldReportScreen" component={FieldReportScreen} options={{ animation: 'slide_from_right' }} />
+    <RootStack.Screen name="CommunityVerifyScreen" component={CommunityVerifyScreen} options={{ animation: 'slide_from_right' }} />
 
     {/* ── SOS flow (full-screen, không có tab bar) ────────────────────────── */}
     <RootStack.Screen

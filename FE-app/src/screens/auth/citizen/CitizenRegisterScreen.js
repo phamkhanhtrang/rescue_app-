@@ -132,7 +132,7 @@ const CitizenRegisterScreen = ({ navigation }) => {
               <Text style={styles.avatarEmoji}>🧑‍💼</Text>
             </View>
             <Text style={styles.pageTitle}>Tạo tài khoản</Text>
-            <Text style={styles.pageSubtitle}>Đăng ký để được bảo vệ bởi hệ thống{'\n'}SENTINEL Blockchain · AI Rescuer</Text>
+            <Text style={styles.pageSubtitle}>Đăng ký để nhận hỗ trợ khẩn cấp từ{'\n'}Hệ thống Cứu hộ Sentinel Ethos</Text>
           </View>
 
           {/* Form */}

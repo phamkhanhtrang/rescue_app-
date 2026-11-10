@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 /**
  * src/screens/auth/rescuer/RescuerLoginScreen.js
  * ─────────────────────────────────────────────────────────────────────────────
@@ -18,17 +19,17 @@ const C = {
   bg: '#0B1220',
   bgCard: '#111E30',
   bgInput: '#0F1B2D',
-  primary: '#E53935',
-  primaryDark: '#B71C1C',
-  primaryGlow: 'rgba(229,57,53,0.2)',
-  blue: '#1E88E5',
-  teal: '#00BCD4',
+  primary: '#B7131A',
+  primaryDark: '#8B0E13',
+  primaryGlow: 'rgba(183,19,26,0.2)',
+  blue: '#1D4ED8',
+  teal: '#0F766E',
   white: '#FFFFFF',
   textWhite: 'rgba(255,255,255,0.95)',
   textDim: 'rgba(255,255,255,0.55)',
   textHint: 'rgba(255,255,255,0.3)',
   border: 'rgba(255,255,255,0.10)',
-  borderFocus: '#E53935',
+  borderFocus: '#B7131A',
   error: '#FF5252',
 };
 
@@ -114,7 +115,7 @@ const RescuerLoginScreen = ({ navigation }) => {
             </TouchableOpacity>
             <View style={styles.commandBadge}>
               <View style={styles.commandDot} />
-              <Text style={styles.commandText}>RESCUER PORTAL</Text>
+              <Text style={styles.commandText}>CỔNG ĐỘI CỨU TRỢ</Text>
             </View>
           </View>
 
@@ -122,7 +123,7 @@ const RescuerLoginScreen = ({ navigation }) => {
           <View style={styles.heroSection}>
             <View style={styles.shieldOuter}>
               <View style={styles.shieldInner}>
-                <Text style={styles.shieldText}>🛡</Text>
+                <Ionicons name="shield-checkmark" size={32} color="#FFF" />
               </View>
             </View>
             <Text style={styles.systemLabel}>TRUNG TÂM ĐIỀU PHỐI</Text>
@@ -136,7 +137,7 @@ const RescuerLoginScreen = ({ navigation }) => {
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>SỐ ĐIỆN THOẠI / MÃ CỨU HỘ</Text>
               <View style={[styles.inputWrap, focusedField === 'login' && styles.inputWrapFocus]}>
-                <Text style={styles.inputPfx}>📱</Text>
+                <Ionicons name="call-outline" size={18} color="#94A3B8" />
                 <TextInput
                   style={styles.input}
                   placeholder="Nhập SĐT hoặc Mã định danh"
@@ -154,7 +155,7 @@ const RescuerLoginScreen = ({ navigation }) => {
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>MẬT KHẨU</Text>
               <View style={[styles.inputWrap, focusedField === 'pass' && styles.inputWrapFocus]}>
-                <Text style={styles.inputPfx}>🔒</Text>
+                <Ionicons name="lock-closed-outline" size={18} color="#94A3B8" />
                 <TextInput
                   style={styles.input}
                   placeholder="••••••••"
