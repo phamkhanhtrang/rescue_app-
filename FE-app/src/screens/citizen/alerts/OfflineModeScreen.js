@@ -367,11 +367,6 @@ const OfflineModeScreen = ({ navigation }) => {
                 <Text style={styles.packetStat}>Số người: {peopleCount}</Text>
               </View>
             </View>
-
-            <TouchableOpacity style={styles.testPingBtn} onPress={handleTestPing}>
-              <MaterialCommunityIcons name="flash-alert" size={18} color="#FBBF24" />
-              <Text style={styles.testPingText}>THỬ CHỚP FLASH VÀ HÚ CÒI SOS (TEST)</Text>
-            </TouchableOpacity>
           </View>
         )}
 

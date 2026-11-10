@@ -229,6 +229,20 @@ export async function stopCitizenBeacon() {
     broadcastTimer = null;
   }
   await AsyncStorage.setItem(STORAGE_KEYS.BROADCAST_STATE, 'IDLE');
+
+  try {
+    const raw = await AsyncStorage.getItem(STORAGE_KEYS.MY_BEACON);
+    if (raw) {
+      const data = JSON.parse(raw);
+      if (data?.summary?.sosId) {
+        fetch(`${BASE_URL}/rescue_operations/ble-grid/beacon/`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sos_id: data.summary.sosId }),
+        }).catch(() => {});
+      }
+    }
+  } catch (e) {}
 }
 
 /**
@@ -339,38 +353,7 @@ export async function startRescuerScanner(options = {}, onUpdate) {
       }
     } catch (e) {}
 
-    // 3. Fallback: Nếu không có phao nào, tự sinh 1 mục tiêu dã chiến để luôn test được
-    if (discoveredSignals.length === 0) {
-      const demoPacket = encodeSOSPacket({
-        sosId: 77291,
-        peopleCount: 3,
-        hasElderly: true,
-        hasChildren: true,
-        hasInjury: false,
-        severity: 3,
-        lat: 16.0562,
-        lng: 108.2045,
-      });
-      const dist = Math.round((simulatedDistance + 4.5) * 10) / 10;
-      discoveredSignals.push({
-        id: 'sos-77291',
-        sosId: 77291,
-        hex: demoPacket.hexString,
-        rawRSSI: -68,
-        smoothedRSSI: -68,
-        distanceM: dist,
-        peopleCount: 3,
-        hasElderly: true,
-        hasChildren: true,
-        hasInjury: false,
-        severity: 3,
-        lat: 16.0562,
-        lng: 108.2045,
-        lastSeen: Date.now(),
-        radarAngle: 135,
-      });
-    }
-
+    // Chỉ trả về các mục tiêu thật sự được phát sóng từ thiết bị người dân
     if (onUpdate) {
       onUpdate(discoveredSignals);
     }

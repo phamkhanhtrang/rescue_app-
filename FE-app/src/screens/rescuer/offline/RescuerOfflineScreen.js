@@ -143,18 +143,16 @@ const RescuerOfflineScreen = ({ navigation }) => {
     outputRange: ['0deg', '360deg'],
   });
 
-  // Gửi lệnh PING định vị từ xa
+  // Gửi lệnh PING định vị từ xa đến máy nạn nhân
   const handlePingTarget = async () => {
     if (!selectedSignal) return;
     triggerHaptic('alarm');
     await sendRemotePing(selectedSignal.sosId);
-    // Phát âm thanh còi hú trực tiếp để test ngay trên 1 điện thoại
-    await playAlarmSiren(3500);
     setModalConfig({
       visible: true,
       type: 'success',
-      title: '🚨 Đã gửi lệnh PING định vị!',
-      message: `Đã phát lệnh kích hoạt chớp đèn Flash SOS và hú còi 100% âm lượng trên máy nạn nhân GP-#${selectedSignal.sosId} ở cự ly ${selectedSignal.distanceM}m.`,
+      title: '🚨 Đã phát lệnh PING định vị!',
+      message: `Đã truyền sóng kích hoạt chớp đèn Flash SOS và còi hú khẩn cấp đến thiết bị của nạn nhân GP-#${selectedSignal.sosId}.`,
     });
   };
 
