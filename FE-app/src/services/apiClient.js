@@ -1,9 +1,20 @@
 /** API client with a single shared JWT refresh for the whole app. */
+import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Có thể đổi máy chủ bằng EXPO_PUBLIC_API_URL mà không sửa mã nguồn.
-// Điện thoại thật phải truy cập được địa chỉ LAN của máy chạy Django.
-export const BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.20:8000').replace(/\/$/, '');
+// Tự động phân định: Web trên máy tính dùng localhost/127.0.0.1, Điện thoại thật dùng IP LAN
+const resolveBaseUrl = () => {
+  if (process.env.EXPO_PUBLIC_API_URL) return process.env.EXPO_PUBLIC_API_URL;
+  if (Platform.OS === 'web') {
+    if (typeof window !== 'undefined' && window.location && window.location.hostname) {
+      return `http://${window.location.hostname}:8000`;
+    }
+    return 'http://127.0.0.1:8000';
+  }
+  return 'http://192.168.1.20:8000';
+};
+
+export const BASE_URL = resolveBaseUrl().replace(/\/$/, '');
 
 let authToken = null;
 let refreshToken = null;
