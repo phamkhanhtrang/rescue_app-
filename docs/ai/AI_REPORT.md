@@ -1,7 +1,7 @@
 # BÁO CÁO CHI TIẾT CÁC CHỨC NĂNG AI - GUARDIAN PULSE
 
 > **Dự án:** Guardian Pulse - Hệ thống điều phối cứu hộ thiên tai
-> **Ngày:** 26/05/2026
+> **Ngày:** 26/05/2026 · cập nhật 16/11/2026 (luồng Model A/B, DBSCAN, Hungarian, đánh giá)
 
 ---
 
@@ -66,11 +66,13 @@
 
 | Thành phần | Công nghệ | Vai trò |
 |---|---|---|
-| **Deep Learning** | PhoBERT (vinai/phobert-base) | Phân loại văn bản SOS tiếng Việt |
-| **NLP Rule-based** | Regex + Keyword matching | Fallback khi chưa có model |
-| **Clustering** | DBSCAN-like (Greedy + Haversine) | Gom cụm SOS theo GPS |
+| **Deep Learning** | PhoBERT Model A + Model B (vinai/phobert-base-v2) | A: nhận diện yêu cầu cứu trợ + nhu cầu. B: trích xuất địa điểm, số người, người yếu thế, vật tư |
+| **Guardrails** | Regex (`sos_ml/hybrid_guardrails.py`) | Kiểm tra lại kết quả Model A/B, ghi rõ nguồn quyết định |
+| **NLP Rule-based** | Regex + Keyword matching | Phân loại tin báo chí (nhánh tin tức) |
+| **Model cũ** | PhoBERT v1 6 nhãn (vinai/phobert-base) | Chỉ còn làm baseline so sánh, mặc định không chạy |
+| **Clustering** | DBSCAN (scikit-learn, Haversine) | Gom cụm SOS theo GPS |
 | **Scoring** | Weighted Multi-factor (Log scaling) | Chấm điểm ưu tiên Zone |
-| **Matching** | Greedy Matching Algorithm | Phân công Rescuer tối ưu |
+| **Matching** | Hungarian (scipy `linear_sum_assignment`) | Phân công Rescuer tối ưu toàn cục |
 | **Crawling** | feedparser (RSS) + Facebook Graph API v18.0 | Thu thập tin thiên tai |
 | **Deduplication** | MD5 Hash + SequenceMatcher (difflib) | Lọc tin trùng lặp |
 | **Geocoding** | Từ điển offline 63 tỉnh/thành + Nominatim API | Xác định vị trí |
@@ -78,7 +80,11 @@
 
 ---
 
-## 2. PhoBERT SOS Classifier
+## 2. PhoBERT SOS Classifier (v1, model cũ)
+
+> **Trạng thái:** model 6 nhãn này không chạy trong luồng chính. Tin cầu cứu đi qua
+> Model A/B (mục 2A); tin báo chí dùng luật từ khóa (mục 3). Model v1 chỉ được nạp khi bật
+> `AI_LEGACY_PHOBERT_V1=True` hoặc khi chạy `ai_evaluate --with-v1` để so sánh.
 
 ### 2.1 Mô tả bài toán
 Phân loại văn bản SOS tiếng Việt thành **6 nhãn** chuyên biệt cho tình huống cứu hộ thiên tai.
@@ -174,19 +180,45 @@ File: `backend/ai/nlp/phobert_analyzer.py`
 
 ---
 
-## 3. NLP Text Analyzer (Rule-based Fallback)
+## 2A. Model A/B (luồng chính cho tin cầu cứu)
+
+Code: `backend/ai/sos_ml/`, trọng số: `backend/ai/nlp/sos_two_model_v1/`, huấn luyện: `backend/ai/training/`.
+
+| Model | Kiến trúc | Đầu ra |
+|---|---|---|
+| A | PhoBERT-base-v2 + 2 đầu phân loại (1 encoder dùng chung) | `is_request` và đa nhãn nhu cầu RESCUE / MEDICAL / EVACUATION / SUPPLY |
+| B | PhoBERT-base-v2 token classification (BIO) | Cụm LOCATION, PEOPLE_COUNT, VULNERABLE_GROUP, RESOURCE |
+
+Sau hai model là lớp luật `hybrid_guardrails.py`: ép thành yêu cầu khi có dấu hiệu nguy hiểm
+tính mạng, chặn tin quyên góp/bán hàng/thời tiết, và sửa/bổ sung thực thể. Mỗi kết quả ghi
+`decision_source` (MODEL / RULE_FALLBACK / RULE_FILTER) cùng dự đoán gốc của model.
+
+**Nơi sử dụng:**
+
+| Nguồn | Cách dùng |
+|---|---|
+| Bài Facebook | Phân tích khi crawl → admin sửa và duyệt → tạo SOS |
+| Ghi chú SOS từ app | Chạy nền sau khi SOS đã lưu. Chỉ bổ sung thông tin và gắn cờ (lệch loại, lệch số người, có người yếu thế); **không** loại bỏ hay hạ ưu tiên SOS |
+| Trang test của admin | `POST /ai/analyze-sos/` |
+
+**Dữ liệu:** Model A train trên 1.001 câu (960 tổng hợp + 41 thực), Model B trên 1.051 câu
+(1.032 tổng hợp + 19 thực); Validation 176 và Test 160 câu đều là câu tổng hợp theo mẫu.
+Xem kết quả và giới hạn ở mục 11.
+
+---
+
+## 3. NLP Text Analyzer (luật từ khóa cho nhánh tin tức)
 
 ### 3.1 Mô tả
-Hệ thống phân tích văn bản dự phòng khi PhoBERT chưa được cài đặt. Sử dụng keyword matching để trích xuất thông tin.
+Phân tích bài báo (RSS) bằng keyword matching để lấy loại sự cố, mức độ và điểm tin cậy. Bài báo là tin cảnh báo chứ không phải lời cầu cứu nên không cần model phân loại SOS.
 
 File: `backend/ai/nlp/text_analyzer.py`
 
-### 3.2 Chiến lược 2 tầng
+### 3.2 Chiến lược
 
 ```
-Văn bản → [PhoBERT available?]
-              ├── YES → PhoBERT classify → AnalysisResult (method='phobert')
-              └── NO  → Rule-based → AnalysisResult (method='rule_based')
+Bài báo → Rule-based → AnalysisResult (method='rule_based')
+          (PhoBERT v1 chỉ chạy khi bật AI_LEGACY_PHOBERT_V1)
 ```
 
 ### 3.3 Rule-based: Phân loại sự cố
@@ -315,25 +347,33 @@ File: `backend/ai/clustering.py`
 
 ### 7.1 Thuật toán
 
-**Greedy Clustering (DBSCAN-like):**
+**DBSCAN** (scikit-learn, `metric='haversine'`, `algorithm='ball_tree'`):
 
 | Tham số | Giá trị |
 |---|---|
-| Bán kính gom cụm | 300m |
+| eps (bán kính lân cận) | 300m |
 | Khoảng cách | Haversine (GPS) |
-| Min samples | 1 |
-| Độ phức tạp | O(n²) — phù hợp n < 10k |
+| min_samples | 2 |
+
+- Hai SOS cách nhau ≤ 300m thuộc cùng cụm; cụm lan theo chuỗi các SOS kề nhau.
+- Kết quả không phụ thuộc thứ tự duyệt SOS.
+- SOS không có SOS nào khác trong 300m là điểm nhiễu → giữ là SOS đơn lẻ.
+- Cách gom tham lam cũ (`greedy_cluster_sos_signals`) chỉ còn là phương án dự phòng khi thiếu scikit-learn.
 
 ### 7.2 Quy trình
 
 ```
-1. Lấy SOS chưa gán zone (PENDING/ACKNOWLEDGED)
-2. Greedy cluster: SOS đầu tiên → hạt nhân cụm → thêm mọi SOS trong 300m
+1. Lấy SOS chưa gán zone (PENDING/ACKNOWLEDGED), sắp theo thời gian gửi
+2. DBSCAN → các cụm + các SOS đơn lẻ
 3. Tính centroid (trung bình lat/lng)
 4. Suy ra severity từ people_count + emergency_type
-5. Tìm Zone cũ gần tâm → cập nhật hoặc tạo Zone mới
-6. Gán zone_id cho mỗi SOS
+5. Có Zone cũ trong 300m quanh tâm → cập nhật Zone đó
+   Không có → tạo Zone mới nếu cụm ≥ 2 SOS hoặc ≥ 10 người; SOS đơn lẻ giữ zone = None
+6. Gán zone_id cho mỗi SOS, trả về danh sách Zone vừa thay đổi để chấm điểm lại
 ```
+
+Gom cụm và chấm điểm chạy trong luồng nền (`ai/background.py`, `ai/sos_pipeline.py`):
+request gửi SOS được trả ngay sau khi lưu.
 
 ### 7.3 Map Severity
 
@@ -353,11 +393,12 @@ File: `backend/ai/priority_scorer.py`
 ### 8.1 Công thức
 
 ```
-score = W_SOS    × f_sos(sos_count)
-      + W_PEOPLE × f_people(people_affected)
-      + W_SEV    × severity_weight
-      + W_WAIT   × f_wait(hours_waiting)
-      + W_RESCUE × f_rescuer_deficit(needed, assigned)
+score = W_SOS        × f_sos(sos_count)
+      + W_PEOPLE     × f_people(people_affected)
+      + W_SEV        × severity_weight
+      + W_WAIT       × f_wait(hours_waiting)
+      + W_RESCUE     × f_rescuer_deficit(needed, assigned)
+      + W_VULNERABLE × f_vulnerable(SOS còn mở trong zone)
 
 → Chuẩn hóa [0.00 – 100.00]
 ```
@@ -366,11 +407,19 @@ score = W_SOS    × f_sos(sos_count)
 
 | Yếu tố | Trọng số | Hàm chuẩn hóa |
 |---|---|---|
-| Số SOS trong zone | 25% | log1p(count)/log1p(50) |
-| Số nạn nhân | 30% | log1p(people)/log1p(100) |
+| Số SOS trong zone | 20% | log1p(count)/log1p(50) |
+| Số nạn nhân | 25% | log1p(people)/log1p(100) |
 | Mức nghiêm trọng | 20% | CRITICAL=1.0, HIGH=0.75, MEDIUM=0.45, LOW=0.20 |
 | Thời gian chờ | 15% | hours/24 (tối đa 1.0 sau 24h) |
 | Thiếu hụt cứu hộ | 10% | deficit/needed |
+| Người yếu thế / y tế | 10% | 0.6 nếu có SOS nêu người yếu thế + 0.4 nếu có SOS cần y tế |
+
+Yếu tố cuối lấy từ `SOSSignal.ai_analysis` (Model A/B đọc ghi chú, hoặc thông tin admin đã duyệt
+với SOS từ Facebook).
+
+Trọng số là lựa chọn thiết kế, không học từ dữ liệu. Độ ổn định của thứ hạng khi trọng số lệch
+được kiểm tra bằng `python manage.py ai_priority_sensitivity`; kết quả lưu ở
+`backend/ai/reports/priority_sensitivity.md`.
 
 ### 8.3 Phân loại theo điểm
 
@@ -414,15 +463,18 @@ score = W_DIST     × f_distance(rescuer → zone)
 | LOGISTICS | hậu cần, di tản, nhu yếu phẩm | lũ, bão |
 | COMMAND | — | mặc định (0.7) |
 
-### 9.4 Greedy Matching
+### 9.4 Ghép cặp bằng thuật toán Hungarian
 
 ```
 1. Tính ma trận score: |Rescuers| × |Zones|
-2. Sắp xếp giảm dần theo score
-3. Lần lượt chọn cặp (Rescuer, Zone) score cao nhất
-4. Loại Rescuer đã gán khỏi pool
-5. Dừng khi đạt top_n hoặc hết
+2. Zone thiếu k người được nhân thành k cột (mỗi cột là một chỗ trống)
+3. scipy.optimize.linear_sum_assignment(maximize=True) → tập cặp có TỔNG điểm lớn nhất,
+   mỗi Rescuer tối đa một Zone, mỗi Zone không quá số chỗ còn thiếu
+4. Sắp theo điểm giảm dần, trả về top_n
 ```
+
+API trả thêm `optimization.total_score` và `optimization.greedy_total_score` để so sánh với
+cách ghép tham lam cũ (vẫn giữ làm phương án dự phòng).
 
 ---
 
@@ -439,47 +491,70 @@ score = W_DIST     × f_distance(rescuer → zone)
 | POST | `/ai/crawled/<id>/review/` | Duyệt/từ chối bài crawl |
 | GET | `/ai/recommend/` | Gợi ý phân công Rescuer → Zone |
 | POST | `/ai/crawl/facebook/` | Crawl Facebook SOS |
-| POST | `/ai/classify/` | Phân loại text bằng PhoBERT |
+| POST | `/ai/classify/` | Phân loại text bằng luật từ khóa (PhoBERT v1 nếu bật `AI_LEGACY_PHOBERT_V1`) |
+| POST | `/ai/analyze-sos/` | Phân tích text bằng Model A/B + guardrails |
+| POST | `/ai/crawled/<id>/analyze/` | Phân tích lại một bài Facebook bằng Model A/B |
 
 ---
 
 ## 11. Kết quả & Đánh giá
 
-### 11.1 PhoBERT Training Results
+### 11.1 Cách đo
 
-- **Môi trường:** Google Colab (GPU CUDA)
-- **Epochs:** 3
-- **Metric chọn best model:** F1 Macro
-- **Training strategy:** Load best model at end
+```
+python manage.py ai_evaluate --with-v1          # tập test tổng hợp đi kèm repo
+python manage.py ai_export_reviewed             # xuất bài admin đã duyệt thành dữ liệu thực
+python manage.py ai_evaluate --task a --excel-a ai/reports/real_model_a.xlsx --name real
+```
 
-### 11.2 Kiến trúc Fallback đảm bảo độ tin cậy
+Báo cáo đầy đủ nằm ở `backend/ai/reports/eval_<tên>.md`.
+
+### 11.2 Kết quả trên tập test tổng hợp (16/11/2026)
+
+**Đây là điểm trên 160 câu tổng hợp theo mẫu, không phải độ chính xác trên tin thực.**
+
+Bài toán A (nhận diện yêu cầu + nhu cầu):
+
+| Phương pháp | Yêu cầu F1 | Nhu cầu macro-F1 |
+|---|---:|---:|
+| Luật từ khóa | 0.353 | 0.301 |
+| TF-IDF + Logistic Regression | 0.966 | 0.881 |
+| PhoBERT v1 (6 nhãn, model cũ) | 0.876 | 0.193 |
+| PhoBERT Model A (chỉ model) | 0.978 | 0.983 |
+| PhoBERT Model A + guardrails (đang dùng) | 0.978 | 0.983 |
+
+Trên tập này luật guardrails không can thiệp vào câu nào (160/160 do model tự quyết).
+
+Bài toán B (trích xuất thông tin, so khớp theo nhãn + nội dung cụm):
+
+| Phương pháp | P | R | F1 |
+|---|---:|---:|---:|
+| Chỉ luật regex | 0.532 | 0.578 | 0.554 |
+| PhoBERT Model B (chỉ model) | 0.873 | 0.992 | 0.929 |
+| PhoBERT Model B + luật (đang dùng) | 0.692 | 0.992 | 0.815 |
+
+Nhận xét: trên dữ liệu tổng hợp, lớp luật bổ sung thực thể làm giảm precision của Model B
+(thêm cụm không có trong nhãn). Cần đo lại trên dữ liệu thực trước khi kết luận nên giữ hay
+thu hẹp các luật này.
+
+### 11.3 Giới hạn
+
+| Hạng mục | Giới hạn |
+|---|---|
+| Dữ liệu đánh giá | Validation/Test đều là câu tổng hợp; chưa có tập test thực đủ lớn. `ai_export_reviewed` tạo tập này từ các bài admin đã duyệt |
+| Model A/B | Câu phủ định ("đã an toàn, không cần hỗ trợ") từng bị nhận nhầm là yêu cầu ở bản model tháng 9 |
+| Điểm ưu tiên | Trọng số đặt tay; chỉ có phân tích độ nhạy, chưa có đánh giá của chuyên gia |
+| Phân công | Khoảng cách tính theo đường chim bay, chưa tính đường ngập |
+| Geocoder | Nominatim giới hạn 1 request/giây; từ điển offline chỉ tới cấp tỉnh/thành |
+
+### 11.4 Độ tin cậy khi AI lỗi
 
 | Tình huống | Hành vi |
 |---|---|
-| PhoBERT sẵn sàng | Dùng AI (method='phobert') |
-| torch/transformers chưa cài | Log warning → Rule-based |
-| Model directory không tồn tại | Log warning → Rule-based |
-| Lỗi inference | Log error → Rule-based |
-| **Kết quả:** Hệ thống **không bao giờ crash** vì lỗi AI |
-
-### 11.3 Đánh giá tổng thể hệ thống AI
-
-| Module | Điểm mạnh | Hạn chế |
-|---|---|---|
-| PhoBERT Classifier | Hiểu ngữ cảnh tiếng Việt, phân loại 6 nhãn | Dataset còn nhỏ (620 mẫu) |
-| Clustering | Nhanh, tự động tạo Zone | O(n²), chưa tối ưu cho dữ liệu lớn |
-| Priority Scorer | Công thức đa yếu tố, cân bằng | Trọng số cố định, chưa học từ dữ liệu |
-| Assignment Recommender | Greedy matching nhanh, có giải thích lý do | Chưa tối ưu toàn cục (Hungarian) |
-| Crawler Pipeline | Đa nguồn, lọc trùng 3 tầng | Phụ thuộc RSS feed format |
-| Geocoder | Offline nhanh cho 63 tỉnh/thành | Nominatim có rate limit |
-
-### 11.4 Hướng phát triển
-
-1. **Mở rộng dataset** PhoBERT lên 5,000+ mẫu thực tế
-2. **Nâng cấp Clustering** sang DBSCAN/HDBSCAN thực sự
-3. **Học trọng số** Priority Scorer từ feedback Admin
-4. **Hungarian Algorithm** cho Assignment (tối ưu toàn cục)
-5. **Real-time WebSocket** để push kết quả AI tức thì
+| Model A/B chưa nạp được | SOS vẫn được lưu, gom cụm và chấm điểm; `ai_analysis.status = 'unavailable'` |
+| Gom cụm / chấm điểm lỗi | Ghi log, SOS không bị ảnh hưởng |
+| Thiếu scikit-learn / scipy | Tự chuyển sang gom tham lam / ghép tham lam |
+| Bài Facebook không phân tích được | Vẫn lưu bài để admin duyệt tay |
 
 ---
 
@@ -488,33 +563,35 @@ score = W_DIST     × f_distance(rescuer → zone)
 ```
 backend/ai/
 ├── models.py                    # Model CrawledArticle (Django ORM)
-├── views.py                     # 10 API endpoints
-├── urls.py                      # URL routing
-├── clustering.py                # Gom cụm SOS → Zone (Haversine + Greedy)
+├── views.py, urls.py            # API endpoints
+├── apps.py                      # Nạp sẵn Model A/B khi server khởi động
+├── background.py                # Hàng đợi chạy nền cho tác vụ AI
+├── sos_pipeline.py              # SOS mới → gom cụm → chấm điểm → đọc ghi chú
+├── sos_note_analysis.py         # Model A/B đọc ghi chú SOS từ app
+├── sos_article_analysis.py      # Model A/B cho bài Facebook + xếp mức khẩn
+├── sos_service.py               # Bộ nạp Model A/B dùng chung
+├── clustering.py                # Gom cụm SOS → Zone (DBSCAN + Haversine)
 ├── priority_scorer.py           # Chấm điểm ưu tiên Zone
-├── assignment_recommender.py    # Gợi ý phân công Rescuer
-├── crawler_pipeline.py          # Pipeline tổng hợp Crawl → NLP → DB
-├── train_sos_phobert.ipynb      # Notebook training PhoBERT trên Colab
-├── crawlers/
-│   ├── base_crawler.py          # Abstract BaseCrawler + CrawledItem
-│   ├── rss_crawler.py           # Crawl RSS báo chí VN
-│   └── fb_crawler.py            # Crawl Facebook SOS Groups
+├── assignment_recommender.py    # Gợi ý phân công Rescuer (Hungarian)
+├── crawler_pipeline.py          # Pipeline Crawl → NLP → DB
+├── evaluation.py                # Đo model + baseline + thống kê guardrails
+├── dataset_export.py            # Xuất bài admin đã duyệt thành dữ liệu thực
+├── management/commands/         # ai_evaluate, ai_export_reviewed, ai_priority_sensitivity
+├── reports/                     # Kết quả đánh giá (sinh bằng lệnh)
+├── sos_ml/                      # Tiền xử lý, kiến trúc, suy luận, guardrails của Model A/B
+├── training/                    # Notebook Colab + Excel huấn luyện
+├── crawlers/                    # RSS, Facebook (Graph API, Playwright), GDACS
 └── nlp/
-    ├── text_analyzer.py         # NLP phân tích + Fallback rule-based
-    ├── phobert_analyzer.py      # PhoBERT inference (Singleton)
-    ├── deduplicator.py          # Lọc trùng 3 tầng
-    ├── geocoder.py              # Geocoding (offline + Nominatim)
-    └── sos_phobert_model/       # Model weights (~540MB)
-        ├── config.json
-        ├── model.safetensors
-        ├── tokenizer_config.json
-        ├── vocab.txt
-        ├── bpe.codes
-        ├── label_mapping.json
-        └── metadata.json
+    ├── text_analyzer.py         # Luật từ khóa cho nhánh tin tức
+    ├── phobert_analyzer.py      # PhoBERT v1 (model cũ, baseline)
+    ├── deduplicator.py          # Lọc trùng bài crawl
+    ├── event_matcher.py         # Gộp trùng theo sự kiện (SĐT, vị trí, nội dung)
+    ├── geocoder.py              # Geocoding (ghép địa chỉ + Nominatim + từ điển tỉnh)
+    ├── sos_two_model_v1/        # Trọng số Model A/B
+    └── sos_phobert_model/       # Trọng số PhoBERT v1
 ```
 
 ---
 
 _Báo cáo được tạo tự động từ mã nguồn dự án Guardian Pulse._
-_Cập nhật: 26/05/2026_
+_Cập nhật: 16/11/2026_

@@ -335,6 +335,27 @@ export default function SOSDetailModal({ sosId, isOpen, onClose, onUpdated }: SO
                       </div>
                     )}
 
+                    {/* AI đọc ghi chú: chỉ bổ sung thông tin và gắn cờ, không tự loại SOS */}
+                    {sos.ai_analysis?.status === 'ok' && (() => {
+                      const ai = sos.ai_analysis;
+                      const NEED: Record<string, string> = { RESCUE: 'Cứu hộ', MEDICAL: 'Y tế', EVACUATION: 'Sơ tán', SUPPLY: 'Tiếp tế' };
+                      const names = (list?: string[]) => (list || []).map(n => NEED[n] || n).join(', ');
+                      const hasInfo = ai.needs?.length || ai.vulnerable_groups?.length || ai.resources?.length || ai.messages?.length;
+                      if (!hasInfo) return null;
+                      return (
+                        <div className="p-3 rounded-xl border border-violet-200 bg-violet-50/60 text-xs text-slate-700 space-y-1">
+                          <p className="text-[11px] text-violet-700 font-bold">
+                            {ai.source === 'admin_review' ? 'Thông tin admin đã duyệt từ bài Facebook' : 'AI đọc ghi chú (gợi ý, cần người xác nhận)'}
+                          </p>
+                          {ai.needs?.length > 0 && <p>Nhu cầu: <b>{names(ai.needs)}</b></p>}
+                          {ai.suggested_needs?.length > 0 && <p className="text-amber-800">Khác loại đã chọn, nên xem thêm: <b>{names(ai.suggested_needs)}</b></p>}
+                          {ai.vulnerable_groups?.length > 0 && <p>Người yếu thế: <b>{ai.vulnerable_groups.join('; ')}</b></p>}
+                          {ai.resources?.length > 0 && <p>Vật tư cần: {ai.resources.join('; ')}</p>}
+                          {(ai.messages || []).map((m: string, i: number) => <p key={i} className="text-amber-800">⚠ {m}</p>)}
+                        </div>
+                      );
+                    })()}
+
                     {/* Assigned Rescuer Status */}
                     {sos.assigned_rescuer ? (
                       <div className="p-4 rounded-2xl border border-blue-200 bg-blue-50/70 space-y-1.5">

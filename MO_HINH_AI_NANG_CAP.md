@@ -33,7 +33,7 @@
 
 ### 1.1. Mô hình AI hiện tại (v1.0) — Những hạn chế
 
-Mô hình AI v1.0 trong dự án Guardian Pulse hiện chỉ thực hiện được **một nhiệm vụ duy nhất**: Phân loại văn bản thô vào các nhãn chung chung (`SOS`, `ALERT`, `SPAM`) bằng PhoBERT hoặc Rule-based fallback.
+Mô hình AI v1.0 trong dự án Guardian Pulse chỉ thực hiện được **một nhiệm vụ duy nhất**: Phân loại văn bản thô vào **6 nhãn** (`RESCUE`, `MEDICAL`, `EVACUATION`, `SUPPLY`, `INFO`, `SPAM`), mỗi câu một nhãn, bằng PhoBERT hoặc Rule-based fallback.
 
 Các hạn chế chính:
 * **Không bóc tách được thông tin chi tiết:** Chỉ biết "đây là tin cứu hộ" nhưng không biết cứu hộ ai (người già? trẻ em?), mức nước ngập bao nhiêu, ở đoạn đường nào.

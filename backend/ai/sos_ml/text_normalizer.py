@@ -174,3 +174,61 @@ def clean_text_for_pipeline(text: str) -> str:
     text = re.sub(r'[ ]{2,}', ' ', text)
 
     return text.strip()
+
+
+# Hai ký tự vùng dùng riêng của Unicode, không xuất hiện trong văn bản thật,
+# dùng để đánh dấu tạm đầu/cuối cụm thực thể trong lúc chuẩn hóa.
+_SPAN_OPEN, _SPAN_CLOSE = '', ''
+
+
+def clean_marked_text(text: str, entities=None):
+    """
+    Chuẩn hóa văn bản huấn luyện giống hệt lúc hệ thống chạy thật, đồng thời tính lại
+    vị trí các cụm thực thể (chuẩn hóa làm đổi độ dài câu: "ko" -> "không").
+
+    Args:
+        text:     văn bản gốc.
+        entities: danh sách {'start', 'end', 'label', 'text'} trên văn bản gốc, không chồng nhau.
+
+    Returns:
+        (văn bản đã chuẩn hóa, danh sách thực thể với start/end/text trên văn bản mới)
+    """
+    entities = sorted(entities or [], key=lambda e: e['start'])
+    if _SPAN_OPEN in text or _SPAN_CLOSE in text:
+        raise ValueError('Văn bản chứa ký tự điều khiển không hỗ trợ.')
+    cleaned = clean_text_for_pipeline(text)
+    if not cleaned:
+        raise ValueError('Văn bản trống sau khi chuẩn hóa.')
+    if not entities:
+        return cleaned, []
+
+    marked, cursor = [], 0
+    for entity in entities:
+        marked += [text[cursor:entity['start']], _SPAN_OPEN, text[entity['start']:entity['end']], _SPAN_CLOSE]
+        cursor = entity['end']
+    marked.append(text[cursor:])
+    marked = clean_text_for_pipeline(''.join(marked))
+
+    plain, result, start = [], [], None
+    length, labels = 0, iter(entities)
+    for char in marked:
+        if char == _SPAN_OPEN:
+            start = length
+        elif char == _SPAN_CLOSE:
+            label = next(labels)['label']
+            value = ''.join(plain)[start:length]
+            # Chuẩn hóa có thể để lại khoảng trắng ở mép cụm (ví dụ "_" -> " ").
+            left = len(value) - len(value.lstrip())
+            value = value.strip()
+            if value:
+                result.append({'start': start + left, 'end': start + left + len(value), 'label': label, 'text': value})
+            start = None
+        else:
+            plain.append(char)
+            length += 1
+    plain = ''.join(plain)
+    # Dấu tạm chỉ được phép nằm ở ranh giới từ; nếu nó cắt giữa một từ thì câu
+    # chuẩn hóa sẽ khác với câu hệ thống nhìn thấy lúc chạy thật.
+    if plain != cleaned:
+        raise ValueError('Nhãn cắt giữa một từ nên không chuẩn hóa được. Kiểm tra lại vị trí nhãn.')
+    return cleaned, result

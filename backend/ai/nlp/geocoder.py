@@ -11,6 +11,7 @@ Trả về (lat, lng, location_name) hoặc (None, None, None) nếu không tìm
 """
 
 import re
+import time
 import logging
 import requests
 from typing import Optional
@@ -142,6 +143,91 @@ def geocode_from_text(text: str) -> tuple[Optional[float], Optional[float], Opti
             return result
 
     return None, None, None
+
+
+# ─── Ghép nhiều cụm địa điểm thành một địa chỉ ───────────────────────────────
+
+# Cấp hành chính từ chi tiết → rộng. Cụm không nhận ra cấp được coi là chi tiết nhất.
+_ADMIN_LEVELS = [
+    (1, r'(số nhà|số|ngõ|ngách|hẻm|kiệt|đường|phố)\b'),
+    (2, r'(thôn|xóm|bản|buôn|ấp|tổ dân phố|tổ|khu phố|khối)\b'),
+    (3, r'(xã|phường|thị trấn)\b'),
+    (4, r'(huyện|quận|thị xã)\b'),
+    (5, r'(tỉnh|thành phố|tp\.?)(\s|$)'),
+]
+
+
+def _admin_level(part: str) -> int:
+    value = part.strip().lower()
+    for level, pattern in _ADMIN_LEVELS:
+        if re.match(pattern, value):
+            return level
+    # Tên tỉnh/thành đứng một mình ("Quảng Nam") là cấp rộng nhất.
+    return 5 if value in VN_PROVINCES else 0
+
+
+def combine_location_parts(parts: list) -> list:
+    """
+    Sắp các cụm địa điểm rời ("xã Hòa Tiến", "thôn 3", "huyện Hòa Vang") theo thứ tự
+    chi tiết → rộng để ghép thành một địa chỉ. Bỏ cụm lặp và cụm đã nằm trong cụm khác.
+    """
+    cleaned = []
+    for part in parts:
+        value = ' '.join(str(part or '').split()).strip(' ,.;')
+        if value and not any(value.lower() in other.lower() for other in cleaned):
+            cleaned = [other for other in cleaned if other.lower() not in value.lower()]
+            cleaned.append(value)
+    # sorted() ổn định: các cụm cùng cấp giữ thứ tự xuất hiện trong bài.
+    return sorted(cleaned, key=_admin_level)
+
+
+def geocode_address(parts: list, limit: int = 3) -> dict:
+    """
+    Tìm tọa độ cho một địa chỉ gồm nhiều cụm. Thử địa chỉ đầy đủ trước, không ra thì
+    bỏ dần cụm chi tiết nhất; cuối cùng mới dùng tâm tỉnh/thành trong từ điển.
+
+    Returns:
+        {'query': địa chỉ đã ghép,
+         'matched_query': phần địa chỉ thực sự tìm ra kết quả (hoặc None),
+         'precision': 'address' | 'province' | None,
+         'candidates': [{'lat', 'lng', 'name'}, ...]}   # ứng viên đầu là gợi ý chính
+    """
+    ordered = combine_location_parts(parts)
+    result = {'query': ', '.join(ordered), 'matched_query': None, 'precision': None, 'candidates': []}
+    if not ordered:
+        return result
+
+    # Tối đa 3 lần gọi Nominatim cho mỗi bài để tôn trọng giới hạn 1 request/giây.
+    for attempt, start in enumerate(range(len(ordered))[:3]):
+        query = ', '.join(ordered[start:])
+        if attempt:
+            time.sleep(1)
+        candidates = _nominatim_search(query, limit)
+        if candidates:
+            result.update(matched_query=query, precision='address', candidates=candidates)
+            return result
+
+    lowered = result['query'].lower()
+    for name, (lat, lng) in VN_PROVINCES.items():
+        if name in lowered:
+            result.update(matched_query=name.title(), precision='province',
+                          candidates=[{'lat': lat, 'lng': lng, 'name': name.title()}])
+            break
+    return result
+
+
+def _nominatim_search(query: str, limit: int = 3) -> list:
+    """Trả về tối đa `limit` ứng viên từ Nominatim; lỗi mạng trả về danh sách rỗng."""
+    try:
+        resp = requests.get(
+            'https://nominatim.openstreetmap.org/search',
+            params={'q': f'{query}, Việt Nam', 'format': 'json', 'limit': limit, 'countrycodes': 'vn'},
+            headers={'User-Agent': 'GuardianPulse-AI/1.0'}, timeout=5)
+        return [{'lat': float(item['lat']), 'lng': float(item['lon']),
+                 'name': item.get('display_name', query)} for item in resp.json()]
+    except Exception as e:
+        logger.debug(f"[Geocoder] Nominatim lỗi cho '{query}': {e}")
+        return []
 
 
 def _extract_location_candidate(text: str) -> Optional[str]:

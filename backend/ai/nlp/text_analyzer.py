@@ -6,9 +6,12 @@ Phân tích văn bản để trích xuất:
   - Mức độ nghiêm trọng (severity: CRITICAL / HIGH / MEDIUM / LOW)
   - Điểm tin cậy (confidence_score: 0.0 – 1.0)
 
+Dùng cho nhánh TIN TỨC (báo chí RSS). Tin cầu cứu đi qua Model A/B.
+
 Chiến lược:
-  1. PRIMARY: PhoBERT fine-tuned (model thật, hiểu ngữ cảnh tiếng Việt)
-  2. FALLBACK: Rule-based keyword matching (khi chưa cài model)
+  1. MẶC ĐỊNH: luật từ khóa (rule-based).
+  2. TÙY CHỌN: PhoBERT v1 6 nhãn khi bật settings.AI_LEGACY_PHOBERT_V1
+     (model cũ, chỉ còn giữ làm baseline so sánh).
 """
 
 import re
@@ -77,7 +80,7 @@ def analyze(title: str, content: str) -> AnalysisResult:
     """
     Phân tích tiêu đề + nội dung để trả về AnalysisResult.
 
-    Ưu tiên: PhoBERT → Rule-based fallback
+    Mặc định dùng luật từ khóa; PhoBERT v1 chỉ khi bật AI_LEGACY_PHOBERT_V1.
 
     Args:
         title:   Tiêu đề bài viết
@@ -88,10 +91,13 @@ def analyze(title: str, content: str) -> AnalysisResult:
     """
     full_text = f"{title or ''} {content or ''}".strip()
 
-    # ── Thử PhoBERT trước ────────────────────────────────────────────────────
+    # ── PhoBERT v1 chỉ chạy khi bật AI_LEGACY_PHOBERT_V1 ─────────────────────
+    # Mặc định tắt: bài báo là tin cảnh báo chứ không phải lời cầu cứu, nên nhánh
+    # tin tức chỉ cần luật từ khóa. Tin cầu cứu đi qua Model A/B (sos_article_analysis).
     try:
+        from django.conf import settings
         from .phobert_analyzer import classify, is_available
-        if is_available():
+        if getattr(settings, 'AI_LEGACY_PHOBERT_V1', False) and is_available():
             result = classify(full_text)
             if result is not None:
                 logger.debug(

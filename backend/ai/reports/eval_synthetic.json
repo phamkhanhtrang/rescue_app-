@@ -1,0 +1,297 @@
+{
+  "created_at": "2026-11-16T07:54:53.086181+00:00",
+  "reports": [
+    {
+      "task": "a",
+      "rows": 160,
+      "methods": {
+        "Luật từ khóa": {
+          "request": {
+            "precision": 1.0,
+            "recall": 0.2143,
+            "f1": 0.3529,
+            "accuracy": 0.45
+          },
+          "needs": {
+            "RESCUE": {
+              "precision": 1.0,
+              "recall": 0.5,
+              "f1": 0.6667
+            },
+            "MEDICAL": {
+              "precision": 1.0,
+              "recall": 0.1667,
+              "f1": 0.2857
+            },
+            "EVACUATION": {
+              "precision": 0.0,
+              "recall": 0.0,
+              "f1": 0.0
+            },
+            "SUPPLY": {
+              "precision": 1.0,
+              "recall": 0.1429,
+              "f1": 0.25
+            }
+          },
+          "needs_macro_f1": 0.3006,
+          "needs_micro_f1": 0.32
+        },
+        "TF-IDF + Logistic Regression": {
+          "request": {
+            "precision": 0.9333,
+            "recall": 1.0,
+            "f1": 0.9655,
+            "accuracy": 0.95
+          },
+          "needs": {
+            "RESCUE": {
+              "precision": 1.0,
+              "recall": 1.0,
+              "f1": 1.0
+            },
+            "MEDICAL": {
+              "precision": 0.8261,
+              "recall": 0.7917,
+              "f1": 0.8085
+            },
+            "EVACUATION": {
+              "precision": 1.0,
+              "recall": 0.75,
+              "f1": 0.8571
+            },
+            "SUPPLY": {
+              "precision": 0.8571,
+              "recall": 0.8571,
+              "f1": 0.8571
+            }
+          },
+          "needs_macro_f1": 0.8807,
+          "needs_micro_f1": 0.8712
+        },
+        "PhoBERT v1 (6 nhãn, model cũ)": {
+          "request": {
+            "precision": 0.7914,
+            "recall": 0.9821,
+            "f1": 0.8765,
+            "accuracy": 0.8063
+          },
+          "needs": {
+            "RESCUE": {
+              "precision": 0.2762,
+              "recall": 0.9062,
+              "f1": 0.4234
+            },
+            "MEDICAL": {
+              "precision": 0.1667,
+              "recall": 0.0625,
+              "f1": 0.0909
+            },
+            "EVACUATION": {
+              "precision": 1.0,
+              "recall": 0.0312,
+              "f1": 0.0606
+            },
+            "SUPPLY": {
+              "precision": 0.4667,
+              "recall": 0.125,
+              "f1": 0.1972
+            }
+          },
+          "needs_macro_f1": 0.193,
+          "needs_micro_f1": 0.2606
+        },
+        "PhoBERT Model A (chỉ model)": {
+          "request": {
+            "precision": 0.9573,
+            "recall": 1.0,
+            "f1": 0.9782,
+            "accuracy": 0.9688
+          },
+          "needs": {
+            "RESCUE": {
+              "precision": 1.0,
+              "recall": 1.0,
+              "f1": 1.0
+            },
+            "MEDICAL": {
+              "precision": 0.96,
+              "recall": 1.0,
+              "f1": 0.9796
+            },
+            "EVACUATION": {
+              "precision": 1.0,
+              "recall": 1.0,
+              "f1": 1.0
+            },
+            "SUPPLY": {
+              "precision": 1.0,
+              "recall": 0.9107,
+              "f1": 0.9533
+            }
+          },
+          "needs_macro_f1": 0.9832,
+          "needs_micro_f1": 0.979
+        },
+        "PhoBERT Model A + guardrails (đang dùng)": {
+          "request": {
+            "precision": 0.9573,
+            "recall": 1.0,
+            "f1": 0.9782,
+            "accuracy": 0.9688
+          },
+          "needs": {
+            "RESCUE": {
+              "precision": 1.0,
+              "recall": 1.0,
+              "f1": 1.0
+            },
+            "MEDICAL": {
+              "precision": 0.96,
+              "recall": 1.0,
+              "f1": 0.9796
+            },
+            "EVACUATION": {
+              "precision": 1.0,
+              "recall": 1.0,
+              "f1": 1.0
+            },
+            "SUPPLY": {
+              "precision": 1.0,
+              "recall": 0.9107,
+              "f1": 0.9533
+            }
+          },
+          "needs_macro_f1": 0.9832,
+          "needs_micro_f1": 0.979
+        }
+      },
+      "notes": [],
+      "tfidf_train_rows": 1001,
+      "guardrails": {
+        "total": 160,
+        "by_source": {
+          "MODEL": 160
+        },
+        "model_decided": 160,
+        "rule_intervened": 0,
+        "label_changed": 0,
+        "changed_to_correct": 0,
+        "changed_to_wrong": 0,
+        "changed_by_rule": {}
+      },
+      "model_versions": [
+        "model_a_20261005_023738_749428"
+      ],
+      "source": "ai\\training\\data_model_a.xlsx [Test]",
+      "origins": "160 câu tổng hợp"
+    },
+    {
+      "task": "b",
+      "rows": 160,
+      "methods": {
+        "Chỉ luật regex": {
+          "LOCATION": {
+            "precision": 0.5,
+            "recall": 0.4643,
+            "f1": 0.4815,
+            "gold_count": 112
+          },
+          "PEOPLE_COUNT": {
+            "precision": 0.5,
+            "recall": 1.0,
+            "f1": 0.6667,
+            "gold_count": 32
+          },
+          "VULNERABLE_GROUP": {
+            "precision": 0.5,
+            "recall": 0.5,
+            "f1": 0.5,
+            "gold_count": 48
+          },
+          "RESOURCE": {
+            "precision": 0.6452,
+            "recall": 0.625,
+            "f1": 0.6349,
+            "gold_count": 64
+          },
+          "micro": {
+            "precision": 0.5324,
+            "recall": 0.5781,
+            "f1": 0.5543
+          }
+        },
+        "PhoBERT Model B (chỉ model)": {
+          "LOCATION": {
+            "precision": 0.9402,
+            "recall": 0.9821,
+            "f1": 0.9607,
+            "gold_count": 112
+          },
+          "PEOPLE_COUNT": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "gold_count": 32
+          },
+          "VULNERABLE_GROUP": {
+            "precision": 0.75,
+            "recall": 1.0,
+            "f1": 0.8571,
+            "gold_count": 48
+          },
+          "RESOURCE": {
+            "precision": 0.8205,
+            "recall": 1.0,
+            "f1": 0.9014,
+            "gold_count": 64
+          },
+          "micro": {
+            "precision": 0.8729,
+            "recall": 0.9922,
+            "f1": 0.9287
+          }
+        },
+        "PhoBERT Model B + luật (đang dùng)": {
+          "LOCATION": {
+            "precision": 0.6832,
+            "recall": 0.9821,
+            "f1": 0.8059,
+            "gold_count": 112
+          },
+          "PEOPLE_COUNT": {
+            "precision": 0.6667,
+            "recall": 1.0,
+            "f1": 0.8,
+            "gold_count": 32
+          },
+          "VULNERABLE_GROUP": {
+            "precision": 0.75,
+            "recall": 1.0,
+            "f1": 0.8571,
+            "gold_count": 48
+          },
+          "RESOURCE": {
+            "precision": 0.6809,
+            "recall": 1.0,
+            "f1": 0.8101,
+            "gold_count": 64
+          },
+          "micro": {
+            "precision": 0.6921,
+            "recall": 0.9922,
+            "f1": 0.8154
+          }
+        }
+      },
+      "notes": [
+        "So khớp theo nhãn + nội dung cụm từ (sau chuẩn hóa), không so vị trí ký tự."
+      ],
+      "model_versions": [
+        "model_b_20261005_040803_258370"
+      ],
+      "source": "ai\\training\\data_model_b.xlsx [Test]",
+      "origins": "160 câu tổng hợp"
+    }
+  ]
+}

@@ -42,21 +42,61 @@ def predict_article(title, content):
         for entity in chunk['prediction']['entities']:
             entity = dict(entity, start=entity['start'] + chunk['start'], end=entity['end'] + chunk['start'])
             entities.append(entity)
-    return {'method': 'phobert_two_model_v1', 'mode': 'both', 'text': text,
+
+    def union(key):
+        return list(dict.fromkeys(v for c in results for v in (c['prediction'].get(key) or [])))
+
+    def distinct(key):
+        return list(dict.fromkeys(c['prediction'][key] for c in results if c['prediction'].get(key)))
+
+    from .sos_ml.hybrid_guardrails import check_emergency
+    result = {'method': 'phobert_two_model_v1', 'mode': 'both', 'text': text,
             'is_request': any(c['prediction']['is_request'] for c in results),
             'request_score': max(c['prediction']['request_score'] for c in results),
-            'needs': list(dict.fromkeys(n for c in results for n in c['prediction']['needs'])),
+            'needs': union('needs'), 'candidate_needs': union('candidate_needs'),
             'need_scores': {n: max(c['prediction']['need_scores'][n] for c in results) for n in NEED_NAMES},
             'entities': entities, 'model_versions': first['model_versions'], 'evaluation_domains': first['evaluation_domains'],
             'requires_review': True, 'offset_unit': 'unicode_code_points_in_returned_text',
             'chunks': results, 'aggregation': 'any_request_union_needs; max_scores; all_spans',
-            'severity_source': 'need_mapping_not_a_model_prediction'}
+            'severity_source': 'need_mapping_not_a_model_prediction',
+            # Luật nào đã can thiệp ở bất kỳ đoạn nào, và bài có dấu hiệu nguy hiểm tính mạng không.
+            'decision_sources': distinct('decision_source'),
+            'guardrail_applied': next(iter(distinct('guardrail_applied')), None),
+            'emergency_detected': check_emergency(text)[0]}
+    result['triage'] = triage(result)
+    return result
+
+
+def triage(result):
+    """
+    Xếp mức khẩn để sắp hàng đợi duyệt. Chỉ quyết định THỨ TỰ hiển thị: bài mức LOW
+    vẫn nằm trong hàng đợi và admin vẫn là người duyệt cuối.
+    """
+    needs = result.get('needs') or []
+    score = result.get('request_score') or 0
+    vulnerable = any(e.get('label') == 'VULNERABLE_GROUP' for e in result.get('entities', []))
+    if result.get('emergency_detected'):
+        return {'level': 'URGENT', 'reason': 'Bài có dấu hiệu nguy hiểm tới tính mạng.'}
+    if result.get('is_request') and score >= 0.8 and ({'RESCUE', 'MEDICAL'} & set(needs)):
+        return {'level': 'URGENT', 'reason': 'Yêu cầu cứu hộ/y tế với điểm tin cậy cao.'}
+    if result.get('is_request') and vulnerable:
+        return {'level': 'URGENT', 'reason': 'Yêu cầu có nhắc tới người yếu thế.'}
+    if not result.get('is_request'):
+        return {'level': 'LOW', 'reason': 'Model đánh giá không phải yêu cầu cứu trợ.'}
+    return {'level': 'NORMAL', 'reason': 'Yêu cầu cứu trợ thông thường.'}
+
+
+def location_parts(result):
+    """Các cụm LOCATION của Model B, đã sắp từ chi tiết → rộng để ghép thành một địa chỉ."""
+    from .nlp.geocoder import combine_location_parts
+    return combine_location_parts(
+        [e['text'] for e in result.get('entities', []) if e['label'] == 'LOCATION'])
 
 
 def suggested_fields(result):
     def spans(label):
         return list(dict.fromkeys(e['text'] for e in result.get('entities', []) if e['label'] == label))
-    locations = spans('LOCATION')
+    locations = location_parts(result)
     # Ambiguous multiple counts and unrecognized numbers remain unknown for the operator.
     counts = []
     numbers = {'một':1,'hai':2,'ba':3,'bốn':4,'năm':5,'sáu':6,'bảy':7,'tám':8,'chín':9,'mười':10}
@@ -70,18 +110,27 @@ def suggested_fields(result):
     count = counts[0] if len(spans('PEOPLE_COUNT')) == 1 and len(counts) == 1 else None
     needs = result.get('needs', [])
     severity = next((level for n,level in [('RESCUE','CRITICAL'),('MEDICAL','HIGH'),('EVACUATION','HIGH'),('SUPPLY','MEDIUM')] if n in needs), 'LOW')
-    return {'extracted_location': '; '.join(locations)[:200], 'extracted_address': '; '.join(locations),
+    return {'extracted_location': ', '.join(locations)[:200], 'extracted_address': ', '.join(locations),
             'extracted_people_count': count, 'extracted_incident_type': ', '.join(NEED_NAMES[n] for n in needs)[:100],
             'extracted_severity': severity, 'confidence_score': Decimal(str(result.get('request_score', 0)))}
 
 
 def geocode_prediction(result):
-    from .nlp.geocoder import geocode_from_text
-    locations = list(dict.fromkeys(e['text'] for e in result.get('entities', []) if e['label'] == 'LOCATION'))
-    if len(locations) != 1:
+    """
+    Gợi ý tọa độ từ các cụm LOCATION. Bài thật thường viết "thôn X, xã Y, huyện Z"
+    thành nhiều cụm, nên các cụm được ghép thành một địa chỉ trước khi tra cứu.
+    Các ứng viên được lưu vào result['geocode'] để admin chọn khi duyệt.
+    """
+    from .nlp.geocoder import geocode_address
+    parts = location_parts(result)
+    if not parts:
         return None, None
     try:
-        lat, lng, _ = geocode_from_text(locations[0])
-        return (Decimal(str(lat)) if lat is not None else None, Decimal(str(lng)) if lng is not None else None)
+        found = geocode_address(parts)
     except Exception:
         return None, None  # Geocoding is only a suggestion; review requires coordinates.
+    result['geocode'] = found
+    if not found['candidates']:
+        return None, None
+    best = found['candidates'][0]
+    return Decimal(str(round(best['lat'], 7))), Decimal(str(round(best['lng'], 7)))

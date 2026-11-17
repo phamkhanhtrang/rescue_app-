@@ -44,10 +44,11 @@ def build(task):
     {'Đầu vào: câu tiếng Việt. Đầu ra: `is_request`, điểm yêu cầu và nhiều nhãn `RESCUE`, `MEDICAL`, `EVACUATION`, `SUPPLY`. Kiến trúc: PhoBERT + hai đầu sigmoid; fine-tune cả encoder và hai đầu.' if task == 'a' else 'Đầu vào: câu tiếng Việt. Đầu ra: các cụm `LOCATION`, `PEOPLE_COUNT`, `VULNERABLE_GROUP`, `RESOURCE`, cùng vị trí ký tự trong câu. Kiến trúc: PhoBERT + đầu phân loại 9 nhãn BIO; fine-tune cả encoder và đầu BIO.'}
 
     Backbone: `vinai/phobert-base-v2`. PyVi tách từ tiếng Việt; tokenizer PhoBERT dạng slow.
-    Mỗi model có file Excel riêng. Một phần câu nguồn và tập đánh giá của hai bộ hiện tại trùng nhau;
-    A có 960 mẫu train, B có 1.032 mẫu train, mỗi bộ có 176 validation và 160 test.
+    Mỗi model có file Excel riêng. Một phần câu nguồn và tập đánh giá của hai bộ hiện tại trùng nhau.
+    Số mẫu thực tế của từng tập được in ra ở bước 4.
 
-    **Mẫu ban đầu là dữ liệu tổng hợp, chưa được người duyệt độc lập.** Điểm test không chứng minh chất lượng với tin SOS thực tế.
+    **Bộ Excel ban đầu chủ yếu là dữ liệu tổng hợp theo mẫu câu.** Điểm test trên dữ liệu tổng hợp không chứng minh chất lượng với tin SOS thực tế.
+    Khi đã có bài thật do admin duyệt, xem bước 12 để train và đánh giá trên dữ liệu thật.
     Baseline lần đầu là encoder đã tiền huấn luyện + đầu tác vụ khởi tạo ngẫu nhiên;
     PhoBERT nguyên bản chưa có khả năng xuất các nhãn SOS này. Đây là đối chiếu trước/sau, không phải so với một model SOS đã huấn luyện.
 
@@ -181,10 +182,12 @@ def build(task):
     ## 5. Tiền xử lý và định nghĩa mô hình
 
     Các ô code bên dưới chứa trực tiếp cách tách từ, gắn BIO, mô hình và tính F1.
-    Dùng cùng cách tiền xử lý với API của hệ thống. Câu vượt 256 BPE hoặc nhãn cắt giữa từ sẽ được báo để sửa, không tự cắt mất nhãn.
+    Dùng cùng cách tiền xử lý với API của hệ thống, gồm cả bước chuẩn hóa văn bản
+    (đổi teencode như "ko" → "không", co ký tự kéo dài) trước khi đưa vào model; vị trí nhãn được tính lại sau chuẩn hóa.
+    Câu vượt 256 BPE hoặc nhãn cắt giữa từ sẽ được báo để sửa, không tự cắt mất nhãn.
     Ngưỡng A được chọn trên Validation. F1 của B yêu cầu đúng cả loại nhãn và vị trí cụm từ.
     ''')]
-    cells += [code(embedded('preprocess.py')), code(embedded('modeling.py')),
+    cells += [code(embedded('text_normalizer.py')), code(embedded('preprocess.py')), code(embedded('modeling.py')),
               code(embedded('continuation.py')), code(embedded('metrics.py'))]
     cells += [markdown('''
     ## 6. Quy trình train, đánh giá, dự đoán và xuất model
@@ -239,6 +242,71 @@ def build(task):
     history = pd.DataFrame([{'Epoch': h['epoch'], 'Loss': h['loss'], 'Validation F1': h['validation']['selection_score']} for h in session.history])
     display(history)
     ''')]
+    cells += [markdown(f'''
+    ### Ma trận nhầm lẫn và các câu dự đoán sai
+
+    Mỗi ô ghi **số mẫu** và **tỷ lệ theo hàng** (hàng = nhãn thật, cột = model dự đoán). Đường chéo là dự đoán đúng.
+    {'Ô trên-phải là báo nhầm (không phải mà đoán là có), ô dưới-trái là bỏ sót (có mà đoán là không). Với hệ thống cứu hộ, bỏ sót yêu cầu nguy hiểm hơn báo nhầm. Ma trận nhu cầu tính sau khi lọc theo yêu cầu, giống cách hệ thống dùng.' if task == 'a' else 'Tính theo từng từ; `O` là từ không thuộc cụm nào. Hàng `O` sang cột khác là gắn thừa nhãn, hàng khác sang cột `O` là bỏ sót thông tin.'}
+    Hình lưu ở `confusion_matrix.png`, số liệu nằm trong `test_metrics.json` (khóa `confusion`).
+    Bảng bên dưới liệt kê các câu test model đoán sai để phân tích lỗi; bản đầy đủ lưu ở `test_errors.csv`.
+    '''), code('''
+    def draw_confusion(ax, matrix, labels, title):
+        matrix = np.array(matrix)
+        shares = matrix / np.maximum(matrix.sum(axis=1, keepdims=True), 1)
+        ax.imshow(shares, cmap='Blues', vmin=0, vmax=1)
+        ax.set_xticks(range(len(labels)))
+        ax.set_xticklabels(labels, rotation=45, ha='right')
+        ax.set_yticks(range(len(labels)))
+        ax.set_yticklabels(labels)
+        ax.set_xlabel('Dự đoán')
+        ax.set_ylabel('Thực tế')
+        ax.set_title(title)
+        for i in range(len(labels)):
+            for j in range(len(labels)):
+                ax.text(j, i, f'{matrix[i, j]}\\n{shares[i, j]:.0%}', ha='center', va='center', fontsize=9,
+                        color='white' if shares[i, j] > 0.5 else 'black')
+    '''), code('''
+    confusion = session.after['confusion']
+    if TASK == 'a':
+        panels = [('Yêu cầu cứu trợ', confusion['request'])] + [(need, confusion['needs'][need]) for need in NEEDS]
+        fig, axes = plt.subplots(1, len(panels), figsize=(3.6 * len(panels), 3.9))
+        for ax, (title, matrix) in zip(axes, panels):
+            draw_confusion(ax, matrix, ['Không', 'Có'], title)
+    else:
+        fig, ax = plt.subplots(figsize=(7.5, 6.5))
+        draw_confusion(ax, confusion['matrix'], confusion['labels'], 'Nhầm lẫn theo từng từ (tập Test)')
+    plt.tight_layout()
+    plt.savefig(RUN / 'confusion_matrix.png', dpi=160, bbox_inches='tight')
+    plt.show()
+
+    predictions = [json.loads(line) for line in (RUN / 'test_predictions.jsonl').read_text(encoding='utf-8').splitlines()]
+    rows_by_id = {item['row']['id']: item['row'] for item in session.loaders['test'].dataset}
+    errors = []
+    if TASK == 'a':
+        limits = [session.saved['thresholds']['request']] + session.saved['thresholds']['needs']
+        for record in predictions:
+            row = rows_by_id[record['id']]
+            flags = [score >= limit for score, limit in zip(record['scores'], limits)]
+            guessed = [need for need, flag in zip(NEEDS, flags[1:]) if flag and flags[0]]
+            if flags[0] != row['is_request'] or set(guessed) != set(row['needs']):
+                errors.append({'id': row['id'], 'Câu': row['text'],
+                               'Thực tế': ('Yêu cầu: ' + ', '.join(row['needs'])) if row['is_request'] else 'Không phải yêu cầu',
+                               'Dự đoán': ('Yêu cầu: ' + ', '.join(guessed)) if flags[0] else 'Không phải yêu cầu',
+                               'Điểm yêu cầu': round(record['scores'][0], 3)})
+    else:
+        def span_list(values):
+            return sorted((e['label'], e['text']) for e in values)
+        for record in predictions:
+            if span_list(record['entities']) != span_list(record['gold']):
+                errors.append({'id': record['id'], 'Câu': rows_by_id[record['id']]['text'],
+                               'Thực tế': '; '.join(label + '=' + text for label, text in span_list(record['gold'])),
+                               'Dự đoán': '; '.join(label + '=' + text for label, text in span_list(record['entities']))})
+    print(f'Số câu test dự đoán sai: {len(errors)}/{len(predictions)}')
+    if errors:
+        pd.DataFrame(errors).to_csv(RUN / 'test_errors.csv', index=False, encoding='utf-8-sig')
+        with pd.option_context('display.max_colwidth', None):
+            display(pd.DataFrame(errors).head(30))
+    ''')]
     cells += [markdown('## 10. Thử câu mới'), code('''
     TEXT = 'Nhờ cứu 5 người tại xã An Bình, có 2 trẻ em, đang cần nước uống.' #@param {type:"string"}
     print(json.dumps(session.predict(TEXT), ensure_ascii=False, indent=2))
@@ -270,6 +338,17 @@ def build(task):
     5. Đặt `UPLOAD_EXCEL=True`, upload Excel mới và chạy lần lượt đến bước 11.
 
     Model dùng lại trọng số cũ, fine-tune trên dữ liệu cũ + mới; **không khởi tạo lại từ PhoBERT gốc**.
+
+    **Khi thêm dữ liệu THẬT, không dùng `continue` với Validation tổng hợp.** `continue` chỉ lưu model mới khi điểm
+    Validation tăng, mà model cha đã gần đạt tối đa trên Validation tổng hợp, nên kết quả thường là giữ nguyên model cũ.
+    Hãy làm như sau:
+
+    1. Ở backend chạy `python manage.py ai_export_reviewed --merge-train` để có `data_model_{task}_real.xlsx`
+       (Train = câu tổng hợp + bài thật; Validation và Test toàn bài thật do admin đã duyệt{'' if task == 'a' else ', sau khi bạn đã kiểm tra lại nhãn trong bản nháp'}).
+    2. Ở bước 2 chọn `TRAIN_MODE=new`, `EVALUATION_DOMAIN=real_vietnamese`, `EPOCHS=5`, `LEARNING_RATE=0.00002`.
+    3. Ở bước 3 upload file đó (đổi tên thành `data_model_{task}.xlsx` nếu được hỏi) rồi chạy đến bước 11.
+
+    Từ vòng dữ liệu thật thứ hai trở đi (Validation/Test thật giữ nguyên, chỉ thêm Train) thì dùng `continue` bình thường.
     Optimizer được tạo mới, nên đây không phải tiếp tục đúng batch đã bị ngắt. Không thêm loại nhãn mới bằng cách thêm cột.
     Model từ notebook ZIP cũ không có dấu vân tay đánh giá Excel nên không được nhận làm model cha trong quy trình này.
 

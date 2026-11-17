@@ -149,7 +149,7 @@ export const api = {
     createNewsAlert: (id: string, data: any) => apiClient.post(`/ai/crawled/${id}/alert/`, data),
     reviewCrawledArticle: (
       id: string,
-      data: { action: 'approve' | 'reject'; reason?: string; create_alert?: boolean; corrections?: Record<string, unknown> }
+      data: { action: 'approve' | 'reject'; reason?: string; create_alert?: boolean; corrections?: Record<string, unknown>; not_a_request?: boolean }
     ) => apiClient.post(`/ai/crawled/${id}/review/`, data),
 
     // AI Assignment Recommendation

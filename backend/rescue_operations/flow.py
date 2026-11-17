@@ -176,7 +176,7 @@ def serialize(sos):
     result = dict(SOSSignalSerializer(sos).data)
     result.update({k: getattr(sos, k) for k in [
         'contact_name', 'contact_phone', 'address', 'location_source', 'verification_status', 'updated_at',
-        'supplies_needed', 'supplies_delivered']})
+        'supplies_needed', 'supplies_delivered', 'ai_analysis']})
     result['events'] = list(sos.events.values('id', 'kind', 'message', 'created_at'))
     m = sos.assigned_mission
     result['mission_status'] = m.status if m else None
@@ -245,14 +245,15 @@ def create(request):
         sos = SOSSignal.objects.get(request_key=key)
         can_read(request, sos)
         return Response(serialize(sos))
+    # Gom cụm, chấm điểm và đọc ghi chú chạy nền: người gửi nhận phản hồi ngay,
+    # Zone và phân tích AI xuất hiện sau đó (signal post_save tự recount Zone).
     try:
-        from ai.clustering import run_clustering
-        run_clustering(only_unassigned=True)
+        from ai.sos_pipeline import schedule_new_sos
+        schedule_new_sos(sos.pk)
         sos.refresh_from_db()
-        recount(sos.zone_id)
     except Exception:
         import logging
-        logging.getLogger(__name__).exception('Clustering unavailable; SOS saved')
+        logging.getLogger(__name__).exception('AI pipeline unavailable; SOS saved')
     return Response(serialize(sos), status=201)
 
 
@@ -339,6 +340,10 @@ def detail(request, pk):
             raise ValidationError('Hành động không hợp lệ.')
         sos.save()
         recount(recount_zone_id or sos.zone_id)
+        if action == 'update':
+            # Ghi chú đổi thì đọc lại bằng Model A/B (chạy nền sau khi commit).
+            from ai.sos_pipeline import schedule_note_analysis
+            schedule_note_analysis(sos.pk)
         return Response(serialize(sos))
 
 

@@ -1,7 +1,7 @@
 """Evaluation and batching shared by both standalone notebooks."""
 import numpy as np
 import torch
-from sklearn.metrics import f1_score, classification_report
+from sklearn.metrics import f1_score, classification_report, confusion_matrix, multilabel_confusion_matrix
 from .data import NEEDS, BIO, ENTITIES
 from .preprocess import decode_spans
 
@@ -47,6 +47,12 @@ def evaluate_a(model, loader, device, thresholds=None):
         'needs_micro_f1': f1_score(y[:, 1:], predicted[:, 1:], average='micro', zero_division=0),
         'gated_needs_macro_f1': f1_score(y[:, 1:], gated, average='macro', zero_division=0),
         'thresholds': thresholds,
+        # Ma trận nhầm lẫn dạng [[TN, FP], [FN, TP]]: hàng = nhãn thật, cột = dự đoán.
+        'confusion': {
+            'request': confusion_matrix(y[:, 0], predicted[:, 0], labels=[0, 1]).tolist(),
+            'needs': {need: matrix.tolist() for need, matrix in
+                      zip(NEEDS, multilabel_confusion_matrix(y[:, 1:], gated.astype(int), labels=list(range(len(NEEDS)))))},
+        },
     }
     metrics['selection_score'] = (metrics['needs_macro_f1'] + f1_score(y[:, 0], predicted[:, 0], zero_division=0)) / 2
     return metrics, records
@@ -55,6 +61,9 @@ def evaluate_a(model, loader, device, thresholds=None):
 def evaluate_b(model, loader, device):
     counts = {kind: [0, 0, 0] for kind in ENTITIES}
     records = []
+    # Ma trận nhầm lẫn theo từng TỪ: hàng = nhãn thật, cột = dự đoán; 'O' là từ không thuộc cụm nào.
+    kinds = ['O'] + ENTITIES
+    word_matrix = np.zeros((len(kinds), len(kinds)), dtype=int)
     model.eval()
     with torch.inference_mode():
         for batch in loader:
@@ -62,6 +71,9 @@ def evaluate_b(model, loader, device):
             for item, output in zip(batch['items'], logits):
                 row = item['row']
                 tags = [BIO[output[i].argmax().item()] for i in item['first']]
+                for position, tag in zip(item['first'], tags):
+                    truth = BIO[item['labels'][position]]
+                    word_matrix[kinds.index(truth.split('-', 1)[-1]), kinds.index(tag.split('-', 1)[-1])] += 1
                 spans = decode_spans(row['text'], item['words'], tags)
                 predicted = {(e['start'], e['end'], e['label']) for e in spans}
                 gold = {(e['start'], e['end'], e['label']) for e in row['entities']}
@@ -77,5 +89,6 @@ def evaluate_b(model, loader, device):
     metrics = {kind: scores(values) for kind, values in counts.items()}
     metrics['micro'] = scores([sum(v[i] for v in counts.values()) for i in range(3)])
     metrics['selection_score'] = metrics['micro']['f1']
+    metrics['confusion'] = {'labels': kinds, 'matrix': word_matrix.tolist()}
     return metrics, records
 

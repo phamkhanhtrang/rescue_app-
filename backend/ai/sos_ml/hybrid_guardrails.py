@@ -295,8 +295,9 @@ def apply_guardrails(clean_text: str, model_result: Dict[str, Any]) -> Dict[str,
     model_result['decision_source'] = decision_source
     model_result['decision_detail'] = decision_detail
 
-    # 3. Tinh chỉnh thực thể NER
+    # 3. Tinh chỉnh thực thể NER (giữ bản gốc của Model B để đo riêng model và luật)
     if 'entities' in model_result:
+        model_result['raw_model_entities'] = [dict(e) for e in model_result['entities']]
         model_result['entities'] = refine_entities(clean_text, model_result['entities'])
 
     return model_result

@@ -27,10 +27,10 @@ class SOSSignalSerializer(serializers.ModelSerializer):
             'zone', 'zone_name',
             'contact_name', 'contact_phone', 'address', 'location_source',
             'verification_status', 'assigned_mission', 'assigned_rescuer_name', 'assigned_mission_status',
-            'supplies_needed', 'supplies_delivered',
+            'supplies_needed', 'supplies_delivered', 'ai_analysis',
             'sent_at', 'images',
         ]
-        read_only_fields = ['id', 'sent_at']
+        read_only_fields = ['id', 'sent_at', 'ai_analysis']
 
     def create(self, validated_data):
         citizen = validated_data.get('citizen')
@@ -72,7 +72,7 @@ class SOSSignalListSerializer(serializers.ModelSerializer):
             'zone', 'zone_name',
             'contact_name', 'contact_phone', 'address', 'location_source',
             'verification_status', 'assigned_mission', 'assigned_rescuer_name', 'assigned_mission_status',
-            'supplies_needed', 'supplies_delivered',
+            'supplies_needed', 'supplies_delivered', 'ai_analysis',
         ]
 
     def get_fields(self):

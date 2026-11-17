@@ -98,6 +98,30 @@ Giữ nguyên Validation/Test khi học tiếp. Sắp xếp lại dòng hoặc �
 
 ## 4. Học tiếp khi có dữ liệu mới
 
+### Vòng dữ liệu THẬT đầu tiên (dùng `new`, không dùng `continue`)
+
+Nguồn dữ liệu thực: các bài Facebook admin đã duyệt trên web. Từ thư mục backend chạy
+`python manage.py ai_export_reviewed --merge-train` để có trong `ai/reports/`:
+
+| File | Nội dung | Dùng để |
+|---|---|---|
+| `real_model_a.xlsx` | Bài thật chia Train / Validation / Test (mặc định 60/15/25%) | Đo model đang chạy bằng `ai_evaluate` |
+| `data_model_a_real.xlsx` | Train = câu tổng hợp + bài thật; Validation/Test toàn bài thật | Upload lên Colab cho model A |
+| `real_model_b_draft.xlsx` | Bản nháp model B đã đánh dấu sẵn | Đọc lại từng dòng, sửa nhãn, đặt reviewed=1 |
+| `data_model_b_real.xlsx` | Như file A, chỉ gồm dòng nháp đã reviewed=1 | Upload lên Colab cho model B |
+
+Chạy lại lệnh xuất không ghi đè các dòng đã sửa tay trong bản nháp model B.
+Lệnh tự kiểm tra file bằng chính bộ đọc của notebook và báo nếu Validation/Test chưa đủ các loại nhãn.
+
+Trên Colab: `TRAIN_MODE=new`, `EVALUATION_DOMAIN=real_vietnamese`, `EPOCHS=5`, `LEARNING_RATE=0.00002`,
+upload file `data_model_<a|b>_real.xlsx`. Không dùng `continue` ở vòng này: `continue` chỉ lưu model mới khi điểm
+Validation tăng, mà model cũ đã gần tối đa trên Validation tổng hợp nên sẽ giữ nguyên model cũ.
+
+Đo model đang chạy trên tập test thật (trước khi train lại):
+`python manage.py ai_evaluate --task a --excel-a ai/reports/real_model_a.xlsx --name real`.
+
+### Các vòng sau (Validation/Test thật giữ nguyên, chỉ thêm Train)
+
 1. Thêm mẫu vào **Train của Excel đúng model**, giữ dữ liệu cũ.
 2. Mở lại chính notebook model đó.
 3. Chọn TRAIN_MODE=continue.
@@ -125,6 +149,8 @@ Notebook in đường dẫn chính xác. Mỗi lần chạy có thư mục riên
 - comparison.json, comparison.png: bảng và hình so sánh.
 - history.json: loss và F1 Validation từng epoch.
 - before_predictions.jsonl, test_predictions.jsonl: dự đoán từng mẫu để phân tích lỗi.
+- confusion_matrix.png: ma trận nhầm lẫn trên tập Test (số liệu nằm trong test_metrics.json, khóa `confusion`).
+- test_errors.csv: các câu Test model đoán sai, kèm nhãn thật và dự đoán.
 - File Excel dùng trong run: phục vụ tái lập thí nghiệm.
 - model_a.zip hoặc model_b.zip: tạo ở bước 11 để đưa model về hệ thống.
 

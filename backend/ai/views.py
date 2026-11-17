@@ -323,10 +323,26 @@ def crawled_list(request):
             | Q(extracted_phone__icontains=query)
         )
 
+    # Mức khẩn do bước phân tích gán (ai_analysis.triage.level). Bài cũ chưa có → NORMAL.
+    from django.db.models import Case, When, Value, CharField
+    qs = qs.annotate(triage_level=Case(
+        When(ai_analysis__triage__level='URGENT', then=Value('URGENT')),
+        When(ai_analysis__triage__level='LOW', then=Value('LOW')),
+        default=Value('NORMAL'), output_field=CharField()))
+    # Hàng đợi chờ duyệt của Facebook: bài khẩn lên đầu, bài ít khả năng là cầu cứu
+    # xuống cuối (vẫn hiển thị, không bị ẩn). Trong cùng mức thì bài mới trước.
+    sort = request.query_params.get('sort') or (
+        'urgency' if (s or '').upper() == 'ANALYZED' and (plt or '').upper() == 'FACEBOOK' else 'newest')
+    if sort == 'urgency':
+        qs = qs.annotate(triage_rank=Case(
+            When(triage_level='URGENT', then=Value(0)), When(triage_level='LOW', then=Value(2)),
+            default=Value(1))).order_by('triage_rank', '-crawled_at')
+
     total = qs.count()
     qs = qs[offset:offset + lim]
 
     data = list(qs.values(
+        'triage_level',
         'id', 'source_platform', 'source_url', 'raw_title',
         'extracted_location', 'extracted_lat', 'extracted_lng',
         'extracted_severity', 'extracted_incident_type',
@@ -380,6 +396,16 @@ def crawled_detail(request, pk):
     data['publication_events'] = list(article.publication_events.values('action', 'created_at', 'actor__full_name', 'alert_id_snapshot'))
     data['ai_analysis'] = article.ai_analysis
     data['reviewed_analysis'] = article.reviewed_analysis
+    # Báo trước cho admin nếu bài có vẻ trùng với một SOS đang có (cùng SĐT / nội dung / vị trí).
+    data['possible_duplicate'] = None
+    if article.source_platform == 'FACEBOOK' and article.status in ('RAW', 'ANALYZED'):
+        from .nlp.event_matcher import find_matching_sos
+        match, reason = find_matching_sos(
+            f"{article.raw_title or ''} {article.raw_content or ''}",
+            phone=article.extracted_phone, lat=article.extracted_lat, lng=article.extracted_lng)
+        if match:
+            data['possible_duplicate'] = {'sos_id': str(match.id), 'reason': reason, 'status': match.status,
+                                          'address': match.address, 'sent_at': match.sent_at}
     return Response(data)
 
 
@@ -423,9 +449,6 @@ def crawled_review(request, pk):
 
             from rescue_operations.models import SOSSignal
             from django.utils import timezone
-            from datetime import timedelta
-            from difflib import SequenceMatcher
-            from ai.nlp.deduplicator import normalize
 
             # Cho phép Admin sửa phần AI trích xuất ngay trong hồ sơ duyệt.
             corrections = request.data.get('corrections') or {}
@@ -494,25 +517,24 @@ def crawled_review(request, pk):
                 'extracted_people_count', 'reviewed_analysis',
             ])
 
-            # Lọc trùng với các SOS đã có (gửi từ app hoặc crawl) trong 24h qua
-            recent_cutoff = timezone.now() - timedelta(hours=24)
-            recent_sos_qs = SOSSignal.objects.filter(sent_at__gte=recent_cutoff)
-            
-            new_text = normalize(f"{article.raw_title or ''} {article.raw_content or ''}")
-            existing_sos = None
-            
-            for r_sos in recent_sos_qs:
-                old_text = normalize((r_sos.note or '').split('\nNhu cầu đã duyệt:', 1)[0].removeprefix('[Facebook] '))
-                ratio = SequenceMatcher(None, new_text, old_text).ratio()
-                if ratio >= 0.85:
-                    existing_sos = r_sos
-                    break
+            # Gộp trùng theo sự kiện với các SOS đã có (gửi từ app hoặc crawl) trong 24h qua:
+            # cùng số điện thoại, nội dung gần giống, hoặc cùng chỗ + nội dung tương tự.
+            from .nlp.event_matcher import find_matching_sos
+            from rescue_operations.models import SOSEvent
+            existing_sos, match_reason = find_matching_sos(
+                f"{article.raw_title or ''} {article.raw_content or ''}",
+                phone=article.extracted_phone, lat=article.extracted_lat, lng=article.extracted_lng)
 
             if existing_sos:
                 article.linked_sos = existing_sos
                 article.status     = 'ALERT_CREATED'
                 article.save(update_fields=['linked_sos', 'status'])
-                return Response({'message': 'Phát hiện SOS trùng lặp, đã gộp vào SOS hiện có.', 'sos_id': str(existing_sos.id)})
+                reason_text = {'phone': 'cùng số điện thoại liên hệ', 'text': 'nội dung gần như giống nhau',
+                               'nearby_text': 'cùng vị trí và nội dung tương tự'}[match_reason]
+                SOSEvent.objects.create(sos=existing_sos, kind='AI_DUPLICATE_LINKED', actor=request.user,
+                    message=f'Bài Facebook {article.id} được gộp vào yêu cầu này ({reason_text}).')
+                return Response({'message': f'Phát hiện SOS trùng ({reason_text}), đã gộp vào SOS hiện có.',
+                                 'sos_id': str(existing_sos.id), 'match_reason': match_reason})
 
             sos = SOSSignal.objects.create(
                 signal_type    = 'SOS',
@@ -529,21 +551,23 @@ def crawled_review(request, pk):
                 address        = article.extracted_address or article.extracted_location or '',
                 location_source = 'AI_CRAWL',
                 verification_status = 'UNVERIFIED',
+                # Thông tin admin đã xác nhận, dùng chung định dạng với phân tích ghi chú
+                # của SOS từ app để chấm điểm ưu tiên Zone.
+                ai_analysis = {'status': 'ok', 'source': 'admin_review', 'article_id': str(article.id),
+                               'analyzed_at': timezone.now().isoformat(), 'is_request': True,
+                               'needs': needs, 'vulnerable_groups': vulnerable, 'resources': resources,
+                               'flags': ['VULNERABLE_GROUP'] if vulnerable else [], 'messages': []},
             )
             article.linked_sos = sos
             article.status     = 'ALERT_CREATED'
             article.save(update_fields=['linked_sos', 'status'])
 
-            from rescue_operations.models import SOSEvent
             SOSEvent.objects.create(sos=sos, kind='AI_REVIEW_APPROVED', actor=request.user,
                 message=f'Admin duyệt bài Facebook {article.id}; nhu cầu: {article.extracted_incident_type}.')
 
-            try:
-                from .clustering import run_clustering
-                run_clustering(only_unassigned=True)
-            except Exception as e:
-                import logging
-                logging.getLogger(__name__).error(f"Lỗi gom cụm sau khi duyệt bài: {e}")
+            # Gom cụm + chấm điểm chạy nền sau khi transaction duyệt bài commit.
+            from .sos_pipeline import schedule_new_sos
+            schedule_new_sos(sos.id)
 
             return Response({'message': 'Đã duyệt và tạo SOS.', 'sos_id': str(sos.id)})
         else:
@@ -566,7 +590,16 @@ def crawled_review(request, pk):
             return Response({'error': 'Cần nhập lý do từ chối.'}, status=400)
         article.status        = 'REJECTED'
         article.reject_reason = reason[:200]
-        article.save(update_fields=['status', 'reject_reason'])
+        update_fields = ['status', 'reject_reason']
+        # Từ chối không có nghĩa là "không phải lời cầu cứu" (có thể là tin cũ, trùng).
+        # Chỉ khi admin xác nhận rõ thì bài mới được dùng làm mẫu âm tính để train/đánh giá.
+        if article.source_platform == 'FACEBOOK' and request.data.get('not_a_request') is True:
+            from django.utils import timezone
+            article.reviewed_analysis = {'is_request': False, 'needs': [], 'resources': [],
+                'vulnerable_groups': [], 'reviewer_id': str(request.user.pk),
+                'reviewed_at': timezone.now().isoformat()}
+            update_fields.append('reviewed_analysis')
+        article.save(update_fields=update_fields)
         return Response({'message': f'Đã từ chối: {reason}'})
 
     return Response(
@@ -715,10 +748,12 @@ def classify_text(request):
     if not text:
         return Response({'error': 'Thiếu trường "text"'}, status=status.HTTP_400_BAD_REQUEST)
 
-    # ── Thử PhoBERT ────────────────────────────────────────────────────────
+    # ── PhoBERT v1 (6 nhãn): chỉ chạy khi bật AI_LEGACY_PHOBERT_V1 để so sánh ──
+    # Luồng chính dùng Model A/B qua POST /ai/analyze-sos/.
     try:
+        from django.conf import settings
         from .nlp.phobert_analyzer import classify, is_available
-        if is_available():
+        if getattr(settings, 'AI_LEGACY_PHOBERT_V1', False) and is_available():
             result = classify(text)
             if result:
                 return Response({

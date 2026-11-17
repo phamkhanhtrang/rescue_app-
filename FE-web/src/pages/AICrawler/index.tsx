@@ -206,6 +206,11 @@ export default function AICrawler() {
     }
     const reason = action === 'reject' ? window.prompt('Lý do từ chối bài viết:')?.trim() : undefined;
     if (action === 'reject' && !reason) return;
+    // Từ chối có thể vì tin cũ/trùng. Chỉ khi admin xác nhận rõ thì bài mới thành mẫu "không phải yêu cầu" để train model.
+    const platform = (articles.find((a: any) => a.id === id) || selectedArticle)?.source_platform;
+    const not_a_request = action === 'reject' && platform === 'FACEBOOK'
+      ? window.confirm('Bài này KHÔNG phải lời cầu cứu (quảng cáo, quyên góp, tin tức…)?\n\nOK = Không phải yêu cầu cứu trợ (dùng làm dữ liệu huấn luyện).\nCancel = Là lời cầu cứu nhưng từ chối vì lý do khác (tin cũ, trùng…).')
+      : undefined;
     setReviewingId(id);
     try {
       const corrections = isFacebook && action === 'approve' ? {
@@ -213,7 +218,7 @@ export default function AICrawler() {
         resources: reviewForm.resources.split(';').map((s: string) => s.trim()).filter(Boolean),
         vulnerable_groups: reviewForm.vulnerable_groups.split(';').map((s: string) => s.trim()).filter(Boolean),
       } : undefined;
-      const res = await api.ai.reviewCrawledArticle(id, { action, reason, corrections });
+      const res = await api.ai.reviewCrawledArticle(id, { action, reason, corrections, not_a_request });
       setSelectedArticle((current: any) => current?.id === id ? null : current);
       fetchArticles();
       if (res.data.sos_id) alert(res.data.message);
@@ -656,6 +661,16 @@ export default function AICrawler() {
                                 <span className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-medium border ${sev.badge}`}>
                                   {item.extracted_severity || 'LOW'}
                                 </span>
+                                {item.source_platform === 'FACEBOOK' && item.status === 'ANALYZED' && item.triage_level === 'URGENT' && (
+                                  <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold border border-rose-300 bg-rose-100 text-rose-800">
+                                    ƯU TIÊN DUYỆT
+                                  </span>
+                                )}
+                                {item.source_platform === 'FACEBOOK' && item.status === 'ANALYZED' && item.triage_level === 'LOW' && (
+                                  <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-medium border border-slate-200 bg-slate-50 text-slate-500">
+                                    Ít khả năng là cầu cứu
+                                  </span>
+                                )}
                               </div>
 
                               <div className="flex items-center gap-1 text-slate-500 text-[11px] line-clamp-1">

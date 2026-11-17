@@ -5,16 +5,21 @@ Thuật toán gom cụm SOS → Zone theo khoảng cách địa lý (Haversine).
 
 Logic:
   - Lấy tất cả SOS chưa được gán zone (zone=None) hoặc chỉ SOS trong zone cụ thể.
-  - Dùng thuật toán DBSCAN-like đơn giản:
-      * Với mỗi SOS chưa gán, tìm tất cả SOS khác trong bán kính CLUSTER_RADIUS_M.
-      * Nếu có ≥ MIN_SAMPLES điểm → tạo/gán vào một Zone chung.
-      * Tâm zone = trung bình kinh/vĩ độ các điểm trong cụm.
+  - Gom cụm bằng DBSCAN (scikit-learn, khoảng cách Haversine):
+      * eps = CLUSTER_RADIUS_M, min_samples = MIN_SAMPLES.
+      * Hai SOS cách nhau ≤ eps thuộc cùng cụm; cụm lan theo chuỗi các điểm kề nhau.
+      * Kết quả không phụ thuộc thứ tự duyệt SOS (khác với cách gom tham lam cũ).
+      * SOS không có láng giềng trong eps là "nhiễu" → giữ thành SOS đơn lẻ.
+  - Tâm zone = trung bình kinh/vĩ độ các điểm trong cụm.
   - KHÔNG thêm trường DB mới — chỉ dùng trường zone FK sẵn có trên SOSSignal.
 """
 
+import logging
 import math
 from decimal import Decimal
 from django.utils import timezone
+
+logger = logging.getLogger(__name__)
 
 # ─── Hằng số ─────────────────────────────────────────────────────────────────
 
@@ -44,19 +49,57 @@ def centroid(points: list[tuple[float, float]]) -> tuple[float, float]:
     return round(avg_lat, 7), round(avg_lng, 7)
 
 
-# ─── Greedy clustering ────────────────────────────────────────────────────────
+# ─── Clustering ───────────────────────────────────────────────────────────────
 
 def cluster_sos_signals(sos_queryset) -> list[list]:
     """
-    Gom danh sách SOS thành các cụm theo khoảng cách.
-
-    Thuật toán Greedy (O(n²) — đủ tốt với n < 10k):
-      1. Chưa xử lý SOS nào → lấy SOS đầu tiên làm hạt nhân cụm mới.
-      2. Thêm mọi SOS chưa gán nào trong bán kính CLUSTER_RADIUS_M vào cụm.
-      3. Lặp đến khi hết SOS.
+    Gom danh sách SOS thành các cụm theo khoảng cách bằng DBSCAN.
 
     Returns:
-        Danh sách các cụm, mỗi cụm là list các SOSSignal objects.
+        Danh sách các cụm, mỗi cụm là list các SOSSignal objects. SOS "nhiễu"
+        (không có SOS nào khác trong CLUSTER_RADIUS_M) trả về thành cụm 1 phần tử.
+        Thứ tự cụm theo SOS xuất hiện sớm nhất trong đầu vào.
+    """
+    sos_list = list(sos_queryset)
+    if not sos_list:
+        return []
+    try:
+        labels = _dbscan_labels(sos_list)
+    except Exception as exc:
+        # Thiếu scikit-learn hoặc lỗi bất ngờ: vẫn phải gom được cụm.
+        logger.warning('[Clustering] DBSCAN không chạy được (%s); dùng gom tham lam.', exc)
+        return greedy_cluster_sos_signals(sos_list)
+
+    clusters, by_label = [], {}
+    for sos, label in zip(sos_list, labels):
+        if label == -1:
+            clusters.append([sos])
+        elif label in by_label:
+            by_label[label].append(sos)
+        else:
+            by_label[label] = [sos]
+            clusters.append(by_label[label])
+    return clusters
+
+
+def _dbscan_labels(sos_list: list) -> list[int]:
+    """Nhãn cụm DBSCAN cho từng SOS; -1 là điểm nhiễu."""
+    import numpy as np
+    from sklearn.cluster import DBSCAN
+
+    coords = np.radians([[float(s.location_lat), float(s.location_lng)] for s in sos_list])
+    model = DBSCAN(eps=CLUSTER_RADIUS_M / EARTH_RADIUS_M, min_samples=MIN_SAMPLES,
+                   metric='haversine', algorithm='ball_tree')
+    return model.fit_predict(coords).tolist()
+
+
+def greedy_cluster_sos_signals(sos_queryset) -> list[list]:
+    """
+    Thuật toán gom tham lam cũ (O(n²)), giữ làm phương án dự phòng và để so sánh.
+
+      1. Lấy SOS chưa gán đầu tiên làm hạt nhân cụm mới.
+      2. Thêm mọi SOS chưa gán trong bán kính CLUSTER_RADIUS_M quanh hạt nhân.
+      3. Lặp đến khi hết SOS. Kết quả phụ thuộc thứ tự duyệt.
     """
     sos_list = list(sos_queryset)
     assigned = set()
@@ -124,7 +167,8 @@ def run_clustering(only_unassigned: bool = True) -> dict:
                          False → gom lại toàn bộ PENDING/ACKNOWLEDGED SOS.
 
     Returns:
-        dict thống kê: zones_created, zones_updated, sos_assigned.
+        dict thống kê: zones_created, zones_updated, sos_assigned, zone_ids
+        (zone_ids = các Zone vừa tạo/cập nhật, để chấm điểm lại).
     """
     # Import ở đây để tránh circular import
     from rescue_operations.models import Zone, SOSSignal
@@ -134,12 +178,12 @@ def run_clustering(only_unassigned: bool = True) -> dict:
     if only_unassigned:
         base_qs = base_qs.filter(zone__isnull=True)
 
+    stats = {'zones_created': 0, 'zones_updated': 0, 'sos_assigned': 0, 'zone_ids': []}
     if not base_qs.exists():
-        return {'zones_created': 0, 'zones_updated': 0, 'sos_assigned': 0}
+        return stats
 
-    clusters = cluster_sos_signals(base_qs)
-
-    stats = {'zones_created': 0, 'zones_updated': 0, 'sos_assigned': 0}
+    # Thứ tự cố định để kết quả lặp lại được giữa các lần chạy.
+    clusters = cluster_sos_signals(base_qs.order_by('sent_at', 'id'))
 
     for cluster in clusters:
         if not cluster:
@@ -180,6 +224,9 @@ def run_clustering(only_unassigned: bool = True) -> dict:
         else:
             # SOS đơn lẻ (1 SOS) đứng độc lập và không gần zone nào -> Giữ nguyên zone=None (SOS phản ứng nhanh)
             continue
+
+        if str(zone.id) not in stats['zone_ids']:
+            stats['zone_ids'].append(str(zone.id))
 
         # Gán zone cho từng SOS trong cụm
         for sos in cluster:

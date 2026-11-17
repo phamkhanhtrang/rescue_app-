@@ -179,5 +179,22 @@ FB_EMAIL    = env('FB_EMAIL',    default=None)
 FB_PASSWORD = env('FB_PASSWORD', default=None)
 
 # Optional bundle exported by the Colab two-model training kit.
-SOS_TWO_MODEL_DIR = env('SOS_TWO_MODEL_DIR', default='')
+# Nếu không khai báo, dùng bundle đặt sẵn trong repo (khi đã giải nén model vào đó).
+_BUNDLED_SOS_MODEL = 'ai/nlp/sos_two_model_v1'
+SOS_TWO_MODEL_DIR = env('SOS_TWO_MODEL_DIR', default='') or (
+    _BUNDLED_SOS_MODEL if (BASE_DIR / _BUNDLED_SOS_MODEL / 'model_a' / 'metadata.json').exists() else '')
 SOS_TWO_MODEL_DEVICE = env('SOS_TWO_MODEL_DEVICE', default='cpu')
+
+# ── Luồng AI ────────────────────────────────────────────────────────────────
+import sys
+_RUNNING_TESTS = len(sys.argv) > 1 and sys.argv[1] == 'test'
+# Chạy tác vụ AI ngay trong request thay vì luồng nền (chỉ nên bật khi test).
+AI_BACKGROUND_INLINE = env.bool('AI_BACKGROUND_INLINE', default=_RUNNING_TESTS)
+# Cho Model A/B đọc ghi chú của SOS gửi từ app (chỉ bổ sung thông tin, không lọc bỏ SOS).
+SOS_NOTE_ANALYSIS_ENABLED = env.bool('SOS_NOTE_ANALYSIS_ENABLED', default=not _RUNNING_TESTS)
+# Nạp Model A/B ngay khi server khởi động để lần phân tích đầu không phải chờ nạp model.
+SOS_MODEL_PRELOAD = env.bool('SOS_MODEL_PRELOAD', default=True)
+# PhoBERT v1 (6 nhãn) chỉ còn dùng làm baseline so sánh; mặc định không chạy trong hệ thống.
+AI_LEGACY_PHOBERT_V1 = env.bool('AI_LEGACY_PHOBERT_V1', default=False)
+# Vị trí model v1, để lệnh `ai_evaluate --with-v1` đưa nó vào bảng so sánh.
+PHOBERT_MODEL_DIR = env('PHOBERT_MODEL_DIR', default='ai/nlp/sos_phobert_model')

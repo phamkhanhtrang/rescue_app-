@@ -22,8 +22,10 @@ class ExcelTests(unittest.TestCase):
         a = load_excel_data(ROOT / 'data_model_a.xlsx', 'a')
         b = load_excel_data(ROOT / 'data_model_b.xlsx', 'b')
         for task, data, count in [('a', a, 960), ('b', b, 1032)]:
-            self.assertEqual({k:len(v) for k,v in data.items()}, {'train':count,'validation':176,'test':160})
-            self.assertTrue(all(not row['reviewed'] for rows in data.values() for row in rows))
+            # Train có thêm một số câu thực đã duyệt; phần tổng hợp và hai tập đánh giá cố định.
+            self.assertEqual(sum(r['origin'] == 'synthetic' for r in data['train']), count)
+            self.assertEqual({k:len(v) for k,v in data.items() if k != 'train'}, {'validation':176,'test':160})
+            self.assertTrue(all(row['reviewed'] == (row['origin'] != 'synthetic') for rows in data.values() for row in rows))
         self.assertTrue(all(not r['entities'] for rows in a.values() for r in rows))
         self.assertTrue(all(not r['needs'] for rows in b.values() for r in rows))
         self.assertNotEqual({r['id'] for r in a['train']}, {r['id'] for r in b['train']})

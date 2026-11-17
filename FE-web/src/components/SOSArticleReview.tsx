@@ -25,12 +25,27 @@ export default function SOSArticleReview({ article, value, onChange, busy, onAna
     <div className="flex items-center justify-between gap-3"><h3 className="font-bold">Kết quả hai model và xác nhận của admin</h3>
       {editable && <button type="button" disabled={busy} onClick={onAnalyze} className="border rounded-lg px-3 py-2 text-blue-700 disabled:opacity-50">{busy ? 'Đang xử lý…' : 'Phân tích lại bằng A + B'}</button>}
     </div>
+    {editable && article.possible_duplicate && <p role="alert" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-900">
+      Bài này có vẻ trùng với một SOS đang có ({{ phone: 'cùng số điện thoại', text: 'nội dung gần giống', nearby_text: 'cùng vị trí và nội dung tương tự' }[article.possible_duplicate.reason as string] || 'trùng'}
+      {article.possible_duplicate.address ? `, ${article.possible_duplicate.address}` : ''}). Nếu duyệt, bài sẽ được gộp vào SOS đó thay vì tạo SOS mới.
+    </p>}
+    {editable && article.ai_analysis?.triage && <p className={`rounded-lg border p-3 ${article.ai_analysis.triage.level === 'URGENT' ? 'border-rose-300 bg-rose-50 text-rose-900 font-semibold' : 'border-slate-200 bg-slate-50 text-slate-700'}`}>
+      Mức ưu tiên duyệt: {{ URGENT: 'Khẩn', NORMAL: 'Bình thường', LOW: 'Thấp' }[article.ai_analysis.triage.level as string] || article.ai_analysis.triage.level} · {article.ai_analysis.triage.reason}
+    </p>}
     {Object.keys(article.ai_analysis || {}).length ? <ModelResults result={article.ai_analysis} /> : <p className="text-amber-800">Bài cũ chưa có kết quả hai model. Có thể phân tích lại hoặc nhập thông tin xác nhận.</p>}
     {editable ? <fieldset disabled={busy} className="rounded-xl border p-4 space-y-4 disabled:opacity-60">
       <legend className="font-semibold px-2">Thông tin sẽ dùng để tạo SOS</legend>
       <p className="text-xs text-slate-500">Tọa độ chỉ là gợi ý. Kiểm tra vị trí và số người thực tế trước khi xác nhận. Sửa tại đây không thay đổi bản dự đoán gốc.</p>
       <label className="flex gap-2 font-semibold"><input type="checkbox" checked={value.is_request} onChange={e => onChange({ ...value, is_request: e.target.checked })} />Tôi xác nhận đây là yêu cầu đang cần hỗ trợ</label>
       <div className="flex flex-wrap gap-4">{Object.entries(NEED_NAMES).map(([code, title]) => <label key={code} className="flex gap-2"><input type="checkbox" checked={value.needs.includes(code)} onChange={e => onChange({ ...value, needs: e.target.checked ? [...value.needs, code] : value.needs.filter((n: string) => n !== code) })} />{title}</label>)}</div>
+      {article.ai_analysis?.geocode?.candidates?.length > 0 && <div className="rounded-lg border border-blue-200 bg-blue-50/50 p-3 space-y-2">
+        <p className="font-semibold">Gợi ý tọa độ cho “{article.ai_analysis.geocode.query}”{article.ai_analysis.geocode.precision === 'province' ? ' (chỉ tìm được tới tâm tỉnh/thành, cần chỉnh lại)' : ''}</p>
+        {article.ai_analysis.geocode.candidates.map((c: any, i: number) => <button type="button" key={i}
+          onClick={() => onChange({ ...value, extracted_lat: String(c.lat), extracted_lng: String(c.lng) })}
+          className="block w-full text-left rounded border bg-white px-3 py-2 hover:bg-blue-50">
+          {c.name} <span className="text-xs text-slate-500">({Number(c.lat).toFixed(5)}, {Number(c.lng).toFixed(5)})</span>
+        </button>)}
+      </div>}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">{fields.map(([key, title]) => <label key={key} className="block">{title}
         <input aria-label={title} value={value[key]} onChange={e => onChange({ ...value, [key]: e.target.value })} className="mt-1 w-full rounded border px-3 py-2" />
       </label>)}</div>

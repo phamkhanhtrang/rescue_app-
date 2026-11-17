@@ -114,6 +114,9 @@ class SOSSignal(models.Model):
         on_delete=models.SET_NULL, related_name='assigned_sos')
     supplies_needed = models.JSONField(default=dict, blank=True, verbose_name='Nhu cầu cứu trợ')
     supplies_delivered = models.JSONField(default=dict, blank=True, verbose_name='Đã tiếp tế')
+    # Kết quả Model A/B đọc ghi chú (hoặc thông tin admin đã duyệt với SOS từ Facebook).
+    # Chỉ để bổ sung thông tin và gắn cờ; không dùng để loại bỏ SOS.
+    ai_analysis = models.JSONField(default=dict, blank=True, verbose_name='Phân tích AI của ghi chú')
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

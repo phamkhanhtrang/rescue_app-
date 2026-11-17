@@ -17,6 +17,7 @@ from transformers import AutoTokenizer, AutoModel, AutoModelForTokenClassificati
 from tqdm.auto import tqdm
 from .data import NEEDS, BIO, ENTITIES, write_jsonl
 from .preprocess import encode, decode_spans, PREPROCESSOR, MAX_LENGTH
+from .text_normalizer import clean_text_for_pipeline, clean_marked_text
 from .modeling import RequestNeedsModel
 from .continuation import read_parent, load_parent_model
 from .excel_data import semantic_hash, check_excel_parent
@@ -57,16 +58,30 @@ class NotebookRun:
         self.parent = parent
         self.tokenizer = AutoTokenizer.from_pretrained(str(self.parent_path or self.backbone),
             use_fast=False, local_files_only=bool(parent))
-        prepared = {}
+        prepared, self.normalization_fallbacks = {}, []
         for split, rows in self.splits.items():
             prepared[split] = []
             for index, row in enumerate(tqdm(rows, desc=f'Kiểm tra {split}'), 2):
+                labels = row['entities'] if self.task == 'b' else None
                 try:
-                    item = encode(row['text'], self.tokenizer, row['entities'] if self.task == 'b' else None)
-                except ValueError as exc:
-                    raise ValueError(f'{split}, dòng Excel {index}, ID={row["id"]}: {exc}') from exc
-                item['row'] = row
+                    # Chuẩn hóa giống hệt lúc hệ thống chạy thật (teencode, ký tự kéo dài),
+                    # và tính lại vị trí nhãn trên câu đã chuẩn hóa.
+                    text, entities = clean_marked_text(row['text'], labels)
+                    item = encode(text, self.tokenizer, entities if self.task == 'b' else None)
+                except ValueError:
+                    # Hiếm gặp: chuẩn hóa làm bộ tách từ gộp nhãn với từ bên cạnh
+                    # ("cano" -> "ca nô" -> "Cần_ca_nô"). Giữ câu gốc thay vì bỏ cả lần train.
+                    try:
+                        text, entities = row['text'], row['entities']
+                        item = encode(text, self.tokenizer, labels)
+                    except ValueError as exc:
+                        raise ValueError(f'{split}, dòng Excel {index}, ID={row["id"]}: {exc}') from exc
+                    self.normalization_fallbacks.append(row['id'])
+                item['row'] = dict(row, text=text, entities=entities)
                 prepared[split].append(item)
+        if self.normalization_fallbacks:
+            print(f'{len(self.normalization_fallbacks)} câu không chuẩn hóa được mà vẫn giữ đúng nhãn nên dùng câu gốc: '
+                  + ', '.join(self.normalization_fallbacks[:10]))
         self.loaders = {name: DataLoader(rows, batch_size=self.batch_size, shuffle=name == 'train',
             collate_fn=lambda items: collate(items, self.tokenizer.pad_token_id)) for name, rows in prepared.items()}
         if parent:
@@ -80,6 +95,8 @@ class NotebookRun:
         self.metadata = {'schema_version': 1, 'run_id': self.output.name, 'task': self.task,
             'created_at': datetime.now(timezone.utc).isoformat(), 'backbone': parent['backbone'] if parent else self.backbone,
             'preprocessor': PREPROCESSOR, 'max_length': MAX_LENGTH, 'needs': NEEDS, 'bio_labels': BIO,
+            'text_normalization': 'clean_text_for_pipeline',
+            'normalization_fallback_ids': self.normalization_fallbacks,
             'demo': False, 'evaluation_domain': self.domain,
             'initialization': 'continued_fine_tuning' if parent else 'pretrained_backbone_random_task_heads',
             'parent_checkpoint': lineage, 'optimizer_resumed': False,
@@ -198,6 +215,7 @@ class NotebookRun:
         after.update(evaluation_domain=self.domain, demo_not_research_result=False,
                      synthetic_only=self.domain == 'synthetic', best_epoch=self.saved['best_epoch'])
         save_json(self.output / 'test_metrics.json', after)
+        self.after = after
         write_jsonl(self.output / 'test_predictions.jsonl', predictions)
         def compact(report):
             if self.task == 'a':
@@ -216,7 +234,7 @@ class NotebookRun:
     def predict(self, text):
         if not self.evaluation_done:
             raise RuntimeError('Hoàn thành đánh giá model tốt nhất trước khi thử câu mới.')
-        text = unicodedata.normalize('NFC', text)
+        text = clean_text_for_pipeline(text) or unicodedata.normalize('NFC', text)
         item = encode(text, self.tokenizer)
         inputs = {k: torch.tensor([item[k]], device=self.device) for k in ['input_ids', 'attention_mask']}
         self.model.eval()

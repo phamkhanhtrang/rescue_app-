@@ -11,8 +11,9 @@ Thuật toán:
               + w_priority  * f_zone_priority(zone.ai_priority_score)
               + w_deficit   * f_rescuer_deficit(zone)
 
-    Sau đó dùng Greedy Matching: lần lượt chọn cặp (Rescuer, Zone)
-    có điểm cao nhất, loại cả hai khỏi pool, tiếp tục đến hết.
+    Sau đó ghép cặp bằng thuật toán Hungarian (tối ưu toàn cục): chọn tập cặp
+    (Rescuer, Zone) có tổng điểm lớn nhất. Cách ghép tham lam cũ được giữ làm
+    phương án dự phòng và để so sánh tổng điểm.
 
 Trả về danh sách đề xuất dạng:
     [
@@ -28,8 +29,10 @@ Trả về danh sách đề xuất dạng:
     ]
 """
 
-import math
+import logging
 from .clustering import haversine_m          # Tái sử dụng Haversine đã có
+
+logger = logging.getLogger(__name__)
 
 # ─── Trọng số ─────────────────────────────────────────────────────────────────
 
@@ -251,29 +254,79 @@ def run_assignment_recommendation(
                 'reasons':      reasons,
             })
 
-    # Sắp xếp giảm dần theo điểm
-    candidates.sort(key=lambda x: x['match_score'], reverse=True)
+    # Số chỗ còn thiếu của từng Zone
+    slots = {
+        str(z.id): max(0, (z.rescuers_needed or 0) - zone_active_missions[str(z.id)])
+        for z in zones_needing
+    }
 
-    # ── Greedy Matching: mỗi Rescuer chỉ được phân 1 Zone ────────────────────
-    assigned_rescuers = set()
-    assigned_per_zone = {}
-    result = []
+    greedy = greedy_matching(candidates, slots)
+    try:
+        matched, method = optimal_matching(candidates, slots), 'hungarian'
+    except Exception as exc:
+        # Thiếu scipy hoặc lỗi bất ngờ: vẫn phải trả được gợi ý.
+        logger.warning('[Assignment] Hungarian không chạy được (%s); dùng ghép tham lam.', exc)
+        matched, method = greedy, 'greedy'
 
-    for c in candidates:
-        if c['rescuer_id'] in assigned_rescuers:
-            continue
-        zone = next(z for z in zones_needing if str(z.id) == c['zone_id'])
-        slots = max(0, zone.rescuers_needed - zone_active_missions[c['zone_id']])
-        if assigned_per_zone.get(c['zone_id'], 0) >= slots:
-            continue
-        assigned_per_zone[c['zone_id']] = assigned_per_zone.get(c['zone_id'], 0) + 1
-        result.append(c)
-        assigned_rescuers.add(c['rescuer_id'])
-        if len(result) >= top_n:
-            break
+    matched.sort(key=lambda x: x['match_score'], reverse=True)
 
     return {
-        'recommendations':    result,
+        'recommendations':    matched[:top_n],
         'rescuers_available': available_rescuers.count(),
         'zones_needing_help': len(zones_needing),
+        # Tổng điểm của toàn bộ phương án (trước khi cắt top_n) để so sánh hai cách ghép.
+        'optimization': {
+            'method':             method,
+            'pairs':              len(matched),
+            'total_score':        round(sum(c['match_score'] for c in matched), 1),
+            'greedy_total_score': round(sum(c['match_score'] for c in greedy), 1),
+        },
     }
+
+
+# ─── Hai cách ghép cặp ───────────────────────────────────────────────────────
+
+def greedy_matching(candidates: list, slots: dict) -> list:
+    """
+    Ghép tham lam: lần lượt lấy cặp điểm cao nhất còn hợp lệ.
+    Nhanh nhưng không bảo đảm tổng điểm lớn nhất. Giữ để dự phòng và so sánh.
+    """
+    assigned_rescuers, assigned_per_zone, result = set(), {}, []
+    for c in sorted(candidates, key=lambda x: x['match_score'], reverse=True):
+        if c['rescuer_id'] in assigned_rescuers:
+            continue
+        if assigned_per_zone.get(c['zone_id'], 0) >= slots.get(c['zone_id'], 0):
+            continue
+        assigned_per_zone[c['zone_id']] = assigned_per_zone.get(c['zone_id'], 0) + 1
+        assigned_rescuers.add(c['rescuer_id'])
+        result.append(c)
+    return result
+
+
+def optimal_matching(candidates: list, slots: dict) -> list:
+    """
+    Ghép tối ưu toàn cục bằng thuật toán Hungarian (scipy linear_sum_assignment):
+    chọn tập cặp (Rescuer, Zone) có TỔNG điểm phù hợp lớn nhất, mỗi Rescuer tối đa
+    một Zone, mỗi Zone không quá số chỗ còn thiếu.
+
+    Zone thiếu k người được nhân thành k cột, nên bài toán trở về dạng ghép 1-1.
+    """
+    import numpy as np
+    from scipy.optimize import linear_sum_assignment
+
+    rescuer_ids = list(dict.fromkeys(c['rescuer_id'] for c in candidates))
+    # Một Zone không thể nhận nhiều hơn số Rescuer đang rảnh.
+    columns = [zone_id for zone_id, n in slots.items() for _ in range(min(n, len(rescuer_ids)))]
+    if not rescuer_ids or not columns:
+        return []
+
+    by_pair = {(c['rescuer_id'], c['zone_id']): c for c in candidates}
+    scores = np.zeros((len(rescuer_ids), len(columns)))
+    for i, rescuer_id in enumerate(rescuer_ids):
+        for j, zone_id in enumerate(columns):
+            pair = by_pair.get((rescuer_id, zone_id))
+            scores[i, j] = pair['match_score'] if pair else 0.0
+
+    rows, cols = linear_sum_assignment(scores, maximize=True)
+    return [by_pair[(rescuer_ids[i], columns[j])] for i, j in zip(rows, cols)
+            if (rescuer_ids[i], columns[j]) in by_pair]
