@@ -171,15 +171,11 @@ def sos_create(request):
         # Chỉ gom SOS signal loại SOS (không gom PING)
         if sos.signal_type == 'SOS':
             try:
-                from ai.clustering import run_clustering
-                stats = run_clustering(only_unassigned=True)
-                logger.info(
-                    f"[AI Trigger] SOS {sos.id} tạo mới → "
-                    f"clustering: {stats}"
-                )
+                from ai.sos_pipeline import schedule_new_sos
+                schedule_new_sos(sos.id)
             except Exception as e:
                 # AI lỗi KHÔNG ảnh hưởng response trả về cho người dùng
-                logger.error(f"[AI Trigger] Clustering thất bại sau SOS create: {e}")
+                logger.error(f"[AI Trigger] Không xếp được tác vụ AI sau SOS create: {e}")
         # ─────────────────────────────────────────────────────────────────
 
         return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -202,11 +198,10 @@ def anonymous_sos_create(request):
     if serializer.is_valid():
         sos = serializer.save()
         try:
-            from ai.clustering import run_clustering
-            stats = run_clustering(only_unassigned=True)
-            logger.info(f"[AI Trigger] Anonymous SOS {sos.id} created → clustering: {stats}")
+            from ai.sos_pipeline import schedule_new_sos
+            schedule_new_sos(sos.id)
         except Exception as e:
-            logger.error(f"[AI Trigger] Clustering failed for anonymous SOS: {e}")
+            logger.error(f"[AI Trigger] Không xếp được tác vụ AI cho SOS ẩn danh: {e}")
 
         return Response(serializer.data, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -1461,108 +1456,137 @@ def safety_check(request):
 
 # ─── BLE OFFLINE BULK SYNC (STORE-AND-FORWARD) ───────────────
 
+BLE_SYNC_MAX_PACKETS = 200
+BLE_SEVERITY_LABELS = {1: 'Cần hỗ trợ', 2: 'Ngập sâu / hết lương thực', 3: 'Nguy kịch'}
+
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def bulk_offline_sync(request):
     """
-    Đồng bộ hàng loạt gói tin cứu nạn ngoại tuyến BLE (Store-and-Forward / Data Muling).
-    Khi Đội cứu hộ hoặc người dân quay trở lại khu vực có sóng 4G/Wi-Fi,
-    app sẽ tự động đẩy danh sách các gói tin BLE thu thập được lên server.
+    Đồng bộ các gói SOS thu được qua BLE khi thiết bị có mạng trở lại (Store-and-Forward).
+
+    Bất kỳ máy nào (kể cả người dân chưa đăng nhập) cũng được chuyển tiếp gói SOS, nhưng
+    SOS tạo ra luôn ở trạng thái chờ xử lý và chưa xác minh. Chỉ tài khoản cứu hộ / quản trị
+    đã đăng nhập mới được đánh dấu RESOLVED. Mỗi phao cứu sinh chỉ tạo đúng một SOS.
     """
-    import struct
-    device_id = request.data.get('device_id', 'UNKNOWN_DEVICE')
+    from django.db import IntegrityError, transaction
+    from .ble_protocol import PacketError, decode_sos_packet, request_key_for
+    from .flow import event, operator
+
+    device_id = str(request.data.get('device_id') or 'UNKNOWN_DEVICE')[:64]
     packets = request.data.get('packets', [])
     if not isinstance(packets, list) or not packets:
         return Response({'error': 'Danh sách packets rỗng hoặc không đúng định dạng.'}, status=status.HTTP_400_BAD_REQUEST)
+    if len(packets) > BLE_SYNC_MAX_PACKETS:
+        return Response({'error': f'Mỗi lần chỉ đồng bộ tối đa {BLE_SYNC_MAX_PACKETS} gói tin.'}, status=status.HTTP_400_BAD_REQUEST)
 
-    synced_items = []
-    errors = []
+    can_resolve = operator(request.user)
+    actor = request.user if request.user.is_authenticated else None
+    synced_items, rejected, created_any = [], [], False
 
     for idx, item in enumerate(packets):
-        hex_str = item.get('hex_packet', '').strip()
-        if not hex_str:
-            errors.append(f"Gói tin #{idx}: Thiếu trường hex_packet.")
-            continue
         try:
-            raw_bytes = bytes.fromhex(hex_str)
-            if len(raw_bytes) < 16:
-                errors.append(f"Gói tin #{idx}: Độ dài nhị phân < 16 bytes.")
-                continue
+            if not isinstance(item, dict):
+                raise PacketError('Phần tử không đúng định dạng.')
+            packet = decode_sos_packet(item.get('hex_packet', ''))
+        except PacketError as exc:
+            rejected.append({'index': idx, 'reason': str(exc)})
+            continue
 
-            # Kiểm tra Header 0x4750 ('GP')
-            if raw_bytes[0] != 0x47 or raw_bytes[1] != 0x50:
-                errors.append(f"Gói tin #{idx}: Sai header định danh 0xGP.")
-                continue
+        wants_resolved = str(item.get('status', 'PENDING')).upper() == 'RESOLVED'
+        resolve = wants_resolved and can_resolve
+        note_extra = str(item.get('note') or '').strip()[:500]
+        try:
+            rssi = int(item.get('rssi'))
+        except (TypeError, ValueError):
+            rssi = None
 
-            sos_id_int = struct.unpack('>I', raw_bytes[2:6])[0]
-            demo = raw_bytes[6]
-            people_count = max((demo >> 3) & 0x1F, 1)
-            has_elderly = bool(demo & 1)
-            has_children = bool(demo & 2)
-            has_injury = bool(demo & 4)
-            sev_code = raw_bytes[7]
-            lat = round(float(struct.unpack('>f', raw_bytes[8:12])[0]), 6)
-            lng = round(float(struct.unpack('>f', raw_bytes[12:16])[0]), 6)
+        ble_meta = {
+            'has_elderly': packet['has_elderly'],
+            'has_children': packet['has_children'],
+            'has_injury': packet['has_injury'],
+            'ble_sos_id': packet['sos_id'],
+            'ble_severity': packet['severity'],
+            'ble_rssi': rssi,
+            'carrier_device': device_id,
+            'synced_offline': True,
+            'raw_hex': packet['hex'],
+        }
+        key = request_key_for(packet['sos_id'])
 
-            target_status = item.get('status', 'PENDING').upper()
-            if target_status not in dict(SOSSignal.STATUS_CHOICES):
-                target_status = 'PENDING'
+        try:
+            with transaction.atomic():
+                action = None
+                sos_signal = SOSSignal.objects.select_for_update().filter(request_key=key).first()
+                if sos_signal is None:
+                    try:
+                        with transaction.atomic():
+                            sos_signal = SOSSignal.objects.create(
+                                request_key=key,
+                                signal_type='SOS',
+                                status='RESOLVED' if resolve else 'PENDING',
+                                location_lat=packet['lat'],
+                                location_lng=packet['lng'],
+                                people_count=packet['people_count'],
+                                emergency_type='Cứu nạn Ngoại tuyến BLE',
+                                note=(
+                                    f"[BLE Offline Grid] BLE_SOS_ID:{packet['sos_id']}. "
+                                    f"Mức độ: {BLE_SEVERITY_LABELS[packet['severity']]}. {note_extra}"
+                                ).strip(),
+                                location_source='BLE_OFFLINE',
+                                verification_status='VERIFIED' if resolve else 'UNVERIFIED',
+                                supplies_needed=ble_meta,
+                            )
+                        action = 'CREATED'
+                        created_any = True
+                        event(sos_signal, 'CREATED', f'Tiếp nhận SOS qua BLE ngoại tuyến (thiết bị chuyển tiếp: {device_id}).', actor)
+                        if resolve:
+                            event(sos_signal, 'RESOLVED', note_extra or 'Đã cứu nạn (ghi nhận ngoại tuyến).', actor)
+                    except IntegrityError:
+                        # Một máy khác vừa đồng bộ cùng phao này.
+                        sos_signal = SOSSignal.objects.select_for_update().get(request_key=key)
 
-            rssi = item.get('rssi', -70)
-            note_extra = item.get('note', '')
+                if action is None:
+                    if sos_signal.status in ('RESOLVED', 'CANCELLED'):
+                        action = 'UNCHANGED'
+                    else:
+                        sos_signal.location_lat = packet['lat']
+                        sos_signal.location_lng = packet['lng']
+                        sos_signal.people_count = packet['people_count']
+                        sos_signal.supplies_needed = {**(sos_signal.supplies_needed or {}), **ble_meta}
+                        if resolve:
+                            sos_signal.status = 'RESOLVED'
+                            sos_signal.verification_status = 'VERIFIED'
+                            event(sos_signal, 'RESOLVED', note_extra or 'Đã cứu nạn (ghi nhận ngoại tuyến).', actor)
+                        if note_extra and note_extra not in (sos_signal.note or ''):
+                            sos_signal.note = f"{sos_signal.note or ''}\n[Cập nhật offline]: {note_extra}".strip()
+                        sos_signal.save()
+                        action = 'UPDATED'
+        except Exception as exc:
+            logger.exception(f"Lỗi khi lưu gói tin offline #{idx}: {exc}")
+            rejected.append({'index': idx, 'reason': 'Lỗi máy chủ khi lưu gói tin.', 'retry': True})
+            continue
 
-            supplies_payload = {
-                'has_elderly': has_elderly,
-                'has_children': has_children,
-                'has_injury': has_injury,
-                'ble_rssi': rssi,
-                'carrier_device': device_id,
-                'synced_offline': True,
-                'raw_hex': hex_str[:32],
-            }
+        synced_items.append({
+            'index': idx,
+            'sos_id': str(sos_signal.id),
+            'ble_sos_id': packet['sos_id'],
+            'action': action,
+            'status': sos_signal.status,
+            'lat': packet['lat'],
+            'lng': packet['lng'],
+            'people_count': packet['people_count'],
+            'resolve_ignored': wants_resolved and not can_resolve,
+        })
 
-            # Tìm xem đã có tín hiệu SOS này chưa (theo note chứa sos_id_int hoặc tọa độ)
-            sos_signal = SOSSignal.objects.filter(
-                Q(note__icontains=f"BLE_SOS_ID:{sos_id_int}") |
-                Q(location_lat=lat, location_lng=lng, location_source='BLE_OFFLINE')
-            ).first()
-
-            if not sos_signal:
-                sos_signal = SOSSignal.objects.create(
-                    signal_type='SOS',
-                    status=target_status,
-                    location_lat=lat,
-                    location_lng=lng,
-                    people_count=people_count,
-                    emergency_type='Cứu nạn Ngoại tuyến BLE',
-                    note=f"[BLE Offline Grid] BLE_SOS_ID:{sos_id_int}. {note_extra}".strip(),
-                    location_source='BLE_OFFLINE',
-                    verification_status='VERIFIED' if target_status == 'RESOLVED' else 'UNVERIFIED',
-                    supplies_needed=supplies_payload,
-                )
-                action = 'CREATED'
-            else:
-                if target_status == 'RESOLVED':
-                    sos_signal.status = 'RESOLVED'
-                    sos_signal.verification_status = 'VERIFIED'
-                if note_extra and note_extra not in (sos_signal.note or ''):
-                    sos_signal.note = f"{sos_signal.note}\n[Cập nhật offline]: {note_extra}".strip()
-                sos_signal.supplies_needed = {**(sos_signal.supplies_needed or {}), **supplies_payload}
-                sos_signal.save()
-                action = 'UPDATED'
-
-            synced_items.append({
-                'sos_id': str(sos_signal.id),
-                'ble_sos_id': sos_id_int,
-                'action': action,
-                'status': sos_signal.status,
-                'lat': lat,
-                'lng': lng,
-                'people_count': people_count,
-            })
-        except Exception as e:
-            logger.exception(f"Lỗi khi giải mã gói tin offline #{idx}: {e}")
-            errors.append(f"Gói tin #{idx}: Lỗi xử lý ({str(e)})")
+    if created_any:
+        try:
+            # Gói BLE không có ghi chú tự do nên chỉ cần gom cụm + chấm điểm (chạy nền).
+            from ai.sos_pipeline import schedule_new_sos
+            schedule_new_sos()
+        except Exception as exc:
+            logger.error(f"[AI Trigger] Không xếp được tác vụ AI sau BLE sync: {exc}")
 
     return Response({
         'status': 'SUCCESS',
@@ -1570,100 +1594,69 @@ def bulk_offline_sync(request):
         'total_received': len(packets),
         'synced_count': len(synced_items),
         'synced_items': synced_items,
-        'errors': errors,
-    }, status=status.HTTP_200_OK if synced_items else status.HTTP_400_BAD_REQUEST)
+        'rejected': rejected,
+        'errors': [f"Gói tin #{r['index']}: {r['reason']}" for r in rejected],
+    })
 
 
-# ─── VIRTUAL BLE MESH RELAY (CHO TEST 2 THIẾT BỊ / WEB + PHONE) ───────────────
-import time
+# ─── VIRTUAL BLE RELAY (CHỈ ĐỂ DEMO / TEST KHI KHÔNG CÓ SÓNG BLE THẬT) ───────
+# Giả lập "không gian vô tuyến": mỗi thiết bị đăng gói tin đang quảng bá, thiết bị
+# khác đọc về. Dùng cho Expo Go, trình duyệt web và iOS. Tắt ở môi trường production.
 
-BLE_VIRTUAL_BEACONS = {} # { sos_id_str: { hex, sos_id, lat, lng, people_count, severity, updated_at } }
-BLE_VIRTUAL_PINGS = []   # [ { target_id, timestamp, action } ]
-BLE_VIRTUAL_CHATS = []   # [ { id, sender_role, text, target_sos_id, sent_at, timestamp } ]
+BLE_RELAY_CACHE_KEY = 'ble_virtual_relay_v2'
+BLE_RELAY_MAX_TTL = 30
+BLE_RELAY_MAX_ENTRIES = 500
+
+
+def _ble_relay_enabled():
+    from django.conf import settings
+    return bool(getattr(settings, 'BLE_VIRTUAL_RELAY_ENABLED', settings.DEBUG))
+
 
 @api_view(['GET', 'POST', 'DELETE'])
 @permission_classes([AllowAny])
-def ble_mesh_beacon(request):
-    """Đăng ký, cập nhật hoặc lấy danh sách phao cứu sinh đang phát sóng ảo."""
+def ble_virtual_relay(request):
+    """
+    POST   {device_id, slot, hex, ttl}  → bắt đầu / gia hạn "quảng bá" một gói tin.
+    DELETE {device_id, slot}            → dừng quảng bá.
+    GET    ?device_id=...               → các gói tin đang được máy KHÁC quảng bá.
+    """
+    import re
+    import time
+    from django.core.cache import cache
+
+    if not _ble_relay_enabled():
+        return Response({'error': 'Virtual BLE relay đang tắt.'}, status=status.HTTP_404_NOT_FOUND)
+
     now = time.time()
-    stale_keys = [k for k, v in BLE_VIRTUAL_BEACONS.items() if now - v.get('updated_at', 0) > 300]
-    for k in stale_keys:
-        BLE_VIRTUAL_BEACONS.pop(k, None)
+    entries = {k: v for k, v in (cache.get(BLE_RELAY_CACHE_KEY) or {}).items() if v['expires'] > now}
+    source = request.query_params if request.method == 'GET' else request.data
+    device_id = str(source.get('device_id') or '')[:64]
+    if not device_id:
+        return Response({'error': 'Thiếu device_id.'}, status=status.HTTP_400_BAD_REQUEST)
 
-    if request.method == 'POST':
-        data = request.data
-        sos_id = str(data.get('sos_id', ''))
-        if not sos_id:
-            return Response({'error': 'Thiếu sos_id'}, status=400)
-        BLE_VIRTUAL_BEACONS[sos_id] = {
-            'sos_id': int(sos_id) if sos_id.isdigit() else sos_id,
-            'hex': data.get('hex', ''),
-            'lat': float(data.get('lat', 16.0544)),
-            'lng': float(data.get('lng', 108.2022)),
-            'people_count': int(data.get('people_count', 1)),
-            'has_elderly': bool(data.get('has_elderly', False)),
-            'has_children': bool(data.get('has_children', False)),
-            'has_injury': bool(data.get('has_injury', False)),
-            'severity': int(data.get('severity', 2)),
-            'updated_at': now,
-        }
-        return Response({'status': 'REGISTERED', 'beacon': BLE_VIRTUAL_BEACONS[sos_id]})
+    if request.method == 'GET':
+        return Response({'packets': [
+            {'hex': v['hex'], 'device_id': v['device_id']}
+            for v in entries.values() if v['device_id'] != device_id
+        ]})
 
-    elif request.method == 'DELETE':
-        sos_id = str(request.data.get('sos_id', request.query_params.get('sos_id', '')))
-        if sos_id in BLE_VIRTUAL_BEACONS:
-            del BLE_VIRTUAL_BEACONS[sos_id]
-        return Response({'status': 'DELETED'})
+    slot = str(request.data.get('slot') or 'default')[:16]
+    entry_key = f'{device_id}:{slot}'
+    if request.method == 'DELETE':
+        entries.pop(entry_key, None)
+        cache.set(BLE_RELAY_CACHE_KEY, entries, BLE_RELAY_MAX_TTL * 2)
+        return Response({'status': 'STOPPED'})
 
-    return Response({'beacons': list(BLE_VIRTUAL_BEACONS.values())})
-
-
-@api_view(['GET', 'POST'])
-@permission_classes([AllowAny])
-def ble_mesh_ping(request):
-    """Gửi hoặc kiểm tra lệnh PING định vị."""
-    global BLE_VIRTUAL_PINGS
-    now = time.time()
-    BLE_VIRTUAL_PINGS = [p for p in BLE_VIRTUAL_PINGS if now - p['timestamp'] < 30]
-
-    if request.method == 'POST':
-        target_id = request.data.get('target_id', 'ALL')
-        ping_entry = {
-            'target_id': target_id,
-            'timestamp': now,
-            'action': 'STROBE_AND_SIREN',
-        }
-        BLE_VIRTUAL_PINGS.append(ping_entry)
-        return Response({'status': 'PING_SENT', 'ping': ping_entry})
-
-    target_id = request.query_params.get('target_id', '')
-    matching_pings = [
-        p for p in BLE_VIRTUAL_PINGS 
-        if p['target_id'] == 'ALL' or str(p['target_id']) == str(target_id)
-    ]
-    return Response({'pings': matching_pings})
-
-
-@api_view(['GET', 'POST'])
-@permission_classes([AllowAny])
-def ble_mesh_chat(request):
-    """Gửi và nhận tin nhắn bộ đàm tầm gần."""
-    global BLE_VIRTUAL_CHATS
-    now = time.time()
-    BLE_VIRTUAL_CHATS = [c for c in BLE_VIRTUAL_CHATS if now - c.get('timestamp', 0) < 86400]
-
-    if request.method == 'POST':
-        msg = {
-            'id': f"chat-{int(now*1000)}",
-            'sender_role': request.data.get('sender_role', 'CITIZEN'),
-            'text': request.data.get('text', ''),
-            'target_sos_id': request.data.get('target_sos_id', 'ALL'),
-            'sent_at': request.data.get('sent_at', time.strftime('%H:%M')),
-            'timestamp': now,
-        }
-        BLE_VIRTUAL_CHATS.insert(0, msg)
-        return Response({'status': 'SENT', 'message': msg})
-
-    return Response({'messages': BLE_VIRTUAL_CHATS[:30]})
-
-
+    hex_str = str(request.data.get('hex') or '').upper()
+    if not re.fullmatch(r'(?:[0-9A-F]{2}){16,24}', hex_str) or not hex_str.startswith('4750'):
+        return Response({'error': 'Gói tin hex không hợp lệ.'}, status=status.HTTP_400_BAD_REQUEST)
+    if entry_key not in entries and len(entries) >= BLE_RELAY_MAX_ENTRIES:
+        return Response({'error': 'Relay đang quá tải.'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+    try:
+        ttl = min(max(float(request.data.get('ttl', 15)), 1), BLE_RELAY_MAX_TTL)
+    except (TypeError, ValueError):
+        ttl = 15
+    entries[entry_key] = {'hex': hex_str, 'device_id': device_id, 'expires': now + ttl}
+    cache.set(BLE_RELAY_CACHE_KEY, entries, BLE_RELAY_MAX_TTL * 2)
+    return Response({'status': 'ADVERTISING', 'ttl': ttl})

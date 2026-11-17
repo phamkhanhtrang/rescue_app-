@@ -1,70 +1,91 @@
 /**
  * src/screens/rescuer/offline/RescuerOfflineScreen.js
  * ─────────────────────────────────────────────────────────────────────────────
- * Trung Tâm Tác Chiến Cứu Nạn Ngoại Tuyến BLE & Radar Sonar Tầm Soát (Rescuer).
+ * Radar cứu nạn ngoại tuyến BLE (Rescuer).
  *
- * Tính năng chính:
- * 1. Radar Sonar 360° quét tín hiệu phao cứu sinh BLE (0xGP) trong đêm.
- * 2. Đo cự ly tầm gần bằng thuật toán suy diễn RSSI & Bộ lọc Moving Average.
- * 3. Nút "PING ĐỊNH VỊ": Kích hoạt chớp đèn Flash SOS và còi hú trên máy nạn nhân.
- * 4. Bộ đàm tin nhắn nhanh BLE 1-chạm trao đổi với người dân không cần mạng.
- * 5. Cơ chế Bồ câu đưa thư số (Store-and-Forward): Tự động gom hồ sơ cứu nạn và
- *    đồng bộ hàng loạt lên Django Backend khi về trạm có 4G/Wi-Fi.
+ * 1. Quét gói SOS 0xGP mà phao cứu sinh của người dân phát qua BLE Advertising.
+ * 2. Định vị nạn nhân: cự ly + hướng tính từ GPS trong gói SOS và GPS / la bàn của
+ *    máy cứu hộ; chặng cuối (dưới ~15m) dùng cường độ sóng RSSI đã làm mượt.
+ * 3. PING: phát lệnh để máy nạn nhân hú còi và chớp đèn flash.
+ * 4. Tin nhắn soạn sẵn hai chiều với người dân ở tầm gần.
+ * 5. Bồ câu đưa thư: mọi gói SOS nghe được đều lưu lại và tự đồng bộ lên máy chủ
+ *    khi có mạng; cứu hộ đánh dấu "đã cứu" ngay cả khi mất mạng.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  SafeAreaView, Animated, Dimensions, Platform,
+  SafeAreaView, Animated, Dimensions,
 } from 'react-native';
+import * as Location from 'expo-location';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import RescuerHeader from '../../../components/rescuer/common/RescuerHeader';
 import CustomModal from '../../../components/common/CustomModal';
 import { RCOLORS, RFONTS, RSPACING, RRADIUS, RLAYOUT } from '../../../constants/rescuer/theme';
-import apiClient from '../../../services/apiClient';
+import { RESCUER_MESSAGES, compassLabel } from '../../../services/bleProtocol';
 import {
   startRescuerScanner,
   stopRescuerScanner,
+  setRescuerPosition,
+  getTransportInfo,
   sendRemotePing,
   sendQuickChatMessage,
   getQuickChatHistory,
   subscribeToChatMessage,
   markVictimResolvedOffline,
   syncOfflineQueueToBackend,
+  getOfflineQueueCount,
+  subscribeToQueueChange,
   playSonarBeep,
-  playAlarmSiren,
   triggerHaptic,
 } from '../../../services/bleGridService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const RADAR_SIZE = Math.min(SCREEN_WIDTH - 48, 300);
+const RADAR_EDGE_M = 50; // cự ly ứng với vòng ngoài cùng của radar
+const RADAR_EDGE_RATIO = 0.425;
 
-const RESCUER_PRESET_MESSAGES = [
-  'Ca-nô đã tới đầu ngõ',
-  'Hãy giơ cao đèn flash / vẫy khăn',
-  'Giữ nguyên vị trí, đang tiếp cận gác lửng',
-  'Đã đưa phao cứu sinh vào cửa sổ',
-  'Toàn bộ gia đình bình tĩnh, ưu tiên trẻ em',
-];
+const SEVERITY_LABELS = { 1: 'Cần hỗ trợ', 2: 'Ngập sâu', 3: 'Nguy kịch' };
+
+/** Vị trí một phao trên radar. Hướng lên trên = hướng điện thoại đang chĩa tới. */
+function radarPosition(signal, heading) {
+  const distance = signal.distanceM ?? RADAR_EDGE_M;
+  const ratio = Math.min(Math.max((distance / RADAR_EDGE_M) * RADAR_EDGE_RATIO, 0.08), 0.46);
+  const relative = signal.bearing == null ? 0 : signal.bearing - (heading ?? 0);
+  const rad = (relative * Math.PI) / 180;
+  return {
+    left: RADAR_SIZE / 2 + Math.sin(rad) * RADAR_SIZE * ratio - 10,
+    top: RADAR_SIZE / 2 - Math.cos(rad) * RADAR_SIZE * ratio - 10,
+  };
+}
 
 const RescuerOfflineScreen = ({ navigation }) => {
+  const transport = getTransportInfo();
+
   // Trạng thái Radar & Quét sóng
   const [isScanning, setIsScanning] = useState(true);
+  const [scanError, setScanError] = useState(null);
   const [discoveredSignals, setDiscoveredSignals] = useState([]);
-  const [selectedSignal, setSelectedSignal] = useState(null);
+  const [selectedId, setSelectedId] = useState(null);
+
+  // Vị trí & hướng của cứu hộ
+  const [hasPosition, setHasPosition] = useState(false);
+  const [heading, setHeading] = useState(null);
+  const headingRef = useRef(null);
 
   // Trạng thái đồng bộ hàng đợi
   const [offlineQueueCount, setOfflineQueueCount] = useState(0);
   const [syncing, setSyncing] = useState(false);
 
-  // Bộ đàm tin nhắn
+  // Tin nhắn
   const [chatMessages, setChatMessages] = useState([]);
 
   // Animation Radar Sweep
   const radarSweepAnim = useRef(new Animated.Value(0)).current;
   const targetPulseAnim = useRef(new Animated.Value(1)).current;
+  const lastBeepAt = useRef(0);
 
   // Modal thông báo
   const [modalConfig, setModalConfig] = useState({
@@ -73,136 +94,202 @@ const RescuerOfflineScreen = ({ navigation }) => {
     title: '',
     message: '',
   });
+  const showModal = (type, title, message) => setModalConfig({ visible: true, type, title, message });
 
-  // 1. Quản lý Animation xoay Radar 360°
+  const selectedSignal =
+    discoveredSignals.find((s) => s.sosId === selectedId) || discoveredSignals[0] || null;
+
+  // 1. Animation xoay Radar
   useEffect(() => {
-    let sweepLoop = null;
-    let pulseLoop = null;
-
-    if (isScanning) {
-      sweepLoop = Animated.loop(
-        Animated.timing(radarSweepAnim, {
-          toValue: 1,
-          duration: 3000,
-          useNativeDriver: true,
-        })
-      );
-      sweepLoop.start();
-
-      pulseLoop = Animated.loop(
-        Animated.sequence([
-          Animated.timing(targetPulseAnim, { toValue: 1.4, duration: 600, useNativeDriver: true }),
-          Animated.timing(targetPulseAnim, { toValue: 1.0, duration: 600, useNativeDriver: true }),
-        ])
-      );
-      pulseLoop.start();
-    } else {
+    if (!isScanning) {
       radarSweepAnim.setValue(0);
       targetPulseAnim.setValue(1);
+      return undefined;
     }
-
+    const sweepLoop = Animated.loop(
+      Animated.timing(radarSweepAnim, { toValue: 1, duration: 3000, useNativeDriver: true })
+    );
+    const pulseLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(targetPulseAnim, { toValue: 1.4, duration: 600, useNativeDriver: true }),
+        Animated.timing(targetPulseAnim, { toValue: 1.0, duration: 600, useNativeDriver: true }),
+      ])
+    );
+    sweepLoop.start();
+    pulseLoop.start();
     return () => {
-      if (sweepLoop) sweepLoop.stop();
-      if (pulseLoop) pulseLoop.stop();
+      sweepLoop.stop();
+      pulseLoop.stop();
     };
   }, [isScanning]);
 
-  // 2. Khởi chạy Scanner BLE Sonar
+  // 2. GPS và la bàn của máy cứu hộ
   useEffect(() => {
-    startRescuerScanner({ interval: 1400 }, (signals) => {
-      setDiscoveredSignals(signals);
-      if (signals.length > 0) {
-        // Tự động chọn mục tiêu gần nhất
-        signals.sort((a, b) => a.distanceM - b.distanceM);
-        setSelectedSignal((prev) => prev ? signals.find(s => s.sosId === prev.sosId) || signals[0] : signals[0]);
-        // Bíp Sonar khi cự ly < 30m
-        if (signals[0].distanceM <= 30) {
-          playSonarBeep();
-        }
-      }
-    });
-
+    let positionSub = null;
+    let headingSub = null;
+    let cancelled = false;
     (async () => {
-      const history = await getQuickChatHistory();
-      setChatMessages(history);
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted' || cancelled) return;
+        positionSub = await Location.watchPositionAsync(
+          { accuracy: Location.Accuracy.High, timeInterval: 2000, distanceInterval: 2 },
+          (loc) => {
+            setRescuerPosition({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+            setHasPosition(true);
+          }
+        );
+        headingSub = await Location.watchHeadingAsync((h) => {
+          const value = h.trueHeading >= 0 ? h.trueHeading : h.magHeading;
+          if (typeof value !== 'number' || value < 0) return;
+          // Chỉ vẽ lại khi hướng đổi đáng kể, tránh render liên tục.
+          const previous = headingRef.current;
+          const delta = previous == null ? 360 : Math.abs(((value - previous + 540) % 360) - 180);
+          if (delta >= 4) {
+            headingRef.current = value;
+            setHeading(Math.round(value));
+          }
+        });
+        if (cancelled) {
+          positionSub.remove();
+          headingSub.remove();
+        }
+      } catch (e) {
+        // Không có GPS / la bàn: radar vẫn chạy theo cường độ sóng.
+      }
     })();
-
-    const unsubChat = subscribeToChatMessage((msg) => {
-      setChatMessages((prev) => [msg, ...prev.filter((m) => m.id !== msg.id)].slice(0, 30));
-    });
-
     return () => {
-      stopRescuerScanner();
-      unsubChat();
+      cancelled = true;
+      if (positionSub) positionSub.remove();
+      if (headingSub) headingSub.remove();
+      setRescuerPosition(null);
     };
   }, []);
 
-  // Tính góc xoay kim quét radar
+  // 3. Bật / tắt quét BLE theo nút ĐANG QUÉT / TẠM DỪNG
+  useEffect(() => {
+    if (!isScanning) {
+      stopRescuerScanner();
+      return undefined;
+    }
+    let cancelled = false;
+    setScanError(null);
+    startRescuerScanner((signals) => {
+      if (cancelled) return;
+      setDiscoveredSignals(signals);
+      // Bíp sonar: càng gần càng dồn dập.
+      const nearest = signals.find((s) => s.distanceM != null && !s.isStale);
+      if (nearest && nearest.distanceM <= 30) {
+        const interval = Math.min(Math.max(nearest.distanceM * 100, 500), 3000);
+        if (Date.now() - lastBeepAt.current >= interval) {
+          lastBeepAt.current = Date.now();
+          playSonarBeep();
+        }
+      }
+    }).catch((e) => {
+      if (cancelled) return;
+      setScanError(e?.message || 'Không bắt đầu quét được.');
+      setIsScanning(false);
+    });
+    return () => {
+      cancelled = true;
+      stopRescuerScanner();
+    };
+  }, [isScanning]);
+
+  // 4. Tin nhắn & số hồ sơ chờ đồng bộ
+  useEffect(() => {
+    (async () => {
+      setChatMessages(await getQuickChatHistory());
+      setOfflineQueueCount(await getOfflineQueueCount());
+    })();
+    const unsubChat = subscribeToChatMessage((msg) => {
+      setChatMessages((prev) => [msg, ...prev.filter((m) => m.id !== msg.id)].slice(0, 30));
+    });
+    const unsubQueue = subscribeToQueueChange(setOfflineQueueCount);
+    return () => {
+      unsubChat();
+      unsubQueue();
+    };
+  }, []);
+
   const spinInterpolation = radarSweepAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ['0deg', '360deg'],
   });
 
-  // Gửi lệnh PING định vị từ xa đến máy nạn nhân
+  // Phát lệnh PING tới máy nạn nhân
   const handlePingTarget = async () => {
     if (!selectedSignal) return;
-    triggerHaptic('alarm');
-    await sendRemotePing(selectedSignal.sosId);
-    setModalConfig({
-      visible: true,
-      type: 'success',
-      title: '🚨 Đã phát lệnh PING định vị!',
-      message: `Đã truyền sóng kích hoạt chớp đèn Flash SOS và còi hú khẩn cấp đến thiết bị của nạn nhân GP-#${selectedSignal.sosId}.`,
-    });
-  };
-
-  // Đánh dấu đã cứu nạn nhân an toàn (Lưu vào hàng đợi Store-and-Forward)
-  const handleMarkResolved = async () => {
-    if (!selectedSignal) return;
-    triggerHaptic('warning');
-    const newCount = await markVictimResolvedOffline(
-      selectedSignal,
-      `Đã cứu ${selectedSignal.peopleCount} người lên ca-nô tuần tra an toàn`
-    );
-    setOfflineQueueCount(newCount);
-    setModalConfig({
-      visible: true,
-      type: 'success',
-      title: '✅ Đã ghi nhận cứu nạn an toàn!',
-      message: `Hồ sơ GP-#${selectedSignal.sosId} (${selectedSignal.peopleCount} người) đã được lưu vào bộ nhớ cục bộ ca-nô. Khi về trạm có sóng 4G, hệ thống sẽ tự động đồng bộ lên Bản đồ Chỉ huy.`,
-    });
-  };
-
-  // Đồng bộ hàng loạt lên Django Backend
-  const handleSyncToBackend = async () => {
-    setSyncing(true);
-    triggerHaptic('impact');
-    const result = await syncOfflineQueueToBackend(apiClient, 'CANO_TUAN_TRA_01');
-    setSyncing(false);
-
-    if (result.success) {
-      setOfflineQueueCount(0);
-      setModalConfig({
-        visible: true,
-        type: 'success',
-        title: '🎉 Đồng bộ thành công!',
-        message: `Đã đẩy thành công ${result.syncedCount} hồ sơ cứu nạn ngoại tuyến lên máy chủ trung tâm. Trạng thái trên Web Admin đã chuyển sang RESOLVED!`,
-      });
-    } else {
-      setModalConfig({
-        visible: true,
-        type: 'warning',
-        title: 'Chưa có kết nối mạng',
-        message: result.error || 'Thiết bị chưa bắt được sóng 4G/Wi-Fi. Toàn bộ hồ sơ vẫn được giữ an toàn trên máy.',
-      });
+    try {
+      await sendRemotePing(selectedSignal.sosId);
+      showModal(
+        'success',
+        '🚨 Đang phát lệnh PING',
+        `Lệnh PING tới phao GP-#${selectedSignal.sosId} đang được phát trong vài giây. Nếu máy nạn nhân còn trong tầm sóng, máy sẽ hú còi và chớp đèn flash.`
+      );
+    } catch (e) {
+      showModal('warning', 'Chưa phát được lệnh PING', e?.message || 'Không phát được tín hiệu.');
     }
   };
 
-  // Gửi tin nhắn bộ đàm 1-chạm
-  const handleSendRescuerChat = async (text) => {
-    const msg = await sendQuickChatMessage('RESCUER', text, selectedSignal?.sosId || 'ALL');
-    setChatMessages((prev) => [msg, ...prev.filter((m) => m.id !== msg.id)].slice(0, 30));
+  // Đánh dấu đã cứu nạn nhân (lưu cục bộ, đồng bộ khi có mạng)
+  const handleMarkResolved = async () => {
+    if (!selectedSignal) return;
+    const { sosId, peopleCount } = selectedSignal;
+    await markVictimResolvedOffline(selectedSignal, `Đã cứu ${peopleCount} người lên ca-nô tuần tra an toàn`);
+    setSelectedId(null);
+    showModal(
+      'success',
+      '✅ Đã ghi nhận cứu nạn an toàn!',
+      `Hồ sơ GP-#${sosId} (${peopleCount} người) đã được lưu trên máy. Khi có mạng, hệ thống sẽ tự đồng bộ lên Bản đồ Chỉ huy.`
+    );
+    syncOfflineQueueToBackend();
   };
+
+  // Đồng bộ lên máy chủ theo yêu cầu
+  const handleSyncToBackend = async () => {
+    setSyncing(true);
+    triggerHaptic('impact');
+    const result = await syncOfflineQueueToBackend();
+    setSyncing(false);
+
+    if (!result.success) {
+      showModal(
+        'warning',
+        result.offline ? 'Chưa có kết nối mạng' : 'Đồng bộ chưa thành công',
+        result.offline
+          ? 'Thiết bị chưa kết nối được máy chủ. Toàn bộ hồ sơ vẫn được giữ an toàn trên máy và sẽ tự đồng bộ sau.'
+          : result.error
+      );
+      return;
+    }
+    if (result.empty) {
+      showModal('info', 'Không có hồ sơ chờ', 'Mọi hồ sơ cứu nạn ngoại tuyến đã được đồng bộ.');
+      return;
+    }
+    const notes = [];
+    if (result.resolveIgnored) {
+      notes.push(`${result.resolveIgnored} hồ sơ chưa được chuyển sang "đã cứu" vì tài khoản này không có quyền cứu hộ.`);
+    }
+    if (result.rejectedCount) notes.push(`${result.rejectedCount} gói tin hỏng đã bị loại.`);
+    showModal(
+      'success',
+      '🎉 Đồng bộ thành công!',
+      [`Đã đẩy ${result.syncedCount} hồ sơ cứu nạn ngoại tuyến lên máy chủ trung tâm.`, ...notes].join(' ')
+    );
+  };
+
+  // Gửi tin nhắn soạn sẵn
+  const handleSendRescuerChat = async (code) => {
+    try {
+      await sendQuickChatMessage('RESCUER', code, selectedSignal?.sosId ?? null);
+    } catch (e) {
+      showModal('warning', 'Chưa gửi được tin nhắn', e?.message || 'Không phát được tín hiệu.');
+    }
+  };
+
+  const northRad = (-(heading ?? 0) * Math.PI) / 180;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -214,11 +301,13 @@ const RescuerOfflineScreen = ({ navigation }) => {
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
 
-        {/* ─── 1. Header trạng thái Sonar ─────────────────────────────────── */}
+        {/* ─── 1. Header trạng thái ───────────────────────────────────────── */}
         <View style={styles.headerBanner}>
           <View style={styles.headerLeft}>
-            <View style={styles.livePulseDot} />
-            <Text style={styles.bannerTitle}>SONAR TẦM SOÁT 360° (BLE GRID)</Text>
+            <View style={[styles.livePulseDot, !isScanning && { backgroundColor: '#64748B' }]} />
+            <Text style={styles.bannerTitle}>
+              {transport.isSimulated ? 'RADAR (MÔ PHỎNG QUA MẠNG)' : 'RADAR BLUETOOTH BLE'}
+            </Text>
           </View>
           <TouchableOpacity
             style={[styles.scanToggleBtn, !isScanning && styles.scanToggleBtnOff]}
@@ -235,22 +324,45 @@ const RescuerOfflineScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
 
-        {/* ─── 2. Giao diện Màn hình Radar Sonar Trực quan ────────────────── */}
+        {transport.isSimulated && (
+          <Text style={styles.simNotice}>
+            Bản chạy này không dùng được sóng Bluetooth thật (Expo Go, web hoặc iOS). Tín hiệu được giả lập
+            qua máy chủ nên cần có mạng và không có cường độ sóng RSSI; cự ly chỉ tính theo GPS.
+          </Text>
+        )}
+        {scanError && (
+          <Text style={styles.errorNotice}>⚠️ {scanError} Nhấn "TẠM DỪNG" để thử quét lại.</Text>
+        )}
+
+        {/* ─── 2. Radar ───────────────────────────────────────────────────── */}
         <View style={styles.radarContainer}>
           <View style={[styles.radarCircle, { width: RADAR_SIZE, height: RADAR_SIZE }]}>
-            {/* Vòng tròn cự ly 50m, 30m, 15m, 5m */}
             <View style={[styles.radarRing, { width: '85%', height: '85%' }]} />
-            <View style={[styles.radarRing, { width: '60%', height: '60%' }]} />
-            <View style={[styles.radarRing, { width: '35%', height: '35%' }]} />
+            <View style={[styles.radarRing, { width: '51%', height: '51%' }]} />
+            <View style={[styles.radarRing, { width: '25.5%', height: '25.5%' }]} />
             <View style={[styles.radarCrossH]} />
             <View style={[styles.radarCrossV]} />
 
-            {/* Nhãn cự ly */}
-            <Text style={[styles.radarDistLabel, { top: 6 }]}>50m</Text>
-            <Text style={[styles.radarDistLabel, { top: RADAR_SIZE * 0.18 }]}>30m</Text>
-            <Text style={[styles.radarDistLabel, { top: RADAR_SIZE * 0.31 }]}>15m</Text>
+            {/* Nhãn cự ly (tỉ lệ tuyến tính, vòng ngoài = 50m) */}
+            <Text style={[styles.radarDistLabel, { top: RADAR_SIZE * 0.075 + 2 }]}>50m</Text>
+            <Text style={[styles.radarDistLabel, { top: RADAR_SIZE * 0.245 + 2 }]}>30m</Text>
+            <Text style={[styles.radarDistLabel, { top: RADAR_SIZE * 0.3725 + 2 }]}>15m</Text>
 
-            {/* Kim quét Radar xoay 360 độ */}
+            {/* Mốc hướng Bắc, xoay theo la bàn */}
+            {heading != null && (
+              <Text
+                style={[
+                  styles.northMarker,
+                  {
+                    left: RADAR_SIZE / 2 + Math.sin(northRad) * RADAR_SIZE * 0.46 - 7,
+                    top: RADAR_SIZE / 2 - Math.cos(northRad) * RADAR_SIZE * 0.46 - 8,
+                  },
+                ]}
+              >
+                B
+              </Text>
+            )}
+
             {isScanning && (
               <Animated.View
                 style={[
@@ -265,29 +377,22 @@ const RescuerOfflineScreen = ({ navigation }) => {
               />
             )}
 
-            {/* Ca-nô ở trung tâm */}
             <View style={styles.radarCenterBoat}>
               <MaterialCommunityIcons name="ferry" size={16} color="#38BDF8" />
             </View>
 
-            {/* Các điểm phao cứu sinh phát hiện được trên Radar */}
             {discoveredSignals.map((sig) => {
-              const radiusPct = Math.min(Math.max(sig.distanceM / 50.0, 0.18), 0.44);
-              const angleRad = ((sig.radarAngle || 45) * Math.PI) / 180;
-              const xPos = (RADAR_SIZE / 2) + Math.cos(angleRad) * (RADAR_SIZE * radiusPct) - 10;
-              const yPos = (RADAR_SIZE / 2) + Math.sin(angleRad) * (RADAR_SIZE * radiusPct) - 10;
-
               const isTargetSelected = selectedSignal?.sosId === sig.sosId;
-
               return (
                 <TouchableOpacity
                   key={sig.id}
                   style={[
                     styles.radarTargetDot,
-                    { left: xPos, top: yPos },
+                    radarPosition(sig, heading),
                     isTargetSelected && styles.radarTargetDotSelected,
+                    sig.isStale && { opacity: 0.45 },
                   ]}
-                  onPress={() => setSelectedSignal(sig)}
+                  onPress={() => setSelectedId(sig.sosId)}
                 >
                   <Animated.View
                     style={[
@@ -295,39 +400,55 @@ const RescuerOfflineScreen = ({ navigation }) => {
                       isTargetSelected && { transform: [{ scale: targetPulseAnim }] },
                     ]}
                   />
-                  <Text style={styles.targetDotEmoji}>📍</Text>
+                  <Text style={styles.targetDotEmoji}>{sig.bearing == null ? '❔' : '📍'}</Text>
                 </TouchableOpacity>
               );
             })}
           </View>
+          <Text style={styles.radarHint}>
+            {heading != null && hasPosition
+              ? 'Phía trên radar là hướng điện thoại đang chĩa tới.'
+              : 'Chưa có GPS / la bàn: radar chỉ thể hiện cự ly, chưa thể hiện hướng.'}
+          </Text>
         </View>
 
-        {/* ─── 3. Thẻ Thông tin Chi tiết Mục tiêu Gần nhất ────────────────── */}
+        {/* ─── 3. Thông tin mục tiêu đang chọn ────────────────────────────── */}
         {selectedSignal ? (
           <View style={styles.targetCard}>
             <View style={styles.targetHeader}>
               <View style={styles.targetBadge}>
-                <Text style={styles.targetBadgeText}>MỤC TIÊU PHÁT HIỆN: GP-#{selectedSignal.sosId}</Text>
+                <Text style={styles.targetBadgeText}>PHAO GP-#{selectedSignal.sosId}</Text>
               </View>
               <View style={styles.rssiBadge}>
                 <MaterialCommunityIcons name="signal" size={12} color="#22C55E" />
-                <Text style={styles.rssiText}>{selectedSignal.smoothedRSSI} dBm</Text>
+                <Text style={styles.rssiText}>
+                  {selectedSignal.smoothedRSSI != null ? `${selectedSignal.smoothedRSSI} dBm` : 'Không có RSSI'}
+                </Text>
               </View>
             </View>
 
-            {/* Hiển thị cự ly to nổi bật */}
             <View style={styles.distMeterRow}>
-              <View>
-                <Text style={styles.distSubLabel}>KHOẢNG CÁCH ƯỚC TÍNH (RSSI):</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.distSubLabel}>
+                  {selectedSignal.distanceSource === 'GPS'
+                    ? 'KHOẢNG CÁCH (THEO GPS):'
+                    : selectedSignal.distanceSource === 'RSSI'
+                    ? 'KHOẢNG CÁCH ƯỚC TÍNH (THEO SÓNG):'
+                    : 'CHƯA ƯỚC TÍNH ĐƯỢC KHOẢNG CÁCH'}
+                </Text>
                 <View style={styles.distValueRow}>
-                  <Text style={styles.distBigValue}>{selectedSignal.distanceM}</Text>
+                  <Text style={styles.distBigValue}>{selectedSignal.distanceM ?? '—'}</Text>
                   <Text style={styles.distUnit}>MÉT</Text>
                 </View>
               </View>
 
               <View style={styles.proximityStatus}>
                 <Text style={styles.proximityStatusText}>
-                  {selectedSignal.distanceM <= 5
+                  {selectedSignal.isStale
+                    ? '⚠️ MẤT SÓNG'
+                    : selectedSignal.distanceM == null
+                    ? '📡 ĐANG BẮT SÓNG'
+                    : selectedSignal.distanceM <= 5
                     ? '🎯 ĐÃ ÁP SÁT'
                     : selectedSignal.distanceM <= 15
                     ? '⚡ RẤT GẦN'
@@ -336,27 +457,35 @@ const RescuerOfflineScreen = ({ navigation }) => {
               </View>
             </View>
 
-            {/* Chi tiết nhân khẩu */}
+            <Text style={styles.gpsCoordText}>
+              {selectedSignal.bearing != null
+                ? `🧭 Hướng ${compassLabel(selectedSignal.bearing)} (${selectedSignal.bearing}°)`
+                : '🧭 Chưa xác định được hướng'}
+              {selectedSignal.gpsDistanceM != null ? ` • GPS ${selectedSignal.gpsDistanceM}m` : ''}
+              {selectedSignal.rssiDistanceM != null ? ` • Sóng ≈${selectedSignal.rssiDistanceM}m` : ''}
+            </Text>
+
             <View style={styles.demoBox}>
               <Text style={styles.demoTitle}>
                 👨‍👩‍👦 Nhân khẩu: <Text style={{ fontWeight: 'bold', color: '#FFF' }}>{selectedSignal.peopleCount} người</Text>
+                {'  '}• Phao bật {selectedSignal.minutesActive} phút
               </Text>
               <View style={styles.demoTags}>
                 {selectedSignal.hasElderly && <Text style={styles.demoTag}>🧓 Có người già</Text>}
                 {selectedSignal.hasChildren && <Text style={styles.demoTag}>👶 Có trẻ nhỏ</Text>}
                 {selectedSignal.hasInjury && <Text style={styles.demoTag}>🩹 Có thương tích</Text>}
                 <Text style={[styles.demoTag, { color: '#EF4444', borderColor: '#EF4444' }]}>
-                  🚨 Mức độ: {selectedSignal.severity === 3 ? 'Nguy kịch' : 'Ngập sâu'}
+                  🚨 Mức độ: {SEVERITY_LABELS[selectedSignal.severity] || 'Không rõ'}
                 </Text>
               </View>
             </View>
 
-            {/* Tọa độ GPS */}
             <Text style={styles.gpsCoordText}>
-              📍 GPS Vệ tinh: {selectedSignal.lat.toFixed(6)}°N, {selectedSignal.lng.toFixed(6)}°E
+              {selectedSignal.hasLocation
+                ? `📍 GPS nạn nhân: ${selectedSignal.lat.toFixed(6)}°, ${selectedSignal.lng.toFixed(6)}°`
+                : '📍 Máy nạn nhân chưa có GPS: hãy dò theo cường độ sóng và dùng PING.'}
             </Text>
 
-            {/* Nút hành động tác chiến */}
             <View style={styles.actionRow}>
               <TouchableOpacity
                 style={styles.pingActionBtn}
@@ -380,18 +509,23 @@ const RescuerOfflineScreen = ({ navigation }) => {
         ) : (
           <View style={styles.noTargetCard}>
             <MaterialCommunityIcons name="radar" size={32} color="#64748B" />
-            <Text style={styles.noTargetText}>Đang quét sóng vô tuyến cự ly 70m xung quanh...</Text>
+            <Text style={styles.noTargetText}>
+              {isScanning
+                ? 'Đang quét phao cứu sinh xung quanh... Chưa phát hiện tín hiệu nào.'
+                : 'Đã tạm dừng quét.'}
+            </Text>
           </View>
         )}
 
-        {/* ─── 4. Cơ chế Bồ Câu Đưa Thư (Store-and-Forward Sync) ─────────── */}
+        {/* ─── 4. Bồ câu đưa thư (Store-and-Forward) ──────────────────────── */}
         <View style={styles.mulingCard}>
           <View style={styles.mulingHeader}>
             <MaterialCommunityIcons name="database-sync" size={20} color="#1D4ED8" />
             <View style={{ flex: 1 }}>
               <Text style={styles.mulingTitle}>BỒ CÂU ĐƯA THƯ SỐ (STORE-AND-FORWARD)</Text>
               <Text style={styles.mulingDesc}>
-                Ca-nô lưu trữ tạm hồ sơ nạn nhân đã cứu. Khi ra vùng có sóng 4G/Wi-Fi, hệ thống tự động đồng bộ hàng loạt lên máy chủ trung tâm.
+                Mọi tín hiệu SOS nghe được và hồ sơ đã cứu đều lưu trên máy. Khi có mạng, hệ thống tự đồng bộ
+                mỗi phút; bạn cũng có thể đồng bộ ngay bằng nút dưới đây.
               </Text>
             </View>
           </View>
@@ -415,29 +549,30 @@ const RescuerOfflineScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
 
-        {/* ─── 5. Bộ Đàm BLE 1-Chạm (Quick Chat với Người Dân) ───────────── */}
+        {/* ─── 5. Tin nhắn soạn sẵn với người dân ─────────────────────────── */}
         <View style={styles.chatCard}>
           <View style={styles.chatHeader}>
             <MaterialCommunityIcons name="radio-handheld" size={20} color="#1D4ED8" />
-            <Text style={styles.chatTitle}>BỘ ĐÀM NGOẠI TUYẾN 1-CHẠM (RESCUER CHAT)</Text>
+            <Text style={styles.chatTitle}>
+              TIN NHẮN NHANH {selectedSignal ? `TỚI GP-#${selectedSignal.sosId}` : 'TỚI MỌI PHAO Ở GẦN'}
+            </Text>
           </View>
 
           <View style={styles.presetGrid}>
-            {RESCUER_PRESET_MESSAGES.map((msg, idx) => (
+            {RESCUER_MESSAGES.map((m) => (
               <TouchableOpacity
-                key={idx}
+                key={m.code}
                 style={styles.presetChip}
-                onPress={() => handleSendRescuerChat(msg)}
+                onPress={() => handleSendRescuerChat(m.code)}
               >
-                <Text style={styles.presetChipText}>+ {msg}</Text>
+                <Text style={styles.presetChipText}>+ {m.text}</Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          {/* Lịch sử tin nhắn */}
           {chatMessages.length > 0 && (
             <View style={styles.chatHistory}>
-              <Text style={styles.chatHistoryLabel}>TIN NHẮN ĐÃ TRAO ĐỔI TẦM GẦN:</Text>
+              <Text style={styles.chatHistoryLabel}>TIN NHẮN GẦN ĐÂY:</Text>
               {chatMessages.slice(0, 4).map((m) => (
                 <View
                   key={m.id}
@@ -447,7 +582,9 @@ const RescuerOfflineScreen = ({ navigation }) => {
                   ]}
                 >
                   <Text style={styles.chatRole}>
-                    {m.senderRole === 'RESCUER' ? '🛡️ Tôi (Ca-nô):' : '👤 Người dân:'}
+                    {m.senderRole === 'RESCUER'
+                      ? '🛡️ Tôi (Ca-nô):'
+                      : `👤 Người dân${m.sosId ? ` GP-#${m.sosId}` : ''}:`}
                   </Text>
                   <Text style={styles.chatText}>{m.text}</Text>
                   <Text style={styles.chatTime}>{m.sentAt}</Text>
@@ -475,6 +612,36 @@ const RescuerOfflineScreen = ({ navigation }) => {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#0B1120' },
+  simNotice: {
+    fontSize: 11,
+    lineHeight: 16,
+    color: '#FCD34D',
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    borderRadius: 8,
+    padding: 10,
+  },
+  errorNotice: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: '#FCA5A5',
+    backgroundColor: 'rgba(239, 68, 68, 0.14)',
+    borderRadius: 8,
+    padding: 10,
+  },
+  northMarker: {
+    position: 'absolute',
+    width: 14,
+    textAlign: 'center',
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#F87171',
+  },
+  radarHint: {
+    marginTop: 8,
+    fontSize: 11,
+    color: '#94A3B8',
+    textAlign: 'center',
+  },
   content: {
     padding: RLAYOUT.screenPadding,
     paddingBottom: 40,

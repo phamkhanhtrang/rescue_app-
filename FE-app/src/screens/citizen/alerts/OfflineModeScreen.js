@@ -1,73 +1,87 @@
 /**
  * src/screens/citizen/alerts/OfflineModeScreen.js
  * ─────────────────────────────────────────────────────────────────────────────
- * Phao Cứu Sinh Ngoại Tuyến Bluetooth (BLE Digital Beacon - 0xGP Protocol).
+ * Phao Cứu Sinh Ngoại Tuyến Bluetooth (giao thức 0xGP v2).
  *
  * Chức năng:
- * 1. Hoạt động độc lập 100% khi mất mạng 4G/Wi-Fi và mất điện lưới.
- * 2. Lấy tọa độ GPS vệ tinh trực tiếp (0đ cước phí, không cần SIM).
- * 3. Thiết lập nhân khẩu (Số người, Trẻ nhỏ, Người già, Chấn thương).
- * 4. Nén gói tin nhị phân 16-Bytes và phát xung BLE Advertising (mỗi 800ms).
- * 5. Nhận lệnh PING từ ca-nô cứu hộ cự ly gần: Chớp đèn Flash SOS và Hú còi 100% âm lượng.
- * 6. Bộ đàm tin nhắn nhanh 1-chạm (BLE Quick Chat).
+ * 1. Lấy toạ độ GPS của máy (không cần mạng) và cập nhật liên tục vào gói SOS.
+ * 2. Thiết lập nhân khẩu (số người, trẻ nhỏ, người già, chấn thương) và mức độ.
+ * 3. Phát gói SOS 20 bytes bằng BLE Advertising cho ca-nô cứu hộ ở gần.
+ * 4. Nghe lệnh PING của cứu hộ: hú còi và chớp đèn flash để chỉ vị trí.
+ * 5. Gửi / nhận tin nhắn soạn sẵn với cứu hộ ở tầm gần.
+ *
+ * Khi chạy trong Expo Go, web hoặc iOS, sóng BLE được giả lập qua máy chủ
+ * (xem services/bleTransport.js) và giao diện ghi rõ "MÔ PHỎNG".
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, SafeAreaView, Animated, Alert, Platform,
+  TouchableOpacity, SafeAreaView, Animated, Platform,
 } from 'react-native';
 import * as Location from 'expo-location';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import SentinelHeader from '../../../components/citizen/common/SentinelHeader';
 import CustomModal from '../../../components/common/CustomModal';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS, LAYOUT } from '../../../constants/citizen/theme';
+import { CITIZEN_MESSAGES } from '../../../services/bleProtocol';
 import {
   startCitizenBeacon,
   stopCitizenBeacon,
-  getCitizenBeaconState,
+  restoreCitizenBeacon,
+  updateCitizenLocation,
+  getTransportInfo,
   subscribeToPulse,
   subscribeToPing,
   sendQuickChatMessage,
   getQuickChatHistory,
   subscribeToChatMessage,
-  playAlarmSiren,
+  stopAlarmSiren,
   triggerHaptic,
 } from '../../../services/bleGridService';
 
-const PRESET_MESSAGES = [
-  'Đang ở gác lửng sau nhà',
-  'Cửa cuốn kẹt không mở được',
-  'Có trẻ nhỏ bị sốt cao',
-  'Đã hết sạch nước uống',
-  'Gia đình an toàn, đang chờ ca-nô',
-];
+const PING_ALARM_MS = 15000;
+
+const formatElapsed = (totalSec) => {
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+};
 
 const OfflineModeScreen = ({ navigation }) => {
-  // Trạng thái GPS
-  const [gps, setGps] = useState({ lat: 16.0544, lng: 108.2022, ready: false });
+  const transport = getTransportInfo();
+
+  // Trạng thái GPS (lat/lng = 0 nghĩa là chưa có toạ độ)
+  const [gps, setGps] = useState({ lat: 0, lng: 0, accuracy: null, ready: false, denied: false });
 
   // Cấu hình phao cứu sinh
-  const [peopleCount, setPeopleCount] = useState(3);
-  const [hasElderly, setHasElderly] = useState(true);
+  const [peopleCount, setPeopleCount] = useState(1);
+  const [hasElderly, setHasElderly] = useState(false);
   const [hasChildren, setHasChildren] = useState(false);
   const [hasInjury, setHasInjury] = useState(false);
   const [severity, setSeverity] = useState(2); // 1: Cần hỗ trợ, 2: Ngập sâu/Hết lương thực, 3: Nguy kịch
 
   // Trạng thái phát sóng
   const [isBroadcasting, setIsBroadcasting] = useState(false);
-  const [pulseCount, setPulseCount] = useState(0);
+  const [starting, setStarting] = useState(false);
+  const [beaconId, setBeaconId] = useState(null);
+  const [elapsedSec, setElapsedSec] = useState(0);
   const [packetHex, setPacketHex] = useState('');
   const [pingAlert, setPingAlert] = useState(null);
 
-  // Bộ đàm tin nhắn
+  // Đèn flash chớp khi nhận PING
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [strobeOn, setStrobeOn] = useState(false);
+  const canStrobe = Platform.OS !== 'web' && !!cameraPermission?.granted;
+
+  // Tin nhắn soạn sẵn
   const [chatMessages, setChatMessages] = useState([]);
 
-  // Animation nhịp thở & vòng quét phát sóng
+  // Animation nhịp thở
   const pulseAnim = useRef(new Animated.Value(1)).current;
-  const radarWave = useRef(new Animated.Value(0)).current;
 
   // Modal thông báo
   const [modalConfig, setModalConfig] = useState({
@@ -76,86 +90,89 @@ const OfflineModeScreen = ({ navigation }) => {
     title: '',
     message: '',
   });
+  const showModal = (type, title, message) => setModalConfig({ visible: true, type, title, message });
 
-  // 1. Lấy vị trí GPS vệ tinh khi mở màn hình
+  // 1. Theo dõi vị trí GPS và cập nhật vào gói SOS đang phát
   useEffect(() => {
+    let subscription = null;
+    let cancelled = false;
     (async () => {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === 'granted') {
-          const loc = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.Balanced,
-          });
-          setGps({
-            lat: Math.round(loc.coords.latitude * 1000000) / 1000000,
-            lng: Math.round(loc.coords.longitude * 1000000) / 1000000,
-            ready: true,
-          });
-        } else {
-          setGps({ lat: 16.0544, lng: 108.2022, ready: true });
+        if (status !== 'granted') {
+          setGps((g) => ({ ...g, denied: true }));
+          return;
         }
+        subscription = await Location.watchPositionAsync(
+          { accuracy: Location.Accuracy.High, timeInterval: 15000, distanceInterval: 10 },
+          (loc) => {
+            const lat = Math.round(loc.coords.latitude * 1000000) / 1000000;
+            const lng = Math.round(loc.coords.longitude * 1000000) / 1000000;
+            setGps({ lat, lng, accuracy: loc.coords.accuracy ?? null, ready: true, denied: false });
+            updateCitizenLocation(lat, lng);
+          }
+        );
+        if (cancelled) subscription.remove();
       } catch (e) {
-        setGps({ lat: 16.0544, lng: 108.2022, ready: true });
+        setGps((g) => ({ ...g, denied: true }));
       }
     })();
+    return () => {
+      cancelled = true;
+      if (subscription) subscription.remove();
+    };
   }, []);
 
-  // 2. Khôi phục trạng thái phát sóng nếu đã bật trước đó
+  // 2. Khôi phục phao đang bật (kể cả sau khi app bị đóng) và lịch sử tin nhắn
   useEffect(() => {
     (async () => {
-      const state = await getCitizenBeaconState();
-      if (state.isActive && state.data) {
+      const state = await restoreCitizenBeacon();
+      if (state.isActive) {
         setIsBroadcasting(true);
-        setPacketHex(state.data.packetHex || '');
-        setPulseCount(state.pulseCount || 0);
+        setBeaconId(state.sosId);
+        setPacketHex(state.packetHex || '');
+        setElapsedSec(state.elapsedSec || 0);
+        if (state.config) {
+          setPeopleCount(state.config.peopleCount);
+          setHasElderly(state.config.hasElderly);
+          setHasChildren(state.config.hasChildren);
+          setHasInjury(state.config.hasInjury);
+          setSeverity(state.config.severity);
+        }
       }
-      const chat = await getQuickChatHistory();
-      setChatMessages(chat);
+      setChatMessages(await getQuickChatHistory());
     })();
   }, []);
 
-  // 3. Quản lý Animation khi đang phát sóng
+  // 3. Animation khi đang phát sóng
   useEffect(() => {
-    let loopAnim = null;
-    let waveAnim = null;
-
-    if (isBroadcasting) {
-      loopAnim = Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, { toValue: 1.12, duration: 600, useNativeDriver: true }),
-          Animated.timing(pulseAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
-        ])
-      );
-      loopAnim.start();
-
-      waveAnim = Animated.loop(
-        Animated.timing(radarWave, { toValue: 1, duration: 1600, useNativeDriver: true })
-      );
-      waveAnim.start();
-    } else {
+    if (!isBroadcasting) {
       pulseAnim.setValue(1);
-      radarWave.setValue(0);
+      return undefined;
     }
-
-    return () => {
-      if (loopAnim) loopAnim.stop();
-      if (waveAnim) waveAnim.stop();
-    };
+    const loopAnim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1.12, duration: 600, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
+      ])
+    );
+    loopAnim.start();
+    return () => loopAnim.stop();
   }, [isBroadcasting]);
 
-  // 4. Lắng nghe nhịp xung phát & lệnh PING từ cứu hộ
+  // 4. Lắng nghe nhịp phát, lệnh PING và tin nhắn từ cứu hộ
   useEffect(() => {
     const unsubPulse = subscribeToPulse((info) => {
-      setPulseCount(info.pulseNumber);
+      setElapsedSec(info.elapsedSec);
       setPacketHex(info.hex);
     });
 
     const unsubPing = subscribeToPing((pingData) => {
       setPingAlert({
         receivedAt: new Date().toLocaleTimeString('vi-VN'),
-        targetId: pingData.targetId,
+        rescuerDistanceM: pingData.rescuerDistanceM,
+        key: pingData.timestamp,
       });
-      triggerHaptic('alarm');
     });
 
     const unsubChat = subscribeToChatMessage((msg) => {
@@ -169,22 +186,53 @@ const OfflineModeScreen = ({ navigation }) => {
     };
   }, []);
 
+  // 5. Chớp đèn flash trong lúc báo động PING
+  useEffect(() => {
+    if (!pingAlert) {
+      setStrobeOn(false);
+      return undefined;
+    }
+    const blink = setInterval(() => setStrobeOn((on) => !on), 350);
+    const stop = setTimeout(() => {
+      clearInterval(blink);
+      setStrobeOn(false);
+    }, PING_ALARM_MS);
+    return () => {
+      clearInterval(blink);
+      clearTimeout(stop);
+    };
+  }, [pingAlert?.key]);
+
   // Bật/tắt phát phao cứu sinh
   const toggleBroadcast = async () => {
+    if (starting) return;
     if (!isBroadcasting) {
       triggerHaptic('impact');
-      const beacon = await startCitizenBeacon({
-        peopleCount,
-        hasElderly,
-        hasChildren,
-        hasInjury,
-        severity,
-        lat: gps.lat,
-        lng: gps.lng,
-      });
-      setIsBroadcasting(true);
-      setPacketHex(beacon.packetHex);
-      setPingAlert(null);
+      setStarting(true);
+      try {
+        // Xin quyền camera để có thể chớp đèn flash khi cứu hộ PING (từ chối vẫn phát phao được).
+        if (Platform.OS !== 'web' && !cameraPermission?.granted) {
+          await requestCameraPermission().catch(() => {});
+        }
+        const beacon = await startCitizenBeacon({
+          peopleCount,
+          hasElderly,
+          hasChildren,
+          hasInjury,
+          severity,
+          lat: gps.lat,
+          lng: gps.lng,
+        });
+        setIsBroadcasting(true);
+        setBeaconId(beacon.sosId);
+        setPacketHex(beacon.packetHex);
+        setElapsedSec(0);
+        setPingAlert(null);
+      } catch (e) {
+        showModal('warning', 'Chưa phát được phao cứu sinh', e?.message || 'Không phát được tín hiệu.');
+      } finally {
+        setStarting(false);
+      }
     } else {
       triggerHaptic('warning');
       await stopCitizenBeacon();
@@ -193,21 +241,26 @@ const OfflineModeScreen = ({ navigation }) => {
     }
   };
 
-  // Thử nghiệm còi hú và chớp đèn ngay trên máy
-  const handleTestPing = async () => {
-    triggerHaptic('alarm');
-    setPingAlert({
-      receivedAt: new Date().toLocaleTimeString('vi-VN'),
-      targetId: 'TEST_MANUAL',
-    });
-    await playAlarmSiren(5000);
+  const dismissPingAlert = () => {
+    stopAlarmSiren();
+    setPingAlert(null);
   };
 
-  // Gửi tin nhắn nhanh bộ đàm
-  const handleSendQuickChat = async (text) => {
-    const msg = await sendQuickChatMessage('CITIZEN', text);
-    setChatMessages((prev) => [msg, ...prev.filter((m) => m.id !== msg.id)].slice(0, 30));
+  // Gửi tin nhắn soạn sẵn
+  const handleSendQuickChat = async (code) => {
+    try {
+      await sendQuickChatMessage('CITIZEN', code);
+    } catch (e) {
+      showModal('warning', 'Chưa gửi được tin nhắn', e?.message || 'Không phát được tín hiệu.');
+    }
   };
+
+  const gpsText = gps.ready
+    ? `${gps.lat.toFixed(4)}°, ${gps.lng.toFixed(4)}°`
+    : gps.denied ? 'Chưa có quyền vị trí' : 'Đang dò vệ tinh…';
+  const gpsSub = gps.ready
+    ? (gps.accuracy ? `Sai số ±${Math.round(gps.accuracy)}m` : 'Đã có toạ độ')
+    : 'Cứu hộ vẫn dò được theo sóng';
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: isBroadcasting ? '#090D16' : COLORS.bgDark }]}>
@@ -218,6 +271,11 @@ const OfflineModeScreen = ({ navigation }) => {
         title={isBroadcasting ? 'PHAO CỨU SINH BLE (ĐANG PHÁT)' : 'CỨU NẠN NGOẠI TUYẾN BLE'}
       />
 
+      {/* Camera ẩn chỉ để điều khiển đèn flash khi nhận PING */}
+      {pingAlert && canStrobe && (
+        <CameraView style={styles.hiddenCamera} facing="back" enableTorch={strobeOn} />
+      )}
+
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
 
         {/* ─── 1. Báo động khi nhận lệnh Ping từ Ca-nô cứu hộ ────────────── */}
@@ -226,41 +284,51 @@ const OfflineModeScreen = ({ navigation }) => {
             <View style={styles.pingAlertHeader}>
               <MaterialCommunityIcons name="bullhorn" size={26} color="#FFF" />
               <View style={{ flex: 1 }}>
-                <Text style={styles.pingAlertTitle}>PHÁT HIỆN CA-NÔ CỨU HỘ Ở CỰ LY GẦN!</Text>
+                <Text style={styles.pingAlertTitle}>CỨU HỘ ĐANG Ở GẦN BẠN!</Text>
                 <Text style={styles.pingAlertSub}>
-                  Đội cứu hộ vừa gửi lệnh Ping lúc {pingAlert.receivedAt}. Điện thoại đang chớp đèn Flash SOS và hú còi âm lượng lớn để chỉ vị trí!
+                  Đội cứu hộ vừa gửi lệnh Ping lúc {pingAlert.receivedAt}
+                  {pingAlert.rescuerDistanceM != null ? `, cách bạn khoảng ${pingAlert.rescuerDistanceM}m theo GPS` : ''}.
+                  {' '}Điện thoại đang hú còi{canStrobe ? ' và chớp đèn flash' : ''} để chỉ vị trí.
                 </Text>
               </View>
             </View>
-            <TouchableOpacity style={styles.pingDismissBtn} onPress={() => setPingAlert(null)}>
+            <TouchableOpacity style={styles.pingDismissBtn} onPress={dismissPingAlert}>
               <Text style={styles.pingDismissText}>ĐÃ NHẬN BIẾT / TẮT BÁO ĐỘNG</Text>
             </TouchableOpacity>
           </View>
         )}
 
-        {/* ─── 2. Trạng thái Sóng vô tuyến & GPS Vệ tinh ──────────────────── */}
+        {/* ─── 2. Trạng thái GPS & kênh truyền ────────────────────────────── */}
         <View style={styles.sensorCard}>
           <View style={styles.sensorRow}>
             <View style={styles.sensorItem}>
               <MaterialCommunityIcons name="satellite-variant" size={20} color="#38BDF8" />
-              <View>
-                <Text style={styles.sensorLabel}>GPS VỆ TINH ĐỘC LẬP</Text>
-                <Text style={styles.sensorValue}>
-                  {gps.lat.toFixed(4)}°N, {gps.lng.toFixed(4)}°E
-                </Text>
-                <Text style={styles.sensorSub}>Sai số ±3m • 0đ data</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sensorLabel}>GPS CỦA MÁY</Text>
+                <Text style={styles.sensorValue}>{gpsText}</Text>
+                <Text style={styles.sensorSub}>{gpsSub}</Text>
               </View>
             </View>
 
             <View style={styles.sensorItem}>
-              <MaterialCommunityIcons name="bluetooth" size={20} color="#34D399" />
-              <View>
-                <Text style={styles.sensorLabel}>BĂNG TẦN BLE 2.4GHz</Text>
-                <Text style={styles.sensorValue}>0xGP (16 Bytes)</Text>
-                <Text style={styles.sensorSub}>Phát mỗi 800ms • ~12mA</Text>
+              <MaterialCommunityIcons
+                name={transport.isSimulated ? 'lan-connect' : 'bluetooth'}
+                size={20}
+                color={transport.isSimulated ? '#F59E0B' : '#34D399'}
+              />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sensorLabel}>KÊNH TRUYỀN</Text>
+                <Text style={styles.sensorValue}>{transport.isSimulated ? 'MÔ PHỎNG QUA MẠNG' : 'BLUETOOTH BLE'}</Text>
+                <Text style={styles.sensorSub}>Gói 0xGP 20 bytes</Text>
               </View>
             </View>
           </View>
+          {transport.isSimulated && (
+            <Text style={styles.simNotice}>
+              Bản chạy này không dùng được sóng Bluetooth thật (Expo Go, web hoặc iOS). Tín hiệu đang
+              được giả lập qua máy chủ nên cần có mạng. Cài bản build Android để phát BLE thật.
+            </Text>
+          )}
         </View>
 
         {/* ─── 3. Cấu hình nhân khẩu học & mức độ nguy cấp ───────────────── */}
@@ -281,7 +349,7 @@ const OfflineModeScreen = ({ navigation }) => {
                 <Text style={styles.counterValue}>{peopleCount} người</Text>
                 <TouchableOpacity
                   style={styles.counterBtn}
-                  onPress={() => setPeopleCount((p) => Math.min(20, p + 1))}
+                  onPress={() => setPeopleCount((p) => Math.min(31, p + 1))}
                 >
                   <Text style={styles.counterBtnText}>+</Text>
                 </TouchableOpacity>
@@ -346,24 +414,26 @@ const OfflineModeScreen = ({ navigation }) => {
             </View>
           </View>
         ) : (
-          /* Màn hình hiển thị khi đang phát sóng (Siêu tiết kiệm pin) */
+          /* Màn hình hiển thị khi đang phát sóng */
           <View style={styles.activeBeaconCard}>
             <View style={styles.activeBeaconHeader}>
               <Animated.View style={[styles.activeBeaconDot, { transform: [{ scale: pulseAnim }] }]} />
-              <Text style={styles.activeBeaconTitle}>PHAO CỨU SINH ĐANG PHÁT XUNG</Text>
+              <Text style={styles.activeBeaconTitle}>PHAO CỨU SINH ĐANG PHÁT</Text>
             </View>
 
             <Text style={styles.activeBeaconSub}>
-              Điện thoại đang quảng bá tín hiệu nhị phân 16-Bytes đến ca-nô và lực lượng cứu hộ trong bán kính 30m – 70m.
+              {transport.isSimulated
+                ? 'Tín hiệu SOS đang được giả lập qua máy chủ cho các máy cứu hộ cùng chạy chế độ mô phỏng.'
+                : 'Điện thoại đang phát tín hiệu SOS cho ca-nô cứu hộ trong tầm khoảng 10–30m (xa hơn nếu thoáng). Hãy giữ ứng dụng mở trên màn hình để phao tiếp tục phát.'}
             </Text>
 
             {/* Thông số gói tin */}
             <View style={styles.packetHexBox}>
-              <Text style={styles.packetHexLabel}>GÓI TIN NHỊ PHÂN (16 BYTES 0xGP):</Text>
-              <Text style={styles.packetHexValue}>{packetHex || '4750... CHỜ PHÁT'}</Text>
+              <Text style={styles.packetHexLabel}>GÓI TIN ĐANG PHÁT (20 BYTES 0xGP):</Text>
+              <Text style={styles.packetHexValue}>{packetHex || '4750...'}</Text>
               <View style={styles.packetStatRow}>
-                <Text style={styles.packetStat}>Nhịp xung: #{pulseCount}</Text>
-                <Text style={styles.packetStat}>Chu kỳ: 800ms</Text>
+                <Text style={styles.packetStat}>Mã phao: GP-#{beaconId}</Text>
+                <Text style={styles.packetStat}>Đã phát: {formatElapsed(elapsedSec)}</Text>
                 <Text style={styles.packetStat}>Số người: {peopleCount}</Text>
               </View>
             </View>
@@ -375,8 +445,10 @@ const OfflineModeScreen = ({ navigation }) => {
           style={[
             styles.mainActionButton,
             isBroadcasting ? styles.stopButton : styles.startButton,
+            starting && { opacity: 0.6 },
           ]}
           onPress={toggleBroadcast}
+          disabled={starting}
           activeOpacity={0.88}
         >
           <Animated.View style={{ transform: [{ scale: isBroadcasting ? pulseAnim : 1 }] }}>
@@ -386,45 +458,47 @@ const OfflineModeScreen = ({ navigation }) => {
               color="#FFF"
             />
           </Animated.View>
-          <View style={{ marginLeft: 12 }}>
+          <View style={{ marginLeft: 12, flex: 1 }}>
             <Text style={styles.mainActionTitle}>
-              {isBroadcasting ? 'DỪNG PHÁT PHAO CỨU SINH' : 'KÍCH HOẠT PHAO CỨU SINH BLE'}
+              {isBroadcasting ? 'DỪNG PHÁT PHAO CỨU SINH' : starting ? 'ĐANG KHỞI ĐỘNG...' : 'KÍCH HOẠT PHAO CỨU SINH BLE'}
             </Text>
             <Text style={styles.mainActionSub}>
               {isBroadcasting
-                ? 'Nhấn để tạm dừng phát xung khi đã được cứu'
-                : 'Phát sóng cự ly 30m - 70m không cần mạng Internet'}
+                ? 'Nhấn để dừng phát khi đã được cứu'
+                : transport.isSimulated
+                ? 'Chế độ mô phỏng: cần kết nối tới máy chủ'
+                : 'Phát sóng Bluetooth tầm gần, không cần Internet'}
             </Text>
           </View>
         </TouchableOpacity>
 
-        {/* ─── 5. Bộ đàm Tin nhắn Nhanh BLE (Quick Chat) ──────────────────── */}
+        {/* ─── 5. Tin nhắn soạn sẵn với cứu hộ ────────────────────────────── */}
         <View style={styles.chatCard}>
           <View style={styles.chatHeader}>
             <MaterialCommunityIcons name="message-flash" size={20} color="#38BDF8" />
-            <Text style={styles.chatTitle}>BỘ ĐÀM TIN NHẮN NHANH BLE 1-CHẠM</Text>
+            <Text style={styles.chatTitle}>TIN NHẮN NHANH 1-CHẠM</Text>
           </View>
           <Text style={styles.chatSubtitle}>
-            Gửi nhanh vị trí cụ thể trong nhà cho ca-nô cứu hộ ở cự ly gần không cần 4G:
+            {isBroadcasting
+              ? 'Chạm để phát tin nhắn cho ca-nô cứu hộ ở gần (mỗi tin phát trong vài giây):'
+              : 'Kích hoạt phao cứu sinh trước, sau đó chạm để gửi tin cho ca-nô cứu hộ ở gần:'}
           </Text>
 
-          {/* Danh sách nút nhắn 1-chạm */}
           <View style={styles.presetGrid}>
-            {PRESET_MESSAGES.map((msg, idx) => (
+            {CITIZEN_MESSAGES.map((m) => (
               <TouchableOpacity
-                key={idx}
-                style={styles.presetChip}
-                onPress={() => handleSendQuickChat(msg)}
+                key={m.code}
+                style={[styles.presetChip, !isBroadcasting && { opacity: 0.5 }]}
+                onPress={() => handleSendQuickChat(m.code)}
               >
-                <Text style={styles.presetChipText}>+ {msg}</Text>
+                <Text style={styles.presetChipText}>+ {m.text}</Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          {/* Lịch sử tin nhắn bộ đàm */}
           {chatMessages.length > 0 && (
             <View style={styles.chatHistory}>
-              <Text style={styles.chatHistoryTitle}>TIN NHẮN ĐÃ TRAO ĐỔI TẦM GẦN:</Text>
+              <Text style={styles.chatHistoryTitle}>TIN NHẮN GẦN ĐÂY:</Text>
               {chatMessages.slice(0, 4).map((m) => (
                 <View
                   key={m.id}
@@ -462,6 +536,20 @@ const OfflineModeScreen = ({ navigation }) => {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
+  hiddenCamera: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: 1,
+    height: 1,
+    opacity: 0.01,
+  },
+  simNotice: {
+    marginTop: 10,
+    fontSize: 11,
+    lineHeight: 16,
+    color: '#FCD34D',
+  },
   content: {
     padding: LAYOUT.screenPadding,
     paddingBottom: 40,

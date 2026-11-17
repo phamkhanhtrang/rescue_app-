@@ -29,6 +29,8 @@ import RescuerRegisterScreen  from '../screens/auth/rescuer/RescuerRegisterScree
 import AnonymousSOSScreen     from '../screens/citizen/sos/AnonymousSOSScreen';
 import SOSConfirmScreen     from '../screens/citizen/sos/SOSConfirmScreen';
 import SOSTrackingScreen        from '../screens/citizen/sos/SOSTrackingScreen';
+import OfflineModeScreen      from '../screens/citizen/alerts/OfflineModeScreen';
+import RescuerOfflineScreen   from '../screens/rescuer/offline/RescuerOfflineScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -62,6 +64,16 @@ const AuthStack = () => (
     <Stack.Screen
       name="SOSScreen"
       component={AnonymousSOSScreen}
+      options={{ animation: 'slide_from_bottom' }}
+    />
+    <Stack.Screen
+      name="OfflineModeScreen"
+      component={OfflineModeScreen}
+      options={{ animation: 'slide_from_bottom' }}
+    />
+    <Stack.Screen
+      name="RescuerOfflineScreen"
+      component={RescuerOfflineScreen}
       options={{ animation: 'slide_from_bottom' }}
     />
 

@@ -105,6 +105,31 @@ const WelcomeScreen = ({ navigation }) => {
           </View>
         </TouchableOpacity>
 
+        {/* ── BLE OFFLINE BEACON (KHÔNG CẦN MẠNG / KHÔNG CẦN ĐĂNG NHẬP) ───── */}
+        <TouchableOpacity
+          style={styles.bleOfflineHeroBtn}
+          onPress={() => navigation.navigate('OfflineModeScreen')}
+          activeOpacity={0.88}
+        >
+          <View style={styles.bleOfflineHeroIconBox}>
+            <MaterialCommunityIcons name="broadcast" size={26} color="#38BDF8" />
+          </View>
+          <View style={styles.cardBody}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={styles.bleOfflineHeroTitle}>PHAO CỨU SINH BLE (MẤT MẠNG 4G)</Text>
+              <View style={styles.bleOfflinePill}>
+                <Text style={styles.bleOfflinePillText}>0xGP</Text>
+              </View>
+            </View>
+            <Text style={styles.bleOfflineHeroDesc}>
+              Hoạt động độc lập không cần mạng & không cần đăng nhập
+            </Text>
+          </View>
+          <View style={styles.bleOfflineArrow}>
+            <Text style={styles.bleOfflineArrowText}>📡</Text>
+          </View>
+        </TouchableOpacity>
+
         {/* Sub action: Track sent SOS requests */}
         <TouchableOpacity
           onPress={() => navigation.navigate('SOSRequestsScreen')}
@@ -113,6 +138,16 @@ const WelcomeScreen = ({ navigation }) => {
         >
           <MaterialCommunityIcons name="history" size={18} color="rgba(255,255,255,0.7)" />
           <Text style={styles.historySubText}>Theo dõi các yêu cầu SOS đã gửi</Text>
+        </TouchableOpacity>
+
+        {/* Radar cứu nạn offline cho đội cứu hộ */}
+        <TouchableOpacity
+          onPress={() => navigation.navigate('RescuerOfflineScreen')}
+          style={styles.radarOfflineQuickBtn}
+          activeOpacity={0.8}
+        >
+          <MaterialCommunityIcons name="radar" size={18} color="#38BDF8" />
+          <Text style={styles.radarOfflineQuickText}>Đội cứu hộ: Mở Radar Sonar cứu nạn (Offline)</Text>
         </TouchableOpacity>
 
         <View style={styles.dividerRow}>
@@ -455,6 +490,88 @@ const styles = StyleSheet.create({
   footerVersion: {
     color: 'rgba(255,255,255,0.25)',
     fontSize: 11,
+  },
+
+  // BLE Offline Hero Button
+  bleOfflineHeroBtn: {
+    backgroundColor: '#0F172A',
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    gap: 14,
+    borderWidth: 1.5,
+    borderColor: '#0284C7',
+    shadowColor: '#0284C7',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 6,
+    marginTop: 6,
+  },
+  bleOfflineHeroIconBox: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: 'rgba(2, 132, 199, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.4)',
+  },
+  bleOfflineHeroTitle: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  bleOfflinePill: {
+    backgroundColor: '#0284C7',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  bleOfflinePillText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#FFF',
+  },
+  bleOfflineHeroDesc: {
+    fontSize: 11,
+    color: '#94A3B8',
+    marginTop: 3,
+    lineHeight: 15,
+  },
+  bleOfflineArrow: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(2, 132, 199, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bleOfflineArrowText: {
+    fontSize: 18,
+  },
+
+  // Radar Quick Button
+  radarOfflineQuickBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: 'rgba(56, 189, 248, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.3)',
+    marginTop: 2,
+  },
+  radarOfflineQuickText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#38BDF8',
   },
 });
 

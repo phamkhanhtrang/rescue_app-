@@ -32,8 +32,6 @@ urlpatterns = [
     path('field-reports/<uuid:pk>/vote/', views.field_report_vote, name='field-report-vote'),
     path('safety-check/', views.safety_check, name='safety-check'),
 
-    # Virtual BLE Mesh Relay (Test 2 thiết bị / Web + Mobile)
-    path('ble-grid/beacon/', views.ble_mesh_beacon, name='ble-mesh-beacon'),
-    path('ble-grid/ping/', views.ble_mesh_ping, name='ble-mesh-ping'),
-    path('ble-grid/chat/', views.ble_mesh_chat, name='ble-mesh-chat'),
+    # Virtual BLE relay: giả lập sóng BLE qua mạng, chỉ bật khi DEBUG / BLE_VIRTUAL_RELAY_ENABLED
+    path('ble-grid/packets/', views.ble_virtual_relay, name='ble-virtual-relay'),
 ]
